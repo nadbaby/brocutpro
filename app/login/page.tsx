@@ -123,17 +123,6 @@ export default function Login() {
                         }}>
                         {loading ? 'Authenticating (Async)...' : 'Sign In'}
                     </button>
-
-                    <button
-                        type="button"
-                        onClick={() => handleLogin()}
-                        style={{
-                            width: '100%', backgroundColor: 'rgba(255, 255, 255, 0.8)', color: '#374151', border: '1px solid rgba(0,0,0,0.1)',
-                            padding: '0.85rem', borderRadius: '12px', fontSize: '0.95rem', fontWeight: 600, cursor: 'pointer',
-                            transition: 'all 0.2s ease'
-                        }}>
-                        ⚡ Enter Dashboard (Instant Access)
-                    </button>
                 </form>
 
                 <p style={{ marginTop: '2rem', fontSize: '0.8rem', color: '#6b7280' }}>
