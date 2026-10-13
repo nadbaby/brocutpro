@@ -2,7 +2,7 @@
 
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { signInWithEmailAndPassword, createUserWithEmailAndPassword } from 'firebase/auth';
+import { signInWithEmailAndPassword } from 'firebase/auth';
 import { auth } from '@/lib/firebase';
 
 export default function Login() {
@@ -22,41 +22,19 @@ export default function Login() {
             return;
         }
 
-        if (password.length < 6) {
-            setError('Password must contain at least 6 characters.');
-            return;
-        }
-
         setLoading(true);
         try {
             let idToken = '';
             let registeredEmail = cleanEmail;
 
+            // Strictly authenticate against Firebase — only manually registered users will succeed
             if (process.env.NEXT_PUBLIC_FIREBASE_API_KEY) {
-                try {
-                    // 1. Authenticate with existing Firebase account
-                    const userCredential = await signInWithEmailAndPassword(auth, cleanEmail, password);
-                    idToken = await userCredential.user.getIdToken();
-                    registeredEmail = userCredential.user.email || cleanEmail;
-                } catch (signInErr: unknown) {
-                    const fbErr = signInErr as { code?: string; message?: string };
-                    // 2. If user is not yet in Firebase Auth, seamlessly register and authorize
-                    if (fbErr?.code === 'auth/invalid-credential' || fbErr?.code === 'auth/user-not-found') {
-                        try {
-                            const newCredential = await createUserWithEmailAndPassword(auth, cleanEmail, password);
-                            idToken = await newCredential.user.getIdToken();
-                            registeredEmail = newCredential.user.email || cleanEmail;
-                        } catch (createErr: unknown) {
-                            const createFbErr = createErr as { code?: string; message?: string };
-                            if (createFbErr?.code === 'auth/email-already-in-use') {
-                                throw new Error('Incorrect password. Please check your password and try again.');
-                            }
-                            throw createErr;
-                        }
-                    } else {
-                        throw signInErr;
-                    }
+                const userCredential = await signInWithEmailAndPassword(auth, cleanEmail, password);
+                if (!userCredential?.user) {
+                    throw new Error('Access denied: Authentication failed.');
                 }
+                idToken = await userCredential.user.getIdToken();
+                registeredEmail = userCredential.user.email || cleanEmail;
             } else {
                 throw new Error('Authentication service is not configured.');
             }
@@ -73,7 +51,7 @@ export default function Login() {
                 throw new Error(data.message || 'Login verification failed.');
             }
 
-            // Issue session cookies
+            // Issue session cookies ONLY after verified credentials
             document.cookie = "auth=true; path=/; max-age=604800; SameSite=Lax";
             document.cookie = `rodsync_user=${encodeURIComponent(registeredEmail)}; path=/; max-age=604800; SameSite=Lax`;
 
@@ -82,15 +60,15 @@ export default function Login() {
             console.error('Authentication rejected:', authErr);
             const fbErr = authErr as { code?: string; message?: string };
 
-            let message = 'Authentication failed. Please check your credentials.';
-            if (fbErr?.code === 'auth/wrong-password' || fbErr?.code === 'auth/invalid-credential') {
-                message = 'Incorrect password. Please verify your credentials.';
+            let message = 'Access denied: Only registered users configured in Firebase can access this portal.';
+            if (fbErr?.code === 'auth/user-not-found') {
+                message = 'Access denied: No registered account found with this email in Firebase.';
+            } else if (fbErr?.code === 'auth/wrong-password' || fbErr?.code === 'auth/invalid-credential') {
+                message = 'Access denied: Invalid email or password. Only registered users configured in Firebase can log in.';
             } else if (fbErr?.code === 'auth/invalid-email') {
                 message = 'Please provide a valid email address.';
-            } else if (fbErr?.code === 'auth/weak-password') {
-                message = 'Password must be at least 6 characters.';
             } else if (fbErr?.code === 'auth/user-disabled') {
-                message = 'This account has been deactivated. Please contact an administrator.';
+                message = 'This account has been disabled in Firebase. Please contact your administrator.';
             } else if (fbErr?.code === 'auth/too-many-requests') {
                 message = 'Access temporarily locked due to multiple failed login attempts. Please try again later.';
             } else if (fbErr?.message) {
@@ -133,7 +111,7 @@ export default function Login() {
 
                 <form onSubmit={handleLogin} style={{ display: 'flex', flexDirection: 'column', gap: '1.25rem' }}>
                     {error && (
-                        <div style={{ backgroundColor: '#fee2e2', color: '#b91c1c', padding: '0.75rem', borderRadius: '8px', fontSize: '0.85rem', textAlign: 'left' }}>
+                        <div style={{ backgroundColor: '#fee2e2', color: '#b91c1c', padding: '0.75rem', borderRadius: '8px', fontSize: '0.85rem', textAlign: 'left', lineHeight: '1.4' }}>
                             {error}
                         </div>
                     )}
@@ -149,7 +127,7 @@ export default function Login() {
                                 background: 'rgba(255,255,255,0.7)', fontSize: '0.95rem', outline: 'none', transition: 'all 0.2s ease',
                                 boxSizing: 'border-box'
                             }}
-                            placeholder="admin@rodsync.com"
+                            placeholder="user@rodsync.com"
                             required
                         />
                     </div>
