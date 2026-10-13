@@ -397,6 +397,17 @@ export default function Home() {
     };
   }, [router]);
 
+  useEffect(() => {
+    if (!isCheckingAuth && typeof window !== 'undefined') {
+      const timer = setTimeout(() => {
+        if (window.initVanillaApp) {
+          window.initVanillaApp();
+        }
+      }, 50);
+      return () => clearTimeout(timer);
+    }
+  }, [isCheckingAuth]);
+
   if (isCheckingAuth) {
     return (
       <div style={{
@@ -882,22 +893,6 @@ export default function Home() {
           <div className="inventory-footer">
             <div className="footer-count" id="inventoryCountSummary">
               Showing 0 of 0 records
-            </div>
-            <div className="footer-controls">
-              <button id="btnResetSampleData" className="btn btn-ghost btn-xs text-muted" title="Restore standard default sample inventory">
-                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                  <path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"></path>
-                  <path d="M3 3v5h5"></path>
-                </svg>
-                Load Sample Data
-              </button>
-              <button id="btnClearAllData" className="btn btn-ghost btn-xs text-danger" title="Clear all saved inventory data">
-                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                  <polyline points="3 6 5 6 21 6"></polyline>
-                  <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path>
-                </svg>
-                Clear All Data
-              </button>
             </div>
           </div>
         </section>
@@ -1722,7 +1717,7 @@ export default function Home() {
 
       {/* We load the script with afterInteractive strategy and trigger initialization on load */}
       <Script
-        src="/script.js?v=5"
+        src="/script.js?v=6"
         strategy="afterInteractive"
         onLoad={() => {
           if (window.initVanillaApp) {

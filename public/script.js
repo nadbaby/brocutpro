@@ -26,147 +26,183 @@
   let lastSmartSearchQuery = null;
   let deferredInstallPrompt = null;
 
-  // --- DOM ELEMENT REFERENCES ---
-  const statTotalTypes = document.getElementById('statTotalTypes');
-  const statTotalQuantity = document.getElementById('statTotalQuantity');
-  const statInStockTypes = document.getElementById('statInStockTypes');
-  const statLowStockCount = document.getElementById('statLowStockCount');
-
-  // Smart Search DOM
-  const smartSearchForm = document.getElementById('smartSearchForm');
-  const searchDiameterInput = document.getElementById('searchDiameterInput');
-  const searchLengthInput = document.getElementById('searchLengthInput');
-  const btnResetSmartSearch = document.getElementById('btnResetSmartSearch');
-  const smartSearchResultsContainer = document.getElementById('smartSearchResultsContainer');
-  const smartResultsTableBody = document.getElementById('smartResultsTableBody');
-  const smartResultsCount = document.getElementById('smartResultsCount');
-  const smartResultsCriteria = document.getElementById('smartResultsCriteria');
-  const smartSearchEmptyState = document.getElementById('smartSearchEmptyState');
-  const smartSearchEmptyDesc = document.getElementById('smartSearchEmptyDesc');
-  const btnEmptySuggestAdd = document.getElementById('btnEmptySuggestAdd');
-
-  // Inventory Table DOM
-  const inventoryTableBody = document.getElementById('inventoryTableBody');
-  const inventoryEmptyState = document.getElementById('inventoryEmptyState');
-  const inventoryCountSummary = document.getElementById('inventoryCountSummary');
-  const filterKeyword = document.getElementById('filterKeyword');
-  const filterDiameter = document.getElementById('filterDiameter');
-  let filterStockStatus = document.getElementById('filterStockStatus');
-
-  const btnResetInventoryFilters = document.getElementById('btnResetInventoryFilters');
-  const btnResetSampleData = document.getElementById('btnResetSampleData');
-  const btnClearAllData = document.getElementById('btnClearAllData');
-  const quickDiameterChipsTrack = document.getElementById('quickDiameterChipsTrack');
-
-  // Add/Edit Rod Modal DOM
-  const rodModalOverlay = document.getElementById('rodModalOverlay');
-  const btnOpenAddModal = document.getElementById('btnOpenAddModal');
-  const btnCloseRodModal = document.getElementById('btnCloseRodModal');
-  const btnCancelRodModal = document.getElementById('btnCancelRodModal');
-  const rodForm = document.getElementById('rodForm');
-  const modalTitle = document.getElementById('modalTitle');
-  const btnSaveRodText = document.getElementById('btnSaveRodText');
-  const rodEditId = document.getElementById('rodEditId');
-  const formRodName = document.getElementById('formRodName');
-  const formDiameterMm = document.getElementById('formDiameterMm');
-  const formLengthFt = document.getElementById('formLengthFt');
-  const formQuantity = document.getElementById('formQuantity');
-  const formSku = document.getElementById('formSku');
-  const formNotes = document.getElementById('formNotes');
-
-  // Deduct Stock Modal DOM (Whole Units)
-  const deductModalOverlay = document.getElementById('deductModalOverlay');
-  const btnCloseDeductModal = document.getElementById('btnCloseDeductModal');
-  const btnCancelDeductModal = document.getElementById('btnCancelDeductModal');
-  const deductForm = document.getElementById('deductForm');
-  const deductRodId = document.getElementById('deductRodId');
-  const deductRodName = document.getElementById('deductRodName');
-  const deductRodDimensions = document.getElementById('deductRodDimensions');
-  const deductRodAvailableQty = document.getElementById('deductRodAvailableQty');
-  const deductQuantityInput = document.getElementById('deductQuantityInput');
-  const deductRemainingHint = document.getElementById('deductRemainingHint');
-  const btnDeductStepDown = document.getElementById('btnDeductStepDown');
-  const btnDeductStepUp = document.getElementById('btnDeductStepUp');
-
-  // Cut Rod Modal DOM (Size Deduction + Remnant Offcut)
-  const cutModalOverlay = document.getElementById('cutModalOverlay');
-  const btnCloseCutModal = document.getElementById('btnCloseCutModal');
-  const btnCancelCutModal = document.getElementById('btnCancelCutModal');
-  const cutForm = document.getElementById('cutForm');
-  const cutRodId = document.getElementById('cutRodId');
-  const cutRodName = document.getElementById('cutRodName');
-  const cutRodDiameter = document.getElementById('cutRodDiameter');
-  const cutRodFullLength = document.getElementById('cutRodFullLength');
-  const cutRodAvailableQty = document.getElementById('cutRodAvailableQty');
-  const cutRequiredLengthInput = document.getElementById('cutRequiredLengthInput');
-  const cutPiecesQtyInput = document.getElementById('cutPiecesQtyInput');
-  const btnCutStepDown = document.getElementById('btnCutStepDown');
-  const btnCutStepUp = document.getElementById('btnCutStepUp');
-  const calcOrigLength = document.getElementById('calcOrigLength');
-  const calcCutLength = document.getElementById('calcCutLength');
-  const calcRemainLength = document.getElementById('calcRemainLength');
-  const calcRemainNote = document.getElementById('calcRemainNote');
-  const cutAutoAddRemnant = document.getElementById('cutAutoAddRemnant');
-  const cutReasonInput = document.getElementById('cutReasonInput');
-  const btnConfirmCut = document.getElementById('btnConfirmCut');
-
-  // Cut Logs Modal DOM
-  const cutLogsModalOverlay = document.getElementById('cutLogsModalOverlay');
-  const btnOpenCutLogsModal = document.getElementById('btnOpenCutLogsModal');
-  const btnCloseCutLogsModal = document.getElementById('btnCloseCutLogsModal');
-  const btnCloseCutLogsBottom = document.getElementById('btnCloseCutLogsBottom');
-  const cutLogsBadge = document.getElementById('cutLogsBadge');
-  const cutLogsTableBody = document.getElementById('cutLogsTableBody');
-  const cutLogsEmptyState = document.getElementById('cutLogsEmptyState');
-  const filterCutLogsInput = document.getElementById('filterCutLogsInput');
-  const btnExportCutLogsCsv = document.getElementById('btnExportCutLogsCsv');
-  const btnClearCutLogs = document.getElementById('btnClearCutLogs');
-  const cutLogsCountText = document.getElementById('cutLogsCountText');
-  const cutLogsContentArea = document.getElementById('cutLogsContentArea');
-  const cutLogsTableWrapper = document.getElementById('cutLogsTableWrapper');
-  const cutLogsCardsContainer = document.getElementById('cutLogsCardsContainer');
-  const btnCutLogsCards = document.getElementById('btnCutLogsCards');
-  const btnCutLogsTable = document.getElementById('btnCutLogsTable');
+  // --- DOM ELEMENT REFERENCES (DYNAMICALLY RESOLVED) ---
+  let statTotalTypes, statTotalQuantity, statInStockTypes, statLowStockCount;
+  let smartSearchForm, searchDiameterInput, searchLengthInput, btnResetSmartSearch;
+  let smartSearchResultsContainer, smartResultsTableBody, smartResultsCount, smartResultsCriteria;
+  let smartSearchEmptyState, smartSearchEmptyDesc, btnEmptySuggestAdd;
+  let inventoryTableBody, inventoryEmptyState, inventoryCountSummary;
+  let filterKeyword, filterDiameter, filterStockStatus, btnResetInventoryFilters, quickDiameterChipsTrack;
+  let rodModalOverlay, btnOpenAddModal, btnCloseRodModal, btnCancelRodModal, rodForm, modalTitle, btnSaveRodText;
+  let rodEditId, formRodName, formDiameterMm, formLengthFt, formQuantity, formSku, formNotes;
+  let deductModalOverlay, btnCloseDeductModal, btnCancelDeductModal, deductForm, deductRodId;
+  let deductRodName, deductRodDimensions, deductRodAvailableQty, deductQuantityInput, deductRemainingHint;
+  let btnDeductStepDown, btnDeductStepUp;
+  let cutModalOverlay, btnCloseCutModal, btnCancelCutModal, cutForm, cutRodId, cutRodName, cutRodDiameter;
+  let cutRodFullLength, cutRodAvailableQty, cutRequiredLengthInput, cutPiecesQtyInput;
+  let btnCutStepDown, btnCutStepUp, calcOrigLength, calcCutLength, calcRemainLength, calcRemainNote;
+  let cutAutoAddRemnant, cutReasonInput, btnConfirmCut;
+  let cutLogsModalOverlay, btnOpenCutLogsModal, btnCloseCutLogsModal, btnCloseCutLogsBottom, cutLogsBadge;
+  let cutLogsTableBody, cutLogsEmptyState, filterCutLogsInput, btnExportCutLogsCsv, btnClearCutLogs;
+  let cutLogsCountText, cutLogsContentArea, cutLogsTableWrapper, cutLogsCardsContainer;
+  let btnCutLogsCards, btnCutLogsTable;
   let cutLogsViewMode = window.innerWidth <= 768 ? 'cards' : 'table';
-
-  // PWA & Mobile Navigation DOM
-  const btnInstallPwa = document.getElementById('btnInstallPwa');
-  const mobNavInstall = document.getElementById('mobNavInstall');
-  const installModalOverlay = document.getElementById('installModalOverlay');
-  const btnCloseInstallModal = document.getElementById('btnCloseInstallModal');
-  const btnCloseInstallModalBtn = document.getElementById('btnCloseInstallModalBtn');
-  const installPromptDirect = document.getElementById('installPromptDirect');
-  const btnTriggerInstallPrompt = document.getElementById('btnTriggerInstallPrompt');
-  const mobNavSearch = document.getElementById('mobNavSearch');
-  const mobNavInventory = document.getElementById('mobNavInventory');
-  const mobNavAdd = document.getElementById('mobNavAdd');
-  const mobNavCutLogs = document.getElementById('mobNavCutLogs');
-
-  // Duplicate Resolution Modal DOM
-  const duplicateModalOverlay = document.getElementById('duplicateModalOverlay');
-  const duplicateDetailsCard = document.getElementById('duplicateDetailsCard');
-  const btnDuplicateCancel = document.getElementById('btnDuplicateCancel');
-  const btnDuplicateKeepSeparate = document.getElementById('btnDuplicateKeepSeparate');
-  const btnDuplicateMerge = document.getElementById('btnDuplicateMerge');
-  const btnCloseDuplicateModal = document.getElementById('btnCloseDuplicateModal');
-
-  // Confirmation Dialog Modal DOM
-  const confirmModalOverlay = document.getElementById('confirmModalOverlay');
-  const confirmDialogTitle = document.getElementById('confirmDialogTitle');
-  const confirmDialogMessage = document.getElementById('confirmDialogMessage');
-  const btnConfirmOk = document.getElementById('btnConfirmOk');
-  const btnConfirmCancel = document.getElementById('btnConfirmCancel');
-  const btnCloseConfirmModal = document.getElementById('btnCloseConfirmModal');
+  let btnInstallPwa, mobNavInstall, installModalOverlay, btnCloseInstallModal, btnCloseInstallModalBtn;
+  let installPromptDirect, btnTriggerInstallPrompt, mobNavSearch, mobNavInventory, mobNavAdd, mobNavCutLogs;
+  let duplicateModalOverlay, duplicateDetailsCard, btnDuplicateCancel, btnDuplicateKeepSeparate, btnDuplicateMerge, btnCloseDuplicateModal;
+  let confirmModalOverlay, confirmDialogTitle, confirmDialogMessage, btnConfirmOk, btnConfirmCancel, btnCloseConfirmModal;
   let pendingConfirmCallback = null;
+  let btnExportCsv, csvFileInput, toastContainer;
+  let mobileActionSheetOverlay, btnCloseActionSheet, actionSheetRodName, actionSheetRodSku, actionSheetDiameter;
+  let actionSheetLength, actionSheetQty, actionSheetStatus, actionSheetNotesBox, actionSheetNotesText;
+  let sheetQtyDisplay, btnSheetDec, btnSheetInc, btnSheetCut, btnSheetDeduct, btnSheetEdit, btnSheetDelete;
 
-  // Import / Export DOM
-  const btnExportCsv = document.getElementById('btnExportCsv');
-  const csvFileInput = document.getElementById('csvFileInput');
-  const toastContainer = document.getElementById('toastContainer');
+  function refreshDomElements() {
+    statTotalTypes = document.getElementById('statTotalTypes');
+    statTotalQuantity = document.getElementById('statTotalQuantity');
+    statInStockTypes = document.getElementById('statInStockTypes');
+    statLowStockCount = document.getElementById('statLowStockCount');
+
+    smartSearchForm = document.getElementById('smartSearchForm');
+    searchDiameterInput = document.getElementById('searchDiameterInput');
+    searchLengthInput = document.getElementById('searchLengthInput');
+    btnResetSmartSearch = document.getElementById('btnResetSmartSearch');
+    smartSearchResultsContainer = document.getElementById('smartSearchResultsContainer');
+    smartResultsTableBody = document.getElementById('smartResultsTableBody');
+    smartResultsCount = document.getElementById('smartResultsCount');
+    smartResultsCriteria = document.getElementById('smartResultsCriteria');
+    smartSearchEmptyState = document.getElementById('smartSearchEmptyState');
+    smartSearchEmptyDesc = document.getElementById('smartSearchEmptyDesc');
+    btnEmptySuggestAdd = document.getElementById('btnEmptySuggestAdd');
+
+    inventoryTableBody = document.getElementById('inventoryTableBody');
+    inventoryEmptyState = document.getElementById('inventoryEmptyState');
+    inventoryCountSummary = document.getElementById('inventoryCountSummary');
+    filterKeyword = document.getElementById('filterKeyword');
+    filterDiameter = document.getElementById('filterDiameter');
+    filterStockStatus = document.getElementById('filterStockStatus');
+    btnResetInventoryFilters = document.getElementById('btnResetInventoryFilters');
+    quickDiameterChipsTrack = document.getElementById('quickDiameterChipsTrack');
+
+    rodModalOverlay = document.getElementById('rodModalOverlay');
+    btnOpenAddModal = document.getElementById('btnOpenAddModal');
+    btnCloseRodModal = document.getElementById('btnCloseRodModal');
+    btnCancelRodModal = document.getElementById('btnCancelRodModal');
+    rodForm = document.getElementById('rodForm');
+    modalTitle = document.getElementById('modalTitle');
+    btnSaveRodText = document.getElementById('btnSaveRodText');
+    rodEditId = document.getElementById('rodEditId');
+    formRodName = document.getElementById('formRodName');
+    formDiameterMm = document.getElementById('formDiameterMm');
+    formLengthFt = document.getElementById('formLengthFt');
+    formQuantity = document.getElementById('formQuantity');
+    formSku = document.getElementById('formSku');
+    formNotes = document.getElementById('formNotes');
+
+    deductModalOverlay = document.getElementById('deductModalOverlay');
+    btnCloseDeductModal = document.getElementById('btnCloseDeductModal');
+    btnCancelDeductModal = document.getElementById('btnCancelDeductModal');
+    deductForm = document.getElementById('deductForm');
+    deductRodId = document.getElementById('deductRodId');
+    deductRodName = document.getElementById('deductRodName');
+    deductRodDimensions = document.getElementById('deductRodDimensions');
+    deductRodAvailableQty = document.getElementById('deductRodAvailableQty');
+    deductQuantityInput = document.getElementById('deductQuantityInput');
+    deductRemainingHint = document.getElementById('deductRemainingHint');
+    btnDeductStepDown = document.getElementById('btnDeductStepDown');
+    btnDeductStepUp = document.getElementById('btnDeductStepUp');
+
+    cutModalOverlay = document.getElementById('cutModalOverlay');
+    btnCloseCutModal = document.getElementById('btnCloseCutModal');
+    btnCancelCutModal = document.getElementById('btnCancelCutModal');
+    cutForm = document.getElementById('cutForm');
+    cutRodId = document.getElementById('cutRodId');
+    cutRodName = document.getElementById('cutRodName');
+    cutRodDiameter = document.getElementById('cutRodDiameter');
+    cutRodFullLength = document.getElementById('cutRodFullLength');
+    cutRodAvailableQty = document.getElementById('cutRodAvailableQty');
+    cutRequiredLengthInput = document.getElementById('cutRequiredLengthInput');
+    cutPiecesQtyInput = document.getElementById('cutPiecesQtyInput');
+    btnCutStepDown = document.getElementById('btnCutStepDown');
+    btnCutStepUp = document.getElementById('btnCutStepUp');
+    calcOrigLength = document.getElementById('calcOrigLength');
+    calcCutLength = document.getElementById('calcCutLength');
+    calcRemainLength = document.getElementById('calcRemainLength');
+    calcRemainNote = document.getElementById('calcRemainNote');
+    cutAutoAddRemnant = document.getElementById('cutAutoAddRemnant');
+    cutReasonInput = document.getElementById('cutReasonInput');
+    btnConfirmCut = document.getElementById('btnConfirmCut');
+
+    cutLogsModalOverlay = document.getElementById('cutLogsModalOverlay');
+    btnOpenCutLogsModal = document.getElementById('btnOpenCutLogsModal');
+    btnCloseCutLogsModal = document.getElementById('btnCloseCutLogsModal');
+    btnCloseCutLogsBottom = document.getElementById('btnCloseCutLogsBottom');
+    cutLogsBadge = document.getElementById('cutLogsBadge');
+    cutLogsTableBody = document.getElementById('cutLogsTableBody');
+    cutLogsEmptyState = document.getElementById('cutLogsEmptyState');
+    filterCutLogsInput = document.getElementById('filterCutLogsInput');
+    btnExportCutLogsCsv = document.getElementById('btnExportCutLogsCsv');
+    btnClearCutLogs = document.getElementById('btnClearCutLogs');
+    cutLogsCountText = document.getElementById('cutLogsCountText');
+    cutLogsContentArea = document.getElementById('cutLogsContentArea');
+    cutLogsTableWrapper = document.getElementById('cutLogsTableWrapper');
+    cutLogsCardsContainer = document.getElementById('cutLogsCardsContainer');
+    btnCutLogsCards = document.getElementById('btnCutLogsCards');
+    btnCutLogsTable = document.getElementById('btnCutLogsTable');
+
+    btnInstallPwa = document.getElementById('btnInstallPwa');
+    mobNavInstall = document.getElementById('mobNavInstall');
+    installModalOverlay = document.getElementById('installModalOverlay');
+    btnCloseInstallModal = document.getElementById('btnCloseInstallModal');
+    btnCloseInstallModalBtn = document.getElementById('btnCloseInstallModalBtn');
+    installPromptDirect = document.getElementById('installPromptDirect');
+    btnTriggerInstallPrompt = document.getElementById('btnTriggerInstallPrompt');
+    mobNavSearch = document.getElementById('mobNavSearch');
+    mobNavInventory = document.getElementById('mobNavInventory');
+    mobNavAdd = document.getElementById('mobNavAdd');
+    mobNavCutLogs = document.getElementById('mobNavCutLogs');
+
+    duplicateModalOverlay = document.getElementById('duplicateModalOverlay');
+    duplicateDetailsCard = document.getElementById('duplicateDetailsCard');
+    btnDuplicateCancel = document.getElementById('btnDuplicateCancel');
+    btnDuplicateKeepSeparate = document.getElementById('btnDuplicateKeepSeparate');
+    btnDuplicateMerge = document.getElementById('btnDuplicateMerge');
+    btnCloseDuplicateModal = document.getElementById('btnCloseDuplicateModal');
+
+    confirmModalOverlay = document.getElementById('confirmModalOverlay');
+    confirmDialogTitle = document.getElementById('confirmDialogTitle');
+    confirmDialogMessage = document.getElementById('confirmDialogMessage');
+    btnConfirmOk = document.getElementById('btnConfirmOk');
+    btnConfirmCancel = document.getElementById('btnConfirmCancel');
+    btnCloseConfirmModal = document.getElementById('btnCloseConfirmModal');
+
+    btnExportCsv = document.getElementById('btnExportCsv');
+    csvFileInput = document.getElementById('csvFileInput');
+    toastContainer = document.getElementById('toastContainer');
+
+    mobileActionSheetOverlay = document.getElementById('mobileActionSheetOverlay');
+    btnCloseActionSheet = document.getElementById('btnCloseActionSheet');
+    actionSheetRodName = document.getElementById('actionSheetRodName');
+    actionSheetRodSku = document.getElementById('actionSheetRodSku');
+    actionSheetDiameter = document.getElementById('actionSheetDiameter');
+    actionSheetLength = document.getElementById('actionSheetLength');
+    actionSheetQty = document.getElementById('actionSheetQty');
+    actionSheetStatus = document.getElementById('actionSheetStatus');
+    actionSheetNotesBox = document.getElementById('actionSheetNotesBox');
+    actionSheetNotesText = document.getElementById('actionSheetNotesText');
+    sheetQtyDisplay = document.getElementById('sheetQtyDisplay');
+    btnSheetDec = document.getElementById('btnSheetDec');
+    btnSheetInc = document.getElementById('btnSheetInc');
+    btnSheetCut = document.getElementById('btnSheetCut');
+    btnSheetDeduct = document.getElementById('btnSheetDeduct');
+    btnSheetEdit = document.getElementById('btnSheetEdit');
+    btnSheetDelete = document.getElementById('btnSheetDelete');
+  }
 
   // --- INITIALIZATION ---
   let isAppInitialized = false;
   function initApp() {
+    refreshDomElements();
     initTheme();
     loadRodsFromStorage();
     loadCutLogsFromStorage();
@@ -471,6 +507,8 @@
 
   // --- DASHBOARD REFRESH & STATS ---
   function updateDashboard() {
+    refreshDomElements();
+
     // 1. Calculate KPI Metrics
     const totalTypes = rods.length;
     const totalQuantity = rods.reduce((acc, curr) => acc + (Number(curr.quantity) || 0), 0);
@@ -481,10 +519,10 @@
     }).length;
 
     // KPI numbers
-    statTotalTypes.textContent = totalTypes.toLocaleString();
-    statTotalQuantity.textContent = totalQuantity.toLocaleString();
-    statInStockTypes.textContent = inStockTypes.toLocaleString();
-    statLowStockCount.textContent = lowStockCount.toLocaleString();
+    if (statTotalTypes) statTotalTypes.textContent = totalTypes.toLocaleString();
+    if (statTotalQuantity) statTotalQuantity.textContent = totalQuantity.toLocaleString();
+    if (statInStockTypes) statInStockTypes.textContent = inStockTypes.toLocaleString();
+    if (statLowStockCount) statLowStockCount.textContent = lowStockCount.toLocaleString();
 
     // 2. Refresh Filters (Diameter dropdown & Quick Chips)
     populateDiameterFilterOptions();
@@ -501,6 +539,7 @@
 
   // --- DIAMETER FILTER DROPDOWN & QUICK CHIPS POPULATION ---
   function populateDiameterFilterOptions() {
+    if (!filterDiameter) return;
     const currentVal = filterDiameter.value;
     const diameters = [...new Set(rods.map(r => Number(r.diameterMm)))].sort((a, b) => a - b);
 
@@ -520,7 +559,7 @@
   }
 
   function renderQuickDiameterChips() {
-    if (!quickDiameterChipsTrack) return;
+    if (!quickDiameterChipsTrack || !filterDiameter) return;
     const currentDia = filterDiameter.value;
     const diameters = [...new Set(rods.map(r => Number(r.diameterMm)))].sort((a, b) => a - b);
 
@@ -531,7 +570,7 @@
     allBtn.className = `chip-btn ${currentDia === 'all' ? 'active' : ''}`;
     allBtn.textContent = 'All Sizes';
     allBtn.onclick = () => {
-      filterDiameter.value = 'all';
+      if (filterDiameter) filterDiameter.value = 'all';
       renderQuickDiameterChips();
       renderInventoryTable();
     };
@@ -543,7 +582,7 @@
       chip.className = `chip-btn ${currentDia === String(d) ? 'active' : ''}`;
       chip.textContent = `${d} mm`;
       chip.onclick = () => {
-        filterDiameter.value = d;
+        if (filterDiameter) filterDiameter.value = d;
         renderQuickDiameterChips();
         renderInventoryTable();
       };
@@ -553,8 +592,11 @@
 
   // --- INVENTORY TABLE RENDERING ---
   function renderInventoryTable() {
-    const keyword = filterKeyword.value.trim().toLowerCase();
-    const diaFilter = filterDiameter.value;
+    if (!inventoryTableBody) refreshDomElements();
+    if (!inventoryTableBody) return;
+
+    const keyword = filterKeyword ? filterKeyword.value.trim().toLowerCase() : '';
+    const diaFilter = filterDiameter ? filterDiameter.value : 'all';
 
 
     let filtered = rods.filter(rod => {
@@ -597,15 +639,15 @@
     inventoryTableBody.innerHTML = '';
 
     if (filtered.length === 0) {
-      inventoryTableBody.parentElement.classList.add('hidden');
-      inventoryEmptyState.classList.remove('hidden');
-      inventoryCountSummary.textContent = `Showing 0 of ${rods.length} records`;
+      if (inventoryTableBody && inventoryTableBody.parentElement) inventoryTableBody.parentElement.classList.add('hidden');
+      if (inventoryEmptyState) inventoryEmptyState.classList.remove('hidden');
+      if (inventoryCountSummary) inventoryCountSummary.textContent = `Showing 0 of ${rods.length} records`;
       return;
     }
 
-    inventoryTableBody.parentElement.classList.remove('hidden');
-    inventoryEmptyState.classList.add('hidden');
-    inventoryCountSummary.textContent = `Showing ${filtered.length} of ${rods.length} records`;
+    if (inventoryTableBody && inventoryTableBody.parentElement) inventoryTableBody.parentElement.classList.remove('hidden');
+    if (inventoryEmptyState) inventoryEmptyState.classList.add('hidden');
+    if (inventoryCountSummary) inventoryCountSummary.textContent = `Showing ${filtered.length} of ${rods.length} records`;
 
     filtered.forEach(rod => {
       const tr = document.createElement('tr');
@@ -1187,54 +1229,65 @@
 
   // --- ADD / EDIT ROD MODAL ACTIONS ---
   function openAddRodModal(prefillData = null) {
-    rodForm.reset();
-    rodEditId.value = '';
-    modalTitle.textContent = 'Add New Rod Stock';
-    btnSaveRodText.textContent = 'Save Rod to Stock';
+    refreshDomElements();
+    if (!rodModalOverlay) return;
+
+    if (rodForm) rodForm.reset();
+    if (rodEditId) rodEditId.value = '';
+    if (modalTitle) modalTitle.textContent = 'Add New Rod Stock';
+    if (btnSaveRodText) btnSaveRodText.textContent = 'Save Rod to Stock';
 
     if (prefillData) {
-      if (prefillData.diameter) formDiameterMm.value = prefillData.diameter;
-      if (prefillData.length) formLengthFt.value = prefillData.length;
+      if (prefillData.diameter && formDiameterMm) formDiameterMm.value = prefillData.diameter;
+      if (prefillData.length && formLengthFt) formLengthFt.value = prefillData.length;
     }
 
     rodModalOverlay.classList.remove('hidden');
-    formRodName.focus();
+    if (formRodName) setTimeout(() => formRodName.focus(), 50);
   }
 
   function openEditRodModal(id) {
+    refreshDomElements();
     const rod = rods.find(r => r.id === id);
-    if (!rod) return;
+    if (!rod) {
+      showToast('Rod not found', 'warning');
+      return;
+    }
 
-    rodEditId.value = rod.id;
-    formRodName.value = rod.name;
-    formDiameterMm.value = rod.diameterMm;
-    formLengthFt.value = rod.lengthFt;
-    formQuantity.value = rod.quantity;
-    formSku.value = rod.sku || '';
-    formNotes.value = rod.notes || '';
+    if (rodEditId) rodEditId.value = rod.id;
+    if (formRodName) formRodName.value = rod.name || '';
+    if (formDiameterMm) formDiameterMm.value = rod.diameterMm ?? '';
+    if (formLengthFt) formLengthFt.value = rod.lengthFt ?? '';
+    if (formQuantity) formQuantity.value = rod.quantity ?? 0;
+    if (formSku) formSku.value = rod.sku || '';
+    if (formNotes) formNotes.value = rod.notes || '';
 
-    modalTitle.textContent = 'Edit Rod Details';
-    btnSaveRodText.textContent = 'Update Rod Stock';
+    if (modalTitle) modalTitle.textContent = 'Edit Rod Details';
+    if (btnSaveRodText) btnSaveRodText.textContent = 'Update Rod Stock';
 
-    rodModalOverlay.classList.remove('hidden');
-    formRodName.focus();
+    if (rodModalOverlay) {
+      rodModalOverlay.classList.remove('hidden');
+    }
+    if (formRodName) setTimeout(() => formRodName.focus(), 50);
   }
 
   function closeRodModal() {
-    rodModalOverlay.classList.add('hidden');
-    rodForm.reset();
+    refreshDomElements();
+    if (rodModalOverlay) rodModalOverlay.classList.add('hidden');
+    if (rodForm) rodForm.reset();
   }
 
   function handleSaveRodSubmit(e) {
     e.preventDefault();
+    refreshDomElements();
 
-    const name = formRodName.value.trim();
-    const diameterMm = parseFloat(formDiameterMm.value);
-    const lengthFt = parseFloat(formLengthFt.value);
-    const quantity = parseInt(formQuantity.value, 10);
-    const customSku = formSku.value.trim();
-    const notes = formNotes.value.trim();
-    const editId = rodEditId.value;
+    const name = formRodName ? formRodName.value.trim() : '';
+    const diameterMm = formDiameterMm ? parseFloat(formDiameterMm.value) : NaN;
+    const lengthFt = formLengthFt ? parseFloat(formLengthFt.value) : NaN;
+    const quantity = formQuantity ? parseInt(formQuantity.value, 10) : NaN;
+    const customSku = formSku ? formSku.value.trim() : '';
+    const notes = formNotes ? formNotes.value.trim() : '';
+    const editId = rodEditId ? rodEditId.value : '';
 
     if (!name) {
       showToast('Please enter a valid rod name or material type', 'warning');
@@ -1639,139 +1692,69 @@
 
   // --- EVENT LISTENERS SETUP ---
   function setupEventListeners() {
-    const safeOn = (elem, evt, handler) => {
-      if (elem && typeof elem.addEventListener === 'function') {
-        elem.addEventListener(evt, handler);
+    // Delegated click handling on document
+    document.addEventListener('click', (e) => {
+      // 1. Add Rod Stock / Add Product button triggers
+      const addBtn = e.target.closest('#btnOpenAddModal, .btn-add-main, #mobNavAdd, #btnEmptySuggestAdd');
+      if (addBtn) {
+        e.preventDefault();
+        if (addBtn.id === 'btnEmptySuggestAdd') {
+          refreshDomElements();
+          openAddRodModal({
+            diameter: searchDiameterInput ? searchDiameterInput.value : '',
+            length: searchLengthInput ? searchLengthInput.value : ''
+          });
+        } else {
+          openAddRodModal();
+        }
+        return;
       }
-    };
 
-    // Smart Search Form Submit
-    safeOn(smartSearchForm, 'submit', (e) => {
-      e.preventDefault();
-      executeSmartSearch(searchDiameterInput ? searchDiameterInput.value : '', searchLengthInput ? searchLengthInput.value : '', true);
-    });
-
-    safeOn(btnResetSmartSearch, 'click', resetSmartSearch);
-
-    // Empty state "suggest add"
-    safeOn(btnEmptySuggestAdd, 'click', () => {
-      openAddRodModal({
-        diameter: searchDiameterInput ? searchDiameterInput.value : '',
-        length: searchLengthInput ? searchLengthInput.value : ''
-      });
-    });
-
-    // Add Rod Modal Open/Close
-    safeOn(btnOpenAddModal, 'click', () => openAddRodModal());
-    safeOn(btnCloseRodModal, 'click', closeRodModal);
-    safeOn(btnCancelRodModal, 'click', closeRodModal);
-    safeOn(rodForm, 'submit', handleSaveRodSubmit);
-
-    // Deduct Modal (Whole Units)
-    safeOn(btnCloseDeductModal, 'click', closeDeductModal);
-    safeOn(btnCancelDeductModal, 'click', closeDeductModal);
-    safeOn(deductForm, 'submit', handleDeductSubmit);
-
-    safeOn(deductQuantityInput, 'input', () => {
-      const rod = rods.find(r => r.id === (deductRodId ? deductRodId.value : ''));
-      const val = parseInt(deductQuantityInput.value, 10) || 0;
-      if (rod) {
-        updateDeductRemainingHint(rod.quantity, val);
+      // 2. Rod Modal Close / Cancel buttons
+      const closeRodBtn = e.target.closest('#btnCloseRodModal, #btnCancelRodModal');
+      if (closeRodBtn) {
+        e.preventDefault();
+        closeRodModal();
+        return;
       }
-    });
 
-    safeOn(btnDeductStepDown, 'click', () => {
-      const current = parseInt(deductQuantityInput.value, 10) || 1;
-      if (current > 1) {
-        deductQuantityInput.value = current - 1;
-        deductQuantityInput.dispatchEvent(new Event('input'));
+      // 3. Cut Rod Modal Close / Cancel
+      const closeCutBtn = e.target.closest('#btnCloseCutModal, #btnCancelCutModal');
+      if (closeCutBtn) {
+        e.preventDefault();
+        closeCutModal();
+        return;
       }
-    });
 
-    safeOn(btnDeductStepUp, 'click', () => {
-      const current = parseInt(deductQuantityInput.value, 10) || 0;
-      const rod = rods.find(r => r.id === (deductRodId ? deductRodId.value : ''));
-      if (rod && current < rod.quantity) {
-        deductQuantityInput.value = current + 1;
-        deductQuantityInput.dispatchEvent(new Event('input'));
+      // 4. Deduct Modal Close / Cancel
+      const closeDeductBtn = e.target.closest('#btnCloseDeductModal, #btnCancelDeductModal');
+      if (closeDeductBtn) {
+        e.preventDefault();
+        closeDeductModal();
+        return;
       }
-    });
 
-    // Cut Rod Modal (Size Deduction with Remnant Offcut)
-    safeOn(btnCloseCutModal, 'click', closeCutModal);
-    safeOn(btnCancelCutModal, 'click', closeCutModal);
-    safeOn(cutForm, 'submit', handleCutSubmit);
-
-    safeOn(cutRequiredLengthInput, 'input', updateCutCalculations);
-    safeOn(cutPiecesQtyInput, 'input', updateCutCalculations);
-
-    safeOn(btnCutStepDown, 'click', () => {
-      const current = parseInt(cutPiecesQtyInput.value, 10) || 1;
-      if (current > 1) {
-        cutPiecesQtyInput.value = current - 1;
-        updateCutCalculations();
+      // 5. Cut Logs Modal Close
+      const closeCutLogsBtn = e.target.closest('#btnCloseCutLogsModal, #btnCloseCutLogsBottom');
+      if (closeCutLogsBtn) {
+        e.preventDefault();
+        closeCutLogsModal();
+        return;
       }
-    });
 
-    safeOn(btnCutStepUp, 'click', () => {
-      const current = parseInt(cutPiecesQtyInput.value, 10) || 0;
-      const rod = rods.find(r => r.id === (cutRodId ? cutRodId.value : ''));
-      if (rod && current < rod.quantity) {
-        cutPiecesQtyInput.value = current + 1;
-        updateCutCalculations();
-      }
-    });
+      // 6. Direct overlay backdrop clicks
+      if (e.target.id === 'rodModalOverlay') { closeRodModal(); return; }
+      if (e.target.id === 'deductModalOverlay') { closeDeductModal(); return; }
+      if (e.target.id === 'cutModalOverlay') { closeCutModal(); return; }
+      if (e.target.id === 'cutLogsModalOverlay') { closeCutLogsModal(); return; }
+      if (e.target.id === 'mobileActionSheetOverlay') { closeMobileActionSheet(); return; }
+      if (e.target.id === 'installModalOverlay') { closeInstallModal(); return; }
+      if (e.target.id === 'duplicateModalOverlay') { resolveDuplicateCancel(); return; }
+      if (e.target.id === 'confirmModalOverlay') { closeConfirmModal(); return; }
 
-    // Cut Logs Modal Listeners
-    safeOn(btnOpenCutLogsModal, 'click', openCutLogsModal);
-    safeOn(btnCloseCutLogsModal, 'click', closeCutLogsModal);
-    safeOn(btnCloseCutLogsBottom, 'click', closeCutLogsModal);
-    safeOn(filterCutLogsInput, 'input', renderCutLogsTable);
-    safeOn(btnExportCutLogsCsv, 'click', exportCutLogsCsv);
-    safeOn(btnClearCutLogs, 'click', clearCutLogs);
-    safeOn(btnCutLogsCards, 'click', () => setCutLogsViewMode('cards'));
-    safeOn(btnCutLogsTable, 'click', () => setCutLogsViewMode('table'));
-
-    // PWA Install Listeners
-    safeOn(btnInstallPwa, 'click', openInstallModal);
-    safeOn(btnCloseInstallModal, 'click', closeInstallModal);
-    safeOn(btnCloseInstallModalBtn, 'click', closeInstallModal);
-    safeOn(btnTriggerInstallPrompt, 'click', openInstallModal);
-
-    // Duplicate Dialog Buttons
-    safeOn(btnDuplicateMerge, 'click', resolveDuplicateMerge);
-    safeOn(btnDuplicateKeepSeparate, 'click', resolveDuplicateKeepSeparate);
-    safeOn(btnDuplicateCancel, 'click', resolveDuplicateCancel);
-    safeOn(btnCloseDuplicateModal, 'click', resolveDuplicateCancel);
-
-    // Confirmation Modal
-    safeOn(btnConfirmOk, 'click', () => {
-      if (pendingConfirmCallback) {
-        pendingConfirmCallback();
-      }
-      closeConfirmModal();
-    });
-    safeOn(btnConfirmCancel, 'click', closeConfirmModal);
-    safeOn(btnCloseConfirmModal, 'click', closeConfirmModal);
-
-    // Filters in Inventory
-    safeOn(filterKeyword, 'input', renderInventoryTable);
-    safeOn(filterDiameter, 'change', () => {
-      renderQuickDiameterChips();
-      renderInventoryTable();
-    });
-    safeOn(filterStockStatus, 'change', renderInventoryTable);
-    safeOn(btnResetInventoryFilters, 'click', () => {
-      if (filterKeyword) filterKeyword.value = '';
-      if (filterDiameter) filterDiameter.value = 'all';
-      if (filterStockStatus) filterStockStatus.value = 'all';
-      renderQuickDiameterChips();
-      renderInventoryTable();
-    });
-
-    // Table Column Sorting
-    document.querySelectorAll('#inventoryTable th.sortable').forEach(th => {
-      th.addEventListener('click', () => {
+      // 7. Table sorting click
+      const th = e.target.closest('#inventoryTable th.sortable');
+      if (th) {
         const col = th.dataset.sort;
         if (sortColumn === col) {
           sortDirection = sortDirection === 'asc' ? 'desc' : 'asc';
@@ -1780,11 +1763,10 @@
           sortDirection = 'asc';
         }
         renderInventoryTable();
-      });
-    });
+        return;
+      }
 
-    // Delegated actions on tables
-    document.addEventListener('click', (e) => {
+      // 8. General button clicks
       const target = e.target.closest('button');
       if (!target) return;
 
@@ -1810,74 +1792,196 @@
       } else if (target.classList.contains('btn-rod-more')) {
         const id = target.dataset.id;
         openMobileActionSheet(id);
+      } else if (target.id === 'btnOpenCutLogsModal') {
+        openCutLogsModal();
+      } else if (target.id === 'btnExportCutLogsCsv') {
+        exportCutLogsCsv();
+      } else if (target.id === 'btnClearCutLogs') {
+        clearCutLogs();
+      } else if (target.id === 'btnCutLogsCards') {
+        setCutLogsViewMode('cards');
+      } else if (target.id === 'btnCutLogsTable') {
+        setCutLogsViewMode('table');
+      } else if (target.id === 'btnResetInventoryFilters') {
+        refreshDomElements();
+        if (filterKeyword) filterKeyword.value = '';
+        if (filterDiameter) filterDiameter.value = 'all';
+        if (filterStockStatus) filterStockStatus.value = 'all';
+        renderQuickDiameterChips();
+        renderInventoryTable();
+      } else if (target.id === 'btnResetSmartSearch') {
+        resetSmartSearch();
+      } else if (target.id === 'btnInstallPwa' || target.id === 'mobNavInstall' || target.id === 'btnTriggerInstallPrompt') {
+        openInstallModal();
+      } else if (target.id === 'btnCloseInstallModal' || target.id === 'btnCloseInstallModalBtn') {
+        closeInstallModal();
+      } else if (target.id === 'btnDuplicateMerge') {
+        resolveDuplicateMerge();
+      } else if (target.id === 'btnDuplicateKeepSeparate') {
+        resolveDuplicateKeepSeparate();
+      } else if (target.id === 'btnDuplicateCancel' || target.id === 'btnCloseDuplicateModal') {
+        resolveDuplicateCancel();
+      } else if (target.id === 'btnConfirmOk') {
+        if (pendingConfirmCallback) pendingConfirmCallback();
+        closeConfirmModal();
+      } else if (target.id === 'btnConfirmCancel' || target.id === 'btnCloseConfirmModal') {
+        closeConfirmModal();
+      } else if (target.id === 'btnExportCsv') {
+        exportInventoryCsv();
+      } else if (target.id === 'btnCutStepDown') {
+        refreshDomElements();
+        const current = parseInt(cutPiecesQtyInput ? cutPiecesQtyInput.value : '1', 10) || 1;
+        if (current > 1 && cutPiecesQtyInput) {
+          cutPiecesQtyInput.value = current - 1;
+          updateCutCalculations();
+        }
+      } else if (target.id === 'btnCutStepUp') {
+        refreshDomElements();
+        const current = parseInt(cutPiecesQtyInput ? cutPiecesQtyInput.value : '0', 10) || 0;
+        const rod = rods.find(r => r.id === (cutRodId ? cutRodId.value : ''));
+        if (rod && current < rod.quantity && cutPiecesQtyInput) {
+          cutPiecesQtyInput.value = current + 1;
+          updateCutCalculations();
+        }
+      } else if (target.id === 'btnDeductStepDown') {
+        refreshDomElements();
+        const current = parseInt(deductQuantityInput ? deductQuantityInput.value : '1', 10) || 1;
+        if (current > 1 && deductQuantityInput) {
+          deductQuantityInput.value = current - 1;
+          const rod = rods.find(r => r.id === (deductRodId ? deductRodId.value : ''));
+          if (rod) updateDeductRemainingHint(rod.quantity, current - 1);
+        }
+      } else if (target.id === 'btnDeductStepUp') {
+        refreshDomElements();
+        const current = parseInt(deductQuantityInput ? deductQuantityInput.value : '0', 10) || 0;
+        const rod = rods.find(r => r.id === (deductRodId ? deductRodId.value : ''));
+        if (rod && current < rod.quantity && deductQuantityInput) {
+          deductQuantityInput.value = current + 1;
+          updateDeductRemainingHint(rod.quantity, current + 1);
+        }
+      } else if (target.id === 'btnCloseActionSheet') {
+        closeMobileActionSheet();
+      } else if (target.id === 'btnSheetDec') {
+        if (activeActionSheetRodId) {
+          quickAdjustQuantity(activeActionSheetRodId, -1);
+          const rod = rods.find(r => r.id === activeActionSheetRodId);
+          if (rod) {
+            refreshDomElements();
+            if (sheetQtyDisplay) sheetQtyDisplay.textContent = rod.quantity;
+            if (actionSheetQty) actionSheetQty.textContent = `${rod.quantity} pcs`;
+          }
+        }
+      } else if (target.id === 'btnSheetInc') {
+        if (activeActionSheetRodId) {
+          quickAdjustQuantity(activeActionSheetRodId, 1);
+          const rod = rods.find(r => r.id === activeActionSheetRodId);
+          if (rod) {
+            refreshDomElements();
+            if (sheetQtyDisplay) sheetQtyDisplay.textContent = rod.quantity;
+            if (actionSheetQty) actionSheetQty.textContent = `${rod.quantity} pcs`;
+          }
+        }
+      } else if (target.id === 'btnSheetCut') {
+        const id = activeActionSheetRodId;
+        closeMobileActionSheet();
+        if (id) openCutModal(id);
+      } else if (target.id === 'btnSheetDeduct') {
+        const id = activeActionSheetRodId;
+        closeMobileActionSheet();
+        if (id) openDeductModal(id);
+      } else if (target.id === 'btnSheetEdit') {
+        const id = activeActionSheetRodId;
+        closeMobileActionSheet();
+        if (id) openEditRodModal(id);
+      } else if (target.id === 'btnSheetDelete') {
+        const id = activeActionSheetRodId;
+        closeMobileActionSheet();
+        if (id) deleteRod(id);
+      } else if (target.id === 'btnViewRow') {
+        refreshDomElements();
+        const container = document.getElementById('inventoryTableContainer');
+        const btnRow = document.getElementById('btnViewRow');
+        const btnCards = document.getElementById('btnViewCards');
+        if (container) container.classList.remove('inventory-card-view');
+        if (btnRow) btnRow.classList.add('active');
+        if (btnCards) btnCards.classList.remove('active');
+      } else if (target.id === 'btnViewCards') {
+        refreshDomElements();
+        const container = document.getElementById('inventoryTableContainer');
+        const btnRow = document.getElementById('btnViewRow');
+        const btnCards = document.getElementById('btnViewCards');
+        if (container) container.classList.add('inventory-card-view');
+        if (btnCards) btnCards.classList.add('active');
+        if (btnRow) btnRow.classList.remove('active');
       }
     });
 
-    // View Switcher (Single-Line Row View vs Cards View)
-    const btnViewRow = document.getElementById('btnViewRow');
-    const btnViewCards = document.getElementById('btnViewCards');
-    const inventoryTableContainer = document.getElementById('inventoryTableContainer');
+    // Delegated submit on document
+    document.addEventListener('submit', (e) => {
+      if (!e.target) return;
+      if (e.target.id === 'rodForm') {
+        handleSaveRodSubmit(e);
+      } else if (e.target.id === 'cutForm') {
+        handleCutSubmit(e);
+      } else if (e.target.id === 'deductForm') {
+        handleDeductSubmit(e);
+      } else if (e.target.id === 'smartSearchForm') {
+        e.preventDefault();
+        refreshDomElements();
+        executeSmartSearch(searchDiameterInput ? searchDiameterInput.value : '', searchLengthInput ? searchLengthInput.value : '', true);
+      }
+    });
 
-    if (btnViewRow && btnViewCards && inventoryTableContainer) {
-      btnViewRow.addEventListener('click', () => {
-        inventoryTableContainer.classList.remove('inventory-card-view');
-        btnViewRow.classList.add('active');
-        btnViewCards.classList.remove('active');
-      });
-      btnViewCards.addEventListener('click', () => {
-        inventoryTableContainer.classList.add('inventory-card-view');
-        btnViewCards.classList.add('active');
-        btnViewRow.classList.remove('active');
-      });
-    }
+    // Delegated input / change on document
+    document.addEventListener('input', (e) => {
+      if (!e.target) return;
+      if (e.target.id === 'filterKeyword') {
+        renderInventoryTable();
+      } else if (e.target.id === 'filterCutLogsInput') {
+        renderCutLogsTable();
+      } else if (e.target.id === 'cutRequiredLengthInput' || e.target.id === 'cutPiecesQtyInput') {
+        updateCutCalculations();
+      } else if (e.target.id === 'deductQuantityInput') {
+        refreshDomElements();
+        const rod = rods.find(r => r.id === (deductRodId ? deductRodId.value : ''));
+        const val = parseInt(e.target.value, 10) || 0;
+        if (rod) updateDeductRemainingHint(rod.quantity, val);
+      }
+    });
 
-    // Mobile Action Sheet Modal Listeners
-    setupMobileActionSheetListeners();
-
-    // CSV Export & Import
-    btnExportCsv.addEventListener('click', exportInventoryCsv);
-    csvFileInput.addEventListener('change', handleCsvImport);
-
-    // Reset & Clear data buttons
-    btnResetSampleData.addEventListener('click', resetToSampleData);
-    btnClearAllData.addEventListener('click', clearAllData);
+    document.addEventListener('change', (e) => {
+      if (!e.target) return;
+      if (e.target.id === 'filterDiameter') {
+        renderQuickDiameterChips();
+        renderInventoryTable();
+      } else if (e.target.id === 'filterStockStatus') {
+        renderInventoryTable();
+      } else if (e.target.id === 'csvFileInput') {
+        handleCsvImport(e);
+      }
+    });
 
     // Escape Key to close modals
     document.addEventListener('keydown', (e) => {
       if (e.key === 'Escape') {
+        refreshDomElements();
         if (mobileActionSheetOverlay && !mobileActionSheetOverlay.classList.contains('hidden')) closeMobileActionSheet();
-        if (!installModalOverlay.classList.contains('hidden')) closeInstallModal();
-        if (!cutLogsModalOverlay.classList.contains('hidden')) closeCutLogsModal();
-        if (!cutModalOverlay.classList.contains('hidden')) closeCutModal();
-        if (!rodModalOverlay.classList.contains('hidden')) closeRodModal();
-        if (!deductModalOverlay.classList.contains('hidden')) closeDeductModal();
-        if (!duplicateModalOverlay.classList.contains('hidden')) resolveDuplicateCancel();
-        if (!confirmModalOverlay.classList.contains('hidden')) closeConfirmModal();
+        if (installModalOverlay && !installModalOverlay.classList.contains('hidden')) closeInstallModal();
+        if (cutLogsModalOverlay && !cutLogsModalOverlay.classList.contains('hidden')) closeCutLogsModal();
+        if (cutModalOverlay && !cutModalOverlay.classList.contains('hidden')) closeCutModal();
+        if (rodModalOverlay && !rodModalOverlay.classList.contains('hidden')) closeRodModal();
+        if (deductModalOverlay && !deductModalOverlay.classList.contains('hidden')) closeDeductModal();
+        if (duplicateModalOverlay && !duplicateModalOverlay.classList.contains('hidden')) resolveDuplicateCancel();
+        if (confirmModalOverlay && !confirmModalOverlay.classList.contains('hidden')) closeConfirmModal();
       }
     });
   }
 
   // --- MOBILE ACTION SHEET FOR COMPACT ROWS ---
   let activeActionSheetRodId = null;
-  const mobileActionSheetOverlay = document.getElementById('mobileActionSheetOverlay');
-  const btnCloseActionSheet = document.getElementById('btnCloseActionSheet');
-  const actionSheetRodName = document.getElementById('actionSheetRodName');
-  const actionSheetRodSku = document.getElementById('actionSheetRodSku');
-  const actionSheetDiameter = document.getElementById('actionSheetDiameter');
-  const actionSheetLength = document.getElementById('actionSheetLength');
-  const actionSheetQty = document.getElementById('actionSheetQty');
-  const actionSheetStatus = document.getElementById('actionSheetStatus');
-  const actionSheetNotesBox = document.getElementById('actionSheetNotesBox');
-  const actionSheetNotesText = document.getElementById('actionSheetNotesText');
-  const sheetQtyDisplay = document.getElementById('sheetQtyDisplay');
-  const btnSheetDec = document.getElementById('btnSheetDec');
-  const btnSheetInc = document.getElementById('btnSheetInc');
-  const btnSheetCut = document.getElementById('btnSheetCut');
-  const btnSheetDeduct = document.getElementById('btnSheetDeduct');
-  const btnSheetEdit = document.getElementById('btnSheetEdit');
-  const btnSheetDelete = document.getElementById('btnSheetDelete');
 
   function openMobileActionSheet(id) {
+    refreshDomElements();
     const rod = rods.find(r => r.id === id);
     if (!rod) return;
     activeActionSheetRodId = id;
@@ -1910,77 +2014,11 @@
   }
 
   function closeMobileActionSheet() {
+    refreshDomElements();
     if (mobileActionSheetOverlay) {
       mobileActionSheetOverlay.classList.add('hidden');
     }
     activeActionSheetRodId = null;
-  }
-
-  function setupMobileActionSheetListeners() {
-    if (btnCloseActionSheet) {
-      btnCloseActionSheet.addEventListener('click', closeMobileActionSheet);
-    }
-    if (mobileActionSheetOverlay) {
-      mobileActionSheetOverlay.addEventListener('click', (e) => {
-        if (e.target === mobileActionSheetOverlay) closeMobileActionSheet();
-      });
-    }
-
-    if (btnSheetDec) {
-      btnSheetDec.addEventListener('click', () => {
-        if (!activeActionSheetRodId) return;
-        quickAdjustQuantity(activeActionSheetRodId, -1);
-        const rod = rods.find(r => r.id === activeActionSheetRodId);
-        if (rod) {
-          if (sheetQtyDisplay) sheetQtyDisplay.textContent = rod.quantity;
-          if (actionSheetQty) actionSheetQty.textContent = `${rod.quantity} pcs`;
-        }
-      });
-    }
-
-    if (btnSheetInc) {
-      btnSheetInc.addEventListener('click', () => {
-        if (!activeActionSheetRodId) return;
-        quickAdjustQuantity(activeActionSheetRodId, 1);
-        const rod = rods.find(r => r.id === activeActionSheetRodId);
-        if (rod) {
-          if (sheetQtyDisplay) sheetQtyDisplay.textContent = rod.quantity;
-          if (actionSheetQty) actionSheetQty.textContent = `${rod.quantity} pcs`;
-        }
-      });
-    }
-
-    if (btnSheetCut) {
-      btnSheetCut.addEventListener('click', () => {
-        const id = activeActionSheetRodId;
-        closeMobileActionSheet();
-        if (id) openCutModal(id);
-      });
-    }
-
-    if (btnSheetDeduct) {
-      btnSheetDeduct.addEventListener('click', () => {
-        const id = activeActionSheetRodId;
-        closeMobileActionSheet();
-        if (id) openDeductModal(id);
-      });
-    }
-
-    if (btnSheetEdit) {
-      btnSheetEdit.addEventListener('click', () => {
-        const id = activeActionSheetRodId;
-        closeMobileActionSheet();
-        if (id) openEditRodModal(id);
-      });
-    }
-
-    if (btnSheetDelete) {
-      btnSheetDelete.addEventListener('click', () => {
-        const id = activeActionSheetRodId;
-        closeMobileActionSheet();
-        if (id) deleteRod(id);
-      });
-    }
   }
 
   // --- UTILITY: HTML ESCAPING ---
