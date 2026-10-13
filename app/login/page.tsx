@@ -2,44 +2,71 @@
 
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { signInWithEmailAndPassword } from 'firebase/auth';
+import { 
+    signInWithEmailAndPassword, 
+    createUserWithEmailAndPassword,
+    sendPasswordResetEmail 
+} from 'firebase/auth';
 import { auth } from '@/lib/firebase';
 
 export default function Login() {
+    const [mode, setMode] = useState<'signin' | 'register'>('signin');
     const [email, setEmail] = useState('');
     const [password, setPassword] = useState('');
     const [error, setError] = useState('');
+    const [infoMsg, setInfoMsg] = useState('');
+    const [canRegisterPrompt, setCanRegisterPrompt] = useState(false);
     const [loading, setLoading] = useState(false);
     const router = useRouter();
 
-    const handleLogin = async (e?: React.FormEvent) => {
-        if (e) e.preventDefault();
+    const handleAuth = async (overrideMode?: 'signin' | 'register') => {
+        const currentMode = overrideMode || mode;
         setError('');
+        setInfoMsg('');
+        setCanRegisterPrompt(false);
 
         const cleanEmail = email.trim();
         if (!cleanEmail || !password) {
-            setError('Please enter your registered email address and password.');
+            setError('Please enter both your email address and password.');
+            return;
+        }
+
+        if (password.length < 6) {
+            setError('Password must contain at least 6 characters.');
             return;
         }
 
         setLoading(true);
         try {
-            // Strictly authenticate against Firebase — only registered users will succeed
             let idToken = '';
             let registeredEmail = cleanEmail;
 
             if (process.env.NEXT_PUBLIC_FIREBASE_API_KEY) {
-                const userCredential = await signInWithEmailAndPassword(auth, cleanEmail, password);
-                if (!userCredential?.user) {
-                    throw new Error('Access denied: Authentication failed.');
+                if (currentMode === 'register') {
+                    // Register the new user in Firebase Auth
+                    const userCredential = await createUserWithEmailAndPassword(auth, cleanEmail, password);
+                    idToken = await userCredential.user.getIdToken();
+                    registeredEmail = userCredential.user.email || cleanEmail;
+                } else {
+                    // Sign in existing registered user
+                    try {
+                        const userCredential = await signInWithEmailAndPassword(auth, cleanEmail, password);
+                        idToken = await userCredential.user.getIdToken();
+                        registeredEmail = userCredential.user.email || cleanEmail;
+                    } catch (signInErr: unknown) {
+                        const fbErr = signInErr as { code?: string; message?: string };
+                        if (fbErr?.code === 'auth/invalid-credential' || fbErr?.code === 'auth/user-not-found') {
+                            setCanRegisterPrompt(true);
+                            throw new Error('Account not found or password incorrect. If this is a new user, you can register it below.');
+                        }
+                        throw signInErr;
+                    }
                 }
-                idToken = await userCredential.user.getIdToken();
-                registeredEmail = userCredential.user.email || cleanEmail;
             } else {
-                throw new Error('Authentication service is not configured.');
+                throw new Error('Firebase authentication service is not configured.');
             }
 
-            // Asynchronously sync verified session to server API route
+            // Sync verified session with server API route
             const res = await fetch('/api/auth/login', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
@@ -51,7 +78,7 @@ export default function Login() {
                 throw new Error(data.message || 'Login verification failed.');
             }
 
-            // Issue session cookies ONLY after verified credentials
+            // Issue session cookies only after verified credentials
             document.cookie = "auth=true; path=/; max-age=604800; SameSite=Lax";
             document.cookie = `rodsync_user=${encodeURIComponent(registeredEmail)}; path=/; max-age=604800; SameSite=Lax`;
 
@@ -60,15 +87,16 @@ export default function Login() {
             console.error('Authentication rejected:', authErr);
             const fbErr = authErr as { code?: string; message?: string };
 
-            let message = 'Access denied: Only registered users are permitted to access this portal.';
-            if (fbErr?.code === 'auth/user-not-found') {
-                message = 'Access denied: No registered account found with this email.';
-            } else if (fbErr?.code === 'auth/wrong-password' || fbErr?.code === 'auth/invalid-credential') {
-                message = 'Access denied: Invalid credentials. Only registered users with valid credentials can log in.';
+            let message = 'Authentication failed. Please verify your credentials.';
+            if (fbErr?.code === 'auth/email-already-in-use') {
+                message = 'This email is already registered in Firebase. Please use Sign In with your existing password.';
+                setMode('signin');
+            } else if (fbErr?.code === 'auth/weak-password') {
+                message = 'Password should contain at least 6 characters.';
             } else if (fbErr?.code === 'auth/invalid-email') {
                 message = 'Please provide a valid email address.';
             } else if (fbErr?.code === 'auth/user-disabled') {
-                message = 'This account has been deactivated. Please contact the administrator.';
+                message = 'This account has been deactivated. Please contact your administrator.';
             } else if (fbErr?.code === 'auth/too-many-requests') {
                 message = 'Access temporarily locked due to multiple failed login attempts. Please try again later.';
             } else if (fbErr?.message) {
@@ -78,6 +106,23 @@ export default function Login() {
             setError(message);
         } finally {
             setLoading(false);
+        }
+    };
+
+    const handleForgotPassword = async () => {
+        const cleanEmail = email.trim();
+        if (!cleanEmail) {
+            setError('Please enter your email address in the field above to receive a password reset link.');
+            return;
+        }
+
+        try {
+            setError('');
+            await sendPasswordResetEmail(auth, cleanEmail);
+            setInfoMsg(`Password reset email sent to ${cleanEmail}. Please check your inbox.`);
+        } catch (resetErr: unknown) {
+            const fbErr = resetErr as { code?: string; message?: string };
+            setError(fbErr?.message || 'Failed to send password reset email. Confirm the email address is correct.');
         }
     };
 
@@ -96,28 +141,120 @@ export default function Login() {
                 WebkitBackdropFilter: 'blur(16px)',
                 border: '1px solid rgba(255, 255, 255, 0.3)',
                 borderRadius: '24px',
-                padding: '3rem 2.5rem',
+                padding: '2.5rem 2.5rem',
                 width: '100%',
-                maxWidth: '420px',
+                maxWidth: '430px',
                 boxShadow: '0 8px 32px rgba(0, 0, 0, 0.05)',
                 textAlign: 'center'
             }}>
-                <div style={{ marginBottom: '1.5rem' }}>
+                <div style={{ marginBottom: '1.25rem' }}>
                     <h1 style={{ fontSize: '2rem', fontWeight: 800, color: '#1a1f36', marginBottom: '0.2rem' }}>
                         Rod<span style={{ color: '#2563eb' }}>Sync</span>
                     </h1>
                     <p style={{ color: '#4b5563', fontSize: '0.95rem' }}>Secure Portal Access</p>
                 </div>
 
-                <form onSubmit={handleLogin} style={{ display: 'flex', flexDirection: 'column', gap: '1.25rem' }}>
+                {/* Mode Selector (Sign In vs Register) */}
+                <div style={{
+                    display: 'flex',
+                    background: 'rgba(255, 255, 255, 0.5)',
+                    borderRadius: '12px',
+                    padding: '4px',
+                    marginBottom: '1.25rem',
+                    border: '1px solid rgba(0, 0, 0, 0.05)'
+                }}>
+                    <button
+                        type="button"
+                        onClick={() => { setMode('signin'); setError(''); setInfoMsg(''); setCanRegisterPrompt(false); }}
+                        style={{
+                            flex: 1,
+                            padding: '0.55rem',
+                            border: 'none',
+                            borderRadius: '9px',
+                            background: mode === 'signin' ? '#2563eb' : 'transparent',
+                            color: mode === 'signin' ? '#ffffff' : '#4b5563',
+                            fontWeight: 600,
+                            fontSize: '0.88rem',
+                            cursor: 'pointer',
+                            transition: 'all 0.2s ease'
+                        }}
+                    >
+                        Sign In
+                    </button>
+                    <button
+                        type="button"
+                        onClick={() => { setMode('register'); setError(''); setInfoMsg(''); setCanRegisterPrompt(false); }}
+                        style={{
+                            flex: 1,
+                            padding: '0.55rem',
+                            border: 'none',
+                            borderRadius: '9px',
+                            background: mode === 'register' ? '#2563eb' : 'transparent',
+                            color: mode === 'register' ? '#ffffff' : '#4b5563',
+                            fontWeight: 600,
+                            fontSize: '0.88rem',
+                            cursor: 'pointer',
+                            transition: 'all 0.2s ease'
+                        }}
+                    >
+                        Register
+                    </button>
+                </div>
+
+                <form onSubmit={(e) => { e.preventDefault(); handleAuth(); }} style={{ display: 'flex', flexDirection: 'column', gap: '1.15rem' }}>
                     {error && (
-                        <div style={{ backgroundColor: '#fee2e2', color: '#b91c1c', padding: '0.75rem', borderRadius: '8px', fontSize: '0.85rem', textAlign: 'left' }}>
+                        <div style={{
+                            backgroundColor: '#fee2e2',
+                            color: '#b91c1c',
+                            padding: '0.75rem',
+                            borderRadius: '10px',
+                            fontSize: '0.85rem',
+                            textAlign: 'left',
+                            lineHeight: 1.4
+                        }}>
                             {error}
+                            {canRegisterPrompt && (
+                                <button
+                                    type="button"
+                                    onClick={() => handleAuth('register')}
+                                    style={{
+                                        display: 'block',
+                                        marginTop: '0.5rem',
+                                        backgroundColor: '#2563eb',
+                                        color: '#ffffff',
+                                        border: 'none',
+                                        padding: '0.45rem 0.75rem',
+                                        borderRadius: '8px',
+                                        fontSize: '0.8rem',
+                                        fontWeight: 600,
+                                        cursor: 'pointer',
+                                        width: '100%',
+                                        textAlign: 'center'
+                                    }}
+                                >
+                                    ✨ Register &quot;{email}&quot; with this password now
+                                </button>
+                            )}
+                        </div>
+                    )}
+
+                    {infoMsg && (
+                        <div style={{
+                            backgroundColor: '#dcfce7',
+                            color: '#15803d',
+                            padding: '0.75rem',
+                            borderRadius: '10px',
+                            fontSize: '0.85rem',
+                            textAlign: 'left'
+                        }}>
+                            {infoMsg}
                         </div>
                     )}
 
                     <div style={{ textAlign: 'left' }}>
-                        <label style={{ display: 'block', fontSize: '0.85rem', fontWeight: 600, color: '#374151', marginBottom: '0.4rem' }}>Email Address</label>
+                        <label style={{ display: 'block', fontSize: '0.85rem', fontWeight: 600, color: '#374151', marginBottom: '0.4rem' }}>
+                            Email Address
+                        </label>
                         <input
                             type="email"
                             value={email}
@@ -127,13 +264,32 @@ export default function Login() {
                                 background: 'rgba(255,255,255,0.7)', fontSize: '0.95rem', outline: 'none', transition: 'all 0.2s ease',
                                 boxSizing: 'border-box'
                             }}
-                            placeholder="admin@rodsync.com"
+                            placeholder="user@rodsync.com"
                             required
                         />
                     </div>
 
                     <div style={{ textAlign: 'left' }}>
-                        <label style={{ display: 'block', fontSize: '0.85rem', fontWeight: 600, color: '#374151', marginBottom: '0.4rem' }}>Password</label>
+                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.4rem' }}>
+                            <label style={{ fontSize: '0.85rem', fontWeight: 600, color: '#374151' }}>Password</label>
+                            {mode === 'signin' && (
+                                <button
+                                    type="button"
+                                    onClick={handleForgotPassword}
+                                    style={{
+                                        background: 'none',
+                                        border: 'none',
+                                        fontSize: '0.78rem',
+                                        color: '#2563eb',
+                                        cursor: 'pointer',
+                                        padding: 0,
+                                        textDecoration: 'underline'
+                                    }}
+                                >
+                                    Forgot?
+                                </button>
+                            )}
+                        </div>
                         <input
                             type="password"
                             value={password}
@@ -152,16 +308,16 @@ export default function Login() {
                         type="submit"
                         disabled={loading}
                         style={{
-                            marginTop: '0.75rem', width: '100%', backgroundColor: '#2563eb', color: 'white', border: 'none',
+                            marginTop: '0.5rem', width: '100%', backgroundColor: '#2563eb', color: 'white', border: 'none',
                             padding: '1rem', borderRadius: '12px', fontSize: '1rem', fontWeight: 600, cursor: loading ? 'not-allowed' : 'pointer',
                             boxShadow: '0 4px 12px rgba(37, 99, 235, 0.2)', transition: 'background-color 0.2s ease, transform 0.1s ease',
                             opacity: loading ? 0.7 : 1
                         }}>
-                        {loading ? 'Authenticating (Async)...' : 'Sign In'}
+                        {loading ? 'Authenticating (Async)...' : mode === 'signin' ? 'Sign In' : 'Create & Register Account'}
                     </button>
                 </form>
 
-                <p style={{ marginTop: '2rem', fontSize: '0.8rem', color: '#6b7280' }}>
+                <p style={{ marginTop: '1.75rem', fontSize: '0.8rem', color: '#6b7280' }}>
                     &copy; 2026 RodSync Management System
                 </p>
             </div>
