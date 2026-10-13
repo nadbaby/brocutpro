@@ -15,31 +15,67 @@ export default function Login() {
     const handleLogin = async (e?: React.FormEvent) => {
         if (e) e.preventDefault();
         setError('');
+
+        const cleanEmail = email.trim();
+        if (!cleanEmail || !password) {
+            setError('Please enter your registered email address and password.');
+            return;
+        }
+
         setLoading(true);
         try {
-            if (process.env.NEXT_PUBLIC_FIREBASE_API_KEY && email && password) {
-                try {
-                    await signInWithEmailAndPassword(auth, email, password);
-                } catch (authErr: unknown) {
-                    console.warn('Firebase login fallback active:', authErr);
+            // Strictly authenticate against Firebase — only registered users will succeed
+            let idToken = '';
+            let registeredEmail = cleanEmail;
+
+            if (process.env.NEXT_PUBLIC_FIREBASE_API_KEY) {
+                const userCredential = await signInWithEmailAndPassword(auth, cleanEmail, password);
+                if (!userCredential?.user) {
+                    throw new Error('Access denied: Authentication failed.');
                 }
+                idToken = await userCredential.user.getIdToken();
+                registeredEmail = userCredential.user.email || cleanEmail;
+            } else {
+                throw new Error('Authentication service is not configured.');
             }
 
-            // Asynchronously sync session to API route
-            await fetch('/api/auth/login', {
+            // Asynchronously sync verified session to server API route
+            const res = await fetch('/api/auth/login', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ email: email || 'admin@rodsync.com' })
-            }).catch(() => {});
+                body: JSON.stringify({ email: registeredEmail, token: idToken })
+            });
 
-            document.cookie = "auth=true; path=/; max-age=604800; SameSite=Lax";
-            if (email) {
-                document.cookie = `rodsync_user=${encodeURIComponent(email)}; path=/; max-age=604800; SameSite=Lax`;
+            const data = await res.json();
+            if (!data.success) {
+                throw new Error(data.message || 'Login verification failed.');
             }
-            window.location.href = '/';
-        } catch {
+
+            // Issue session cookies ONLY after verified credentials
             document.cookie = "auth=true; path=/; max-age=604800; SameSite=Lax";
+            document.cookie = `rodsync_user=${encodeURIComponent(registeredEmail)}; path=/; max-age=604800; SameSite=Lax`;
+
             window.location.href = '/';
+        } catch (authErr: unknown) {
+            console.error('Authentication rejected:', authErr);
+            const fbErr = authErr as { code?: string; message?: string };
+
+            let message = 'Access denied: Only registered users are permitted to access this portal.';
+            if (fbErr?.code === 'auth/user-not-found') {
+                message = 'Access denied: No registered account found with this email.';
+            } else if (fbErr?.code === 'auth/wrong-password' || fbErr?.code === 'auth/invalid-credential') {
+                message = 'Access denied: Invalid credentials. Only registered users with valid credentials can log in.';
+            } else if (fbErr?.code === 'auth/invalid-email') {
+                message = 'Please provide a valid email address.';
+            } else if (fbErr?.code === 'auth/user-disabled') {
+                message = 'This account has been deactivated. Please contact the administrator.';
+            } else if (fbErr?.code === 'auth/too-many-requests') {
+                message = 'Access temporarily locked due to multiple failed login attempts. Please try again later.';
+            } else if (fbErr?.message) {
+                message = fbErr.message;
+            }
+
+            setError(message);
         } finally {
             setLoading(false);
         }
