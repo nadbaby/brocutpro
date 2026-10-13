@@ -26,8 +26,18 @@ interface CutLogRecord {
     reason?: string;
 }
 
+interface CacheEntry {
+    rods: RodRecord[];
+    cutLogs: CutLogRecord[];
+    timestamp: number;
+}
+
+// In-memory cache across requests to make multi-device / network access instantaneous
+let memoryCache: CacheEntry | null = null;
+const CACHE_TTL_MS = 60 * 1000; // 60 seconds TTL
+
 const getScriptUrl = (req?: Request): string => {
-    const envUrl = process.env.GOOGLE_SCRIPT_URL || process.env.GOOGLE_SHEETS_SCRIPT_URL || '';
+    const envUrl = process.env.GOOGLE_SCRIPT_URL || process.env.GOOGLE_SHEETS_SCRIPT_URL || process.env.NEXT_PUBLIC_GOOGLE_SCRIPT_URL || '';
     if (envUrl.trim()) return envUrl.trim();
     if (req) {
         const headerUrl = req.headers.get('x-google-script-url');
@@ -63,30 +73,70 @@ const getSheetsDoc = async () => {
 
 export async function GET(req: Request) {
     const scriptUrl = getScriptUrl(req);
+    const url = new URL(req.url);
+    const forceRefresh = url.searchParams.get('refresh') === 'true' || req.headers.get('x-refresh') === 'true';
+
+    // 0. Serve from fast in-memory cache if fresh
+    if (!forceRefresh && memoryCache && (Date.now() - memoryCache.timestamp < CACHE_TTL_MS)) {
+        return NextResponse.json({
+            success: true,
+            configured: true,
+            mode: 'cached',
+            cached: true,
+            rods: memoryCache.rods,
+            cutLogs: memoryCache.cutLogs
+        });
+    }
 
     // 1. Google Apps Script Web App Mode (Preferred)
     if (scriptUrl) {
         try {
+            const controller = new AbortController();
+            const timeoutId = setTimeout(() => controller.abort(), 25000);
             const response = await fetch(scriptUrl, {
                 method: 'GET',
                 redirect: 'follow',
-                cache: 'no-store'
+                cache: 'no-store',
+                signal: controller.signal
             });
+            clearTimeout(timeoutId);
 
             if (!response.ok) {
                 throw new Error(`Apps Script responded with status: ${response.status}`);
             }
 
             const data = await response.json();
+            const rods = data.rods || [];
+            const cutLogs = data.cutLogs || [];
+
+            if (data.success || rods.length > 0) {
+                memoryCache = {
+                    rods,
+                    cutLogs,
+                    timestamp: Date.now()
+                };
+            }
+
             return NextResponse.json({
                 success: Boolean(data.success),
                 configured: true,
                 mode: 'apps-script',
-                rods: data.rods || [],
-                cutLogs: data.cutLogs || []
+                rods,
+                cutLogs
             });
         } catch (error: unknown) {
             console.error('Google Apps Script Read Error:', error);
+            // If we have any cached data from earlier, return it as fallback!
+            if (memoryCache && memoryCache.rods.length > 0) {
+                return NextResponse.json({
+                    success: true,
+                    configured: true,
+                    mode: 'fallback-cache',
+                    cached: true,
+                    rods: memoryCache.rods,
+                    cutLogs: memoryCache.cutLogs
+                });
+            }
             const message = error instanceof Error ? error.message : 'Failed to reach Apps Script';
             return NextResponse.json({ success: false, configured: true, message }, { status: 500 });
         }
@@ -189,6 +239,14 @@ export async function POST(req: Request) {
                 resData = JSON.parse(text);
             } catch {
                 resData = { success: true, message: 'Synchronized with Google Sheets' };
+            }
+
+            if (resData.success !== false) {
+                memoryCache = {
+                    rods: payload.rods || memoryCache?.rods || [],
+                    cutLogs: payload.cutLogs || memoryCache?.cutLogs || [],
+                    timestamp: Date.now()
+                };
             }
 
             return NextResponse.json({

@@ -106,6 +106,7 @@ function doPost(e) {
 
 export default function Home() {
   const router = useRouter();
+  const [isCheckingAuth, setIsCheckingAuth] = useState(true);
   const [isInitializing, setIsInitializing] = useState(false);
   const [theme, setTheme] = useState(() => (typeof document !== 'undefined' ? document.documentElement.getAttribute('data-theme') || 'light' : 'light'));
   const [isImportModalOpen, setIsImportModalOpen] = useState(false);
@@ -138,6 +139,7 @@ export default function Home() {
 
   const handleLogout = async () => {
     try {
+      await fetch('/api/auth/logout', { method: 'POST' });
       if (process.env.NEXT_PUBLIC_FIREBASE_API_KEY) {
         const { getAuth, signOut } = await import('firebase/auth');
         const auth = getAuth();
@@ -146,10 +148,11 @@ export default function Home() {
     } catch (e: unknown) {
       console.error(e);
     }
-    // Delete cookie precisely by expiring it
+    // Delete auth cookies precisely by expiring them
     document.cookie = "auth=; expires=Thu, 01 Jan 1970 00:00:00 UTC; path=/;";
-    // Ensure routing replaces history to prevent back-button ghosts
-    router.replace('/login');
+    document.cookie = "rodsync_user=; expires=Thu, 01 Jan 1970 00:00:00 UTC; path=/;";
+    // Force full page navigation to login portal
+    window.location.href = '/login';
   };
 
   const toggleTheme = () => {
@@ -166,78 +169,134 @@ export default function Home() {
     setTheme(newTheme);
   };
 
-  useEffect(() => {
-    // Auto-set auth cookie for seamless local development
-    if (typeof document !== 'undefined' && !document.cookie.includes('auth=true')) {
-      document.cookie = "auth=true; path=/; max-age=86400";
+  const syncInventoryData = async (forceRefresh = false) => {
+    let loadedFromBackend = false;
+    setSheetsStatus('syncing');
+
+    const hasLocalData = typeof window !== 'undefined' && (() => {
+      try {
+        const stored = localStorage.getItem('rod_stock_inventory_v1');
+        return Boolean(stored && JSON.parse(stored).length > 0);
+      } catch {
+        return false;
+      }
+    })();
+
+    if (!hasLocalData && !forceRefresh) {
+      setIsInitializing(true);
     }
+
+    const scriptUrl = (typeof window !== 'undefined' ? localStorage.getItem('rodsync_gsheets_script_url') : null) || process.env.NEXT_PUBLIC_GOOGLE_SCRIPT_URL || '';
+
+    // 1. Fetch from Google Sheets (via Apps Script or service account)
+    try {
+      const headers: Record<string, string> = {};
+      if (scriptUrl) headers['x-google-script-url'] = scriptUrl;
+      if (forceRefresh) headers['x-refresh'] = 'true';
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), 40000); // 40s timeout for cold starts
+      const url = forceRefresh ? '/api/gsheets-sync?refresh=true' : '/api/gsheets-sync';
+      const res = await fetch(url, { headers, signal: controller.signal });
+      clearTimeout(timeoutId);
+      if (res.ok) {
+        const gsData = await res.json();
+        if (gsData.configured) {
+          if (gsData.success) {
+            setSheetsStatus('connected');
+            if (gsData.rods?.length > 0 || gsData.cutLogs?.length > 0) {
+              window.__INITIAL_RODS__ = gsData.rods || [];
+              window.__INITIAL_CUT_LOGS__ = gsData.cutLogs || [];
+              if (typeof window !== 'undefined') {
+                if (gsData.rods?.length > 0) {
+                  localStorage.setItem('rod_stock_inventory_v1', JSON.stringify(gsData.rods));
+                }
+                if (gsData.cutLogs?.length > 0) {
+                  localStorage.setItem('rod_stock_cut_logs_v1', JSON.stringify(gsData.cutLogs));
+                }
+              }
+              if (window.setVanillaRods) window.setVanillaRods(gsData.rods || []);
+              if (window.setVanillaCutLogs) window.setVanillaCutLogs(gsData.cutLogs || []);
+              if (window.updateDashboardExternal) window.updateDashboardExternal();
+              loadedFromBackend = true;
+            }
+          } else {
+            setSheetsStatus('disconnected');
+          }
+        } else {
+          setSheetsStatus('unconfigured');
+        }
+      } else {
+        setSheetsStatus('disconnected');
+      }
+    } catch (err: unknown) {
+      console.warn('GSheets read failed or not configured', err);
+      setSheetsStatus('disconnected');
+    }
+
+    // 2. Fallback to Firebase
+    try {
+      if (!loadedFromBackend && process.env.NEXT_PUBLIC_FIREBASE_API_KEY) {
+        const docRef = doc(db, 'inventory', 'main');
+        const snap = await getDoc(docRef);
+        if (snap.exists()) {
+          const data = snap.data();
+          window.__INITIAL_RODS__ = data.rods || [];
+          window.__INITIAL_CUT_LOGS__ = data.cutLogs || [];
+          if (window.setVanillaRods) window.setVanillaRods(data.rods || []);
+          if (window.setVanillaCutLogs) window.setVanillaCutLogs(data.cutLogs || []);
+          if (window.updateDashboardExternal) window.updateDashboardExternal();
+        }
+      }
+    } catch (e: unknown) {
+      console.warn('Firebase error, fallback to local defaults', e);
+    } finally {
+      if (window.initVanillaApp) {
+        window.initVanillaApp();
+      }
+      setIsInitializing(false);
+    }
+  };
+
+  useEffect(() => {
+    // Compulsory Async Authentication Check
+    const verifyAuth = async () => {
+      try {
+        if (typeof document !== 'undefined') {
+          const hasAuthCookie = document.cookie
+            .split(';')
+            .some((c) => c.trim().startsWith('auth=true'));
+
+          if (!hasAuthCookie) {
+            router.replace('/login');
+            return;
+          }
+
+          // Asynchronously verify active session via API
+          try {
+            const res = await fetch('/api/auth/session');
+            if (!res.ok) {
+              router.replace('/login');
+              return;
+            }
+          } catch {
+            // Keep going if network is temporarily unreachable
+          }
+        }
+        setIsCheckingAuth(false);
+      } catch (err) {
+        console.error('Session verify error:', err);
+        setIsCheckingAuth(false);
+      }
+    };
+
+    verifyAuth();
 
     const defaultUrl = process.env.NEXT_PUBLIC_GOOGLE_SCRIPT_URL || '';
     if (typeof window !== 'undefined' && !localStorage.getItem('rodsync_gsheets_script_url') && defaultUrl) {
       localStorage.setItem('rodsync_gsheets_script_url', defaultUrl);
     }
-    const savedUrl = (typeof window !== 'undefined' ? localStorage.getItem('rodsync_gsheets_script_url') : null) || defaultUrl;
 
-    const initBackendData = async () => {
-      let loadedFromBackend = false;
-
-      // 1. Fetch from Google Sheets (via Apps Script or service account)
-      try {
-        const headers: Record<string, string> = {};
-        if (savedUrl) headers['x-google-script-url'] = savedUrl;
-        const controller = new AbortController();
-        const timeoutId = setTimeout(() => controller.abort(), 8000);
-        const res = await fetch('/api/gsheets-sync', { headers, signal: controller.signal });
-        clearTimeout(timeoutId);
-        if (res.ok) {
-          const gsData = await res.json();
-          if (gsData.configured) {
-            if (gsData.success) {
-              setSheetsStatus('connected');
-              if (gsData.rods?.length > 0 || gsData.cutLogs?.length > 0) {
-                window.__INITIAL_RODS__ = gsData.rods || [];
-                window.__INITIAL_CUT_LOGS__ = gsData.cutLogs || [];
-                if (window.setVanillaRods) window.setVanillaRods(gsData.rods || []);
-                if (window.setVanillaCutLogs) window.setVanillaCutLogs(gsData.cutLogs || []);
-                if (window.updateDashboardExternal) window.updateDashboardExternal();
-                loadedFromBackend = true;
-              }
-            } else {
-              setSheetsStatus('disconnected');
-            }
-          } else {
-            setSheetsStatus('unconfigured');
-          }
-        }
-      } catch (err: unknown) {
-        console.warn('GSheets read failed or not configured', err);
-        setSheetsStatus('disconnected');
-      }
-
-      // 2. Fallback to Firebase
-      try {
-        if (!loadedFromBackend && process.env.NEXT_PUBLIC_FIREBASE_API_KEY) {
-          const docRef = doc(db, 'inventory', 'main');
-          const snap = await getDoc(docRef);
-          if (snap.exists()) {
-            const data = snap.data();
-            window.__INITIAL_RODS__ = data.rods || [];
-            window.__INITIAL_CUT_LOGS__ = data.cutLogs || [];
-            if (window.setVanillaRods) window.setVanillaRods(data.rods || []);
-            if (window.setVanillaCutLogs) window.setVanillaCutLogs(data.cutLogs || []);
-            if (window.updateDashboardExternal) window.updateDashboardExternal();
-          }
-        }
-      } catch (e: unknown) {
-        console.warn('Firebase error, fallback to local defaults', e);
-      } finally {
-        if (window.initVanillaApp) {
-          window.initVanillaApp();
-        }
-        setIsInitializing(false);
-      }
-    };
-    initBackendData();
+    syncInventoryData(false);
 
     const handleSyncRods = async (e: Event) => {
       const customEvent = e as CustomEvent<unknown[]>;
@@ -338,6 +397,38 @@ export default function Home() {
     };
   }, [router]);
 
+  if (isCheckingAuth) {
+    return (
+      <div style={{
+        position: 'fixed',
+        inset: 0,
+        zIndex: 99999,
+        display: 'flex',
+        flexDirection: 'column',
+        alignItems: 'center',
+        justifyContent: 'center',
+        fontFamily: 'Inter, -apple-system, sans-serif',
+        background: 'radial-gradient(ellipse at top, #1e293b, #0f172a 80%)',
+        color: '#f8fafc',
+        gap: '16px'
+      }}>
+        <div style={{
+          width: '42px',
+          height: '42px',
+          border: '3px solid rgba(56, 189, 248, 0.2)',
+          borderTopColor: '#38bdf8',
+          borderRadius: '50%',
+          animation: 'rodsync-spin 0.8s linear infinite'
+        }}></div>
+        <div style={{ textAlign: 'center' }}>
+          <h3 style={{ margin: '0 0 6px 0', fontSize: '1.2rem', fontWeight: 700, color: '#f8fafc' }}>Verifying Access</h3>
+          <p style={{ margin: 0, fontSize: '0.875rem', color: '#94a3b8' }}>Checking compulsory authentication...</p>
+        </div>
+        <style>{`@keyframes rodsync-spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }`}</style>
+      </div>
+    );
+  }
+
   return (
     <>
       {isInitializing && (
@@ -349,11 +440,25 @@ export default function Home() {
           flexDirection: 'column',
           alignItems: 'center',
           justifyContent: 'center',
-          fontFamily: 'sans-serif',
-          background: '#f5f7fb',
-          color: '#64748b'
+          fontFamily: 'var(--font-sans, -apple-system, sans-serif)',
+          background: 'rgba(245, 247, 251, 0.96)',
+          backdropFilter: 'blur(10px)',
+          color: '#1e293b',
+          gap: '16px'
         }}>
-          <p style={{ fontWeight: 600 }}>Loading Secure Portal...</p>
+          <div style={{
+            width: '44px',
+            height: '44px',
+            border: '4px solid rgba(0, 113, 227, 0.15)',
+            borderTopColor: '#0071e3',
+            borderRadius: '50%',
+            animation: 'rodsync-spin 0.8s linear infinite'
+          }}></div>
+          <div style={{ textAlign: 'center' }}>
+            <h3 style={{ margin: '0 0 6px 0', fontSize: '1.15rem', fontWeight: 700 }}>Connecting to RodSync</h3>
+            <p style={{ margin: 0, fontSize: '0.875rem', color: '#64748b' }}>Syncing rod inventory from Google Sheets...</p>
+          </div>
+          <style>{`@keyframes rodsync-spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }`}</style>
         </div>
       )}
 
@@ -1454,10 +1559,24 @@ export default function Home() {
                   className="btn btn-secondary btn-sm"
                   onClick={() => {
                     localStorage.setItem('rodsync_gsheets_script_url', inputScriptUrl.trim());
-                    alert('Saved Google Sheets Script URL to browser settings!');
+                    syncInventoryData(true);
+                    alert('Saved Google Sheets Script URL and refreshed sync!');
                   }}
                 >
-                  Save URL
+                  Save URL &amp; Sync
+                </button>
+              </div>
+              <div style={{ marginTop: '8px' }}>
+                <button
+                  type="button"
+                  className="btn btn-primary btn-sm"
+                  style={{ width: '100%' }}
+                  onClick={() => {
+                    syncInventoryData(true);
+                    setIsSheetsModalOpen(false);
+                  }}
+                >
+                  🔄 Force Refresh Live Data Now
                 </button>
               </div>
             </div>

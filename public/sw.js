@@ -1,4 +1,4 @@
-const CACHE_NAME = 'rodsync-pwa-v6';
+const CACHE_NAME = 'rodsync-pwa-v7';
 const ASSETS_TO_CACHE = [
   '/',
   '/style.css',
@@ -34,6 +34,11 @@ self.addEventListener('activate', (event) => {
 
 // Network-First strategy for HTML & navigation, fallback to cache for offline
 self.addEventListener('fetch', (event) => {
+  // Never intercept API requests, let browser handle them directly
+  if (event.request.url.includes('/api/')) {
+    return;
+  }
+
   // Navigation or HTML requests: Network first so updates are immediate!
   if (event.request.mode === 'navigate' || event.request.headers.get('accept')?.includes('text/html')) {
     event.respondWith(

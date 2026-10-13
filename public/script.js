@@ -333,12 +333,25 @@
   // --- DATA STORAGE & PERSISTENCE ---
   function loadRodsFromStorage() {
     try {
-      if (window.__INITIAL_RODS__) {
+      if (window.__INITIAL_RODS__ && Array.isArray(window.__INITIAL_RODS__) && window.__INITIAL_RODS__.length > 0) {
         rods = JSON.parse(JSON.stringify(window.__INITIAL_RODS__));
       } else {
         const stored = localStorage.getItem(STORAGE_KEY);
         if (stored) {
-          rods = JSON.parse(stored);
+          try {
+            const parsed = JSON.parse(stored);
+            if (Array.isArray(parsed) && parsed.length > 0) {
+              rods = parsed;
+            } else if (window.__INITIAL_RODS__ && Array.isArray(window.__INITIAL_RODS__)) {
+              rods = JSON.parse(JSON.stringify(window.__INITIAL_RODS__));
+            } else {
+              rods = JSON.parse(JSON.stringify(DEFAULT_SAMPLE_RODS));
+            }
+          } catch {
+            rods = JSON.parse(JSON.stringify(DEFAULT_SAMPLE_RODS));
+          }
+        } else if (window.__INITIAL_RODS__ && Array.isArray(window.__INITIAL_RODS__)) {
+          rods = JSON.parse(JSON.stringify(window.__INITIAL_RODS__));
         } else {
           rods = JSON.parse(JSON.stringify(DEFAULT_SAMPLE_RODS));
         }
@@ -346,8 +359,10 @@
       rods.forEach(r => {
         if (r.location !== undefined) delete r.location;
       });
-      // Optionally sync to local as backup
-      localStorage.setItem(STORAGE_KEY, JSON.stringify(rods));
+      // Optionally sync to local as backup if we have valid rods
+      if (rods.length > 0) {
+        localStorage.setItem(STORAGE_KEY, JSON.stringify(rods));
+      }
     } catch (e) {
       console.error('Error loading inventory from storage, fallback to defaults', e);
       rods = JSON.parse(JSON.stringify(DEFAULT_SAMPLE_RODS));
@@ -365,17 +380,28 @@
 
   function loadCutLogsFromStorage() {
     try {
-      if (window.__INITIAL_CUT_LOGS__) {
+      if (window.__INITIAL_CUT_LOGS__ && Array.isArray(window.__INITIAL_CUT_LOGS__) && window.__INITIAL_CUT_LOGS__.length > 0) {
         cutLogs = JSON.parse(JSON.stringify(window.__INITIAL_CUT_LOGS__));
       } else {
         const stored = localStorage.getItem(CUT_LOGS_STORAGE_KEY);
         if (stored) {
-          cutLogs = JSON.parse(stored);
+          try {
+            const parsed = JSON.parse(stored);
+            if (Array.isArray(parsed)) {
+              cutLogs = parsed;
+            } else {
+              cutLogs = JSON.parse(JSON.stringify(DEFAULT_SAMPLE_CUT_LOGS));
+            }
+          } catch {
+            cutLogs = JSON.parse(JSON.stringify(DEFAULT_SAMPLE_CUT_LOGS));
+          }
         } else {
           cutLogs = JSON.parse(JSON.stringify(DEFAULT_SAMPLE_CUT_LOGS));
         }
       }
-      localStorage.setItem(CUT_LOGS_STORAGE_KEY, JSON.stringify(cutLogs));
+      if (cutLogs.length > 0) {
+        localStorage.setItem(CUT_LOGS_STORAGE_KEY, JSON.stringify(cutLogs));
+      }
     } catch (e) {
       console.error('Error loading cut logs from storage', e);
       cutLogs = [];
@@ -1971,8 +1997,28 @@
   // Expose to window for Next.js to call after fetching Google Sheets data
   window.initVanillaApp = initApp;
   window.updateDashboardExternal = updateDashboard;
-  window.setVanillaRods = (newRods) => { rods = newRods; };
-  window.setVanillaCutLogs = (newLogs) => { cutLogs = newLogs; };
+  window.setVanillaRods = (newRods) => {
+    if (Array.isArray(newRods)) {
+      rods = newRods;
+      try {
+        localStorage.setItem(STORAGE_KEY, JSON.stringify(rods));
+      } catch (e) {
+        console.warn('Failed to cache rods in localStorage:', e);
+      }
+      updateDashboard();
+    }
+  };
+  window.setVanillaCutLogs = (newLogs) => {
+    if (Array.isArray(newLogs)) {
+      cutLogs = newLogs;
+      try {
+        localStorage.setItem(CUT_LOGS_STORAGE_KEY, JSON.stringify(cutLogs));
+      } catch (e) {
+        console.warn('Failed to cache cutLogs in localStorage:', e);
+      }
+      updateCutLogsBadge();
+    }
+  };
 
   // Auto-initialize when DOM is ready
   if (typeof document !== 'undefined') {
