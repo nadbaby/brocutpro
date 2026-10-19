@@ -1276,6 +1276,7 @@ export default function Home() {
                     <th className="text-right">Qty</th>
                     <th>Remnant Offcut</th>
                     <th>Job / Reference</th>
+                    <th className="text-center">Slip</th>
                   </tr>
                 </thead>
                 <tbody id="cutLogsTableBody">
@@ -1717,7 +1718,7 @@ export default function Home() {
 
       {/* We load the script with afterInteractive strategy and trigger initialization on load */}
       <Script
-        src="/script.js?v=6"
+        src="/script.js?v=7"
         strategy="afterInteractive"
         onLoad={() => {
           if (window.initVanillaApp) {

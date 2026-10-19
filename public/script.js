@@ -1036,10 +1036,253 @@
     }));
 
     showToast(
-      `✂️ <strong>Cut Successful!</strong> Processed cut of ${cutLen}ft from ${origLength}ft rod.${remnantMsg}`,
+      `✂️ <strong>Cut Successful!</strong> Processed cut of ${cutLen}ft from ${origLength}ft rod.${remnantMsg} Click 🖨️ in Cut Logs to reprint the slip.`,
       'success',
       5500
     );
+
+    // 5. Auto-print invoice slip
+    printCutSlip(logEntry);
+  }
+
+  // --- CUT SLIP INVOICE PRINTER ---
+  function printCutSlip(log) {
+    const dateStr = new Date(log.timestamp).toLocaleString([], {
+      year: 'numeric', month: 'long', day: 'numeric',
+      hour: '2-digit', minute: '2-digit', second: '2-digit'
+    });
+    const refNo = log.id.toUpperCase().replace('LOG-', 'CUT-');
+    const remnantLine = log.remainderFt > 0
+      ? `<span class="slip-tag slip-tag-rem">✂️ ${log.remainderFt} ft offcut ${log.remnantAdded ? '(Added to Stock)' : '(Not Added)'}</span>`
+      : `<span class="slip-tag slip-tag-exact">🎯 Exact Cut — 0 ft scrap</span>`;
+
+    const html = `<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <title>Cut Invoice — ${refNo}</title>
+  <style>
+    @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap');
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+      background: #f0f4f8;
+      display: flex; align-items: center; justify-content: center;
+      min-height: 100vh; padding: 16px;
+      print-color-adjust: exact; -webkit-print-color-adjust: exact;
+    }
+    .slip {
+      width: 340px; background: #ffffff;
+      border-radius: 16px;
+      box-shadow: 0 4px 24px rgba(0,0,0,0.13);
+      overflow: hidden;
+      page-break-inside: avoid;
+    }
+    /* ---- Header ---- */
+    .slip-header {
+      background: linear-gradient(135deg, #0f172a 0%, #1e3a5f 100%);
+      color: #fff;
+      padding: 20px 22px 16px;
+      display: flex; align-items: center; gap: 12px;
+    }
+    .slip-logo {
+      width: 38px; height: 38px;
+      background: rgba(255,255,255,0.12);
+      border-radius: 10px;
+      display: flex; align-items: center; justify-content: center;
+      flex-shrink: 0;
+    }
+    .slip-brand { font-size: 1.15rem; font-weight: 800; letter-spacing: -0.3px; }
+    .slip-brand span { color: #38bdf8; }
+    .slip-tagline { font-size: 0.7rem; color: rgba(255,255,255,0.55); margin-top: 1px; }
+    /* ---- Title bar ---- */
+    .slip-title-bar {
+      background: #0ea5e9;
+      color: #fff;
+      text-align: center;
+      padding: 8px 12px;
+      font-size: 0.72rem; font-weight: 700;
+      letter-spacing: 1.5px; text-transform: uppercase;
+    }
+    /* ---- Body ---- */
+    .slip-body { padding: 18px 22px; }
+    .slip-ref {
+      font-size: 0.68rem; color: #64748b; font-weight: 600;
+      letter-spacing: 0.8px; text-transform: uppercase;
+      margin-bottom: 4px;
+    }
+    .slip-rod-name {
+      font-size: 1.05rem; font-weight: 800; color: #0f172a;
+      line-height: 1.25; margin-bottom: 14px;
+      border-bottom: 2px dashed #e2e8f0; padding-bottom: 12px;
+    }
+    .slip-grid {
+      display: grid; grid-template-columns: 1fr 1fr;
+      gap: 10px; margin-bottom: 14px;
+    }
+    .slip-field { display: flex; flex-direction: column; gap: 2px; }
+    .slip-field-label {
+      font-size: 0.62rem; color: #94a3b8;
+      font-weight: 600; letter-spacing: 0.6px; text-transform: uppercase;
+    }
+    .slip-field-value {
+      font-size: 0.95rem; font-weight: 700; color: #1e293b;
+      font-variant-numeric: tabular-nums;
+    }
+    .slip-field-value.large { font-size: 1.1rem; color: #0071e3; }
+    .slip-field-value.danger { color: #dc2626; }
+    .slip-divider { border: none; border-top: 1px dashed #cbd5e1; margin: 12px 0; }
+    .slip-row { display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 8px; }
+    .slip-row-label { font-size: 0.72rem; color: #64748b; font-weight: 500; }
+    .slip-row-val { font-size: 0.8rem; font-weight: 600; color: #1e293b; text-align: right; max-width: 58%; }
+    /* ---- Tags ---- */
+    .slip-tag {
+      display: inline-block; border-radius: 6px;
+      font-size: 0.7rem; font-weight: 700; padding: 3px 8px;
+      margin-top: 4px;
+    }
+    .slip-tag-rem { background: #fef3c7; color: #92400e; border: 1px solid #fde68a; }
+    .slip-tag-exact { background: #dcfce7; color: #166534; border: 1px solid #bbf7d0; }
+    /* ---- Footer ---- */
+    .slip-footer {
+      background: #f8fafc;
+      border-top: 1px solid #e2e8f0;
+      padding: 12px 22px;
+      text-align: center;
+    }
+    .slip-footer-date { font-size: 0.68rem; color: #94a3b8; margin-bottom: 6px; }
+    .slip-barcode {
+      display: flex; justify-content: center; gap: 1.5px;
+      margin: 6px auto 4px; width: 120px; height: 22px;
+    }
+    .slip-barcode-bar {
+      background: #475569;
+      border-radius: 1px;
+    }
+    .slip-verified {
+      font-size: 0.62rem; color: #94a3b8;
+      letter-spacing: 0.5px; text-transform: uppercase;
+    }
+    /* ---- Print controls (hidden in print) ---- */
+    .slip-actions {
+      padding: 14px 22px 20px;
+      display: flex; gap: 8px; justify-content: center;
+    }
+    .btn-slip {
+      border: none; border-radius: 10px; cursor: pointer;
+      font-family: inherit; font-weight: 600; font-size: 0.85rem;
+      padding: 9px 20px;
+      transition: transform 0.15s, box-shadow 0.15s;
+    }
+    .btn-slip:active { transform: scale(0.97); }
+    .btn-slip-print {
+      background: #0071e3; color: #fff;
+      box-shadow: 0 2px 10px rgba(0,113,227,0.35);
+    }
+    .btn-slip-close { background: #e2e8f0; color: #475569; }
+    @media print {
+      body { background: #fff; min-height: unset; padding: 0; }
+      .slip {
+        box-shadow: none; border-radius: 0;
+        width: 100%; page-break-inside: avoid;
+      }
+      .slip-actions { display: none !important; }
+    }
+  </style>
+</head>
+<body>
+  <div class="slip">
+    <div class="slip-header">
+      <div class="slip-logo">
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#38bdf8" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+          <line x1="4" y1="20" x2="20" y2="4"/>
+          <circle cx="8" cy="8" r="3"/>
+          <circle cx="16" cy="16" r="3"/>
+        </svg>
+      </div>
+      <div>
+        <div class="slip-brand">Rod<span>Sync</span></div>
+        <div class="slip-tagline">Metal Rod Inventory &amp; Cut Optimizer</div>
+      </div>
+    </div>
+
+    <div class="slip-title-bar">✂ Cut Invoice / Dispatch Slip</div>
+
+    <div class="slip-body">
+      <div class="slip-ref">🔢 Ref: ${refNo}</div>
+      <div class="slip-rod-name">${escapeForHtml(log.rodName)}</div>
+
+      <div class="slip-grid">
+        <div class="slip-field">
+          <span class="slip-field-label">📏 Diameter</span>
+          <span class="slip-field-value">${log.diameterMm} mm</span>
+        </div>
+        <div class="slip-field">
+          <span class="slip-field-label">📦 Qty Cut</span>
+          <span class="slip-field-value">${log.quantity} pc${log.quantity > 1 ? 's' : ''}</span>
+        </div>
+        <div class="slip-field">
+          <span class="slip-field-label">📐 Cut Length</span>
+          <span class="slip-field-value large danger">${log.cutLengthFt} ft</span>
+        </div>
+        <div class="slip-field">
+          <span class="slip-field-label">📏 Original Length</span>
+          <span class="slip-field-value">${log.originalLengthFt} ft</span>
+        </div>
+      </div>
+
+      <div class="slip-field" style="margin-bottom: 12px;">
+        <span class="slip-field-label">📏 Remaining Offcut</span>
+        <span class="slip-field-value" style="font-size:0.9rem; margin-top:3px;">${remnantLine}</span>
+      </div>
+
+      <hr class="slip-divider" />
+
+      <div class="slip-row">
+        <span class="slip-row-label">👤 Operator / Job Ref</span>
+        <span class="slip-row-val">${escapeForHtml(log.reason || 'Not specified')}</span>
+      </div>
+      <div class="slip-row">
+        <span class="slip-row-label">📅 Date &amp; Time</span>
+        <span class="slip-row-val">${dateStr}</span>
+      </div>
+    </div>
+
+    <div class="slip-footer">
+      <div class="slip-footer-date">Printed: ${new Date().toLocaleString([], { year: 'numeric', month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' })}</div>
+      <div class="slip-barcode">
+        ${Array.from({ length: 28 }, (_, i) =>
+      `<div class="slip-barcode-bar" style="width:${[2, 1, 3, 1, 2, 1, 1, 2, 3, 1, 2, 1, 3, 2, 1, 3, 1, 2, 1, 3, 2, 1, 1, 3, 2, 1, 2, 1][i] || 1}px; opacity:${0.5 + Math.random() * 0.5};"></div>`
+    ).join('')}
+      </div>
+      <div class="slip-verified">RodSync Verified Cut Record</div>
+    </div>
+
+    <div class="slip-actions">
+      <button class="btn-slip btn-slip-print" onclick="window.print()">🖨️ Print Slip</button>
+      <button class="btn-slip btn-slip-close" onclick="window.close()">✕ Close</button>
+    </div>
+  </div>
+</body>
+</html>`;
+
+    const win = window.open('', '_blank', 'width=420,height=700,toolbar=0,menubar=0,scrollbars=1');
+    if (!win) {
+      showToast('⚠️ Pop-up blocked! Please allow pop-ups to print the cut slip.', 'warning', 6000);
+      return;
+    }
+    win.document.open();
+    win.document.write(html);
+    win.document.close();
+  }
+
+  // Simple HTML escape helper for use inside printCutSlip strings
+  function escapeForHtml(str) {
+    return String(str || '')
+      .replace(/&/g, '&amp;')
+      .replace(/</g, '&lt;')
+      .replace(/>/g, '&gt;')
+      .replace(/"/g, '&quot;');
   }
 
   // --- CUT LOGS MODAL & AUDIT HISTORY ---
@@ -1130,6 +1373,12 @@
         <td class="text-right font-mono"><strong>${log.quantity}</strong></td>
         <td>${remnantDisplay}</td>
         <td><span style="font-size: 0.825rem; color: var(--text-secondary);">${escapeHtml(log.reason || '—')}</span></td>
+        <td style="text-align:center;">
+          <button class="btn btn-secondary btn-xs btn-print-slip" data-log-id="${log.id}" title="Print cut invoice slip"
+            style="padding:3px 8px; font-size:0.72rem; white-space:nowrap;">
+            🖨️ Slip
+          </button>
+        </td>
       `;
       cutLogsTableBody.appendChild(tr);
 
@@ -1172,6 +1421,13 @@
             <span class="cut-log-reason-text">${escapeHtml(log.reason)}</span>
           </div>
           ` : ''}
+
+          <div style="margin-top: 10px; border-top: 1px dashed var(--border-subtle); padding-top: 10px;">
+            <button class="btn btn-secondary btn-sm btn-print-slip" data-log-id="${log.id}"
+              style="width:100%; font-size:0.8rem; display:flex; align-items:center; justify-content:center; gap:6px;">
+              🖨️ Print Cut Invoice Slip
+            </button>
+          </div>
         `;
         cutLogsCardsContainer.appendChild(card);
       }
@@ -1792,6 +2048,10 @@
       } else if (target.classList.contains('btn-rod-more')) {
         const id = target.dataset.id;
         openMobileActionSheet(id);
+      } else if (target.classList.contains('btn-print-slip')) {
+        const logId = target.dataset.logId;
+        const logEntry = cutLogs.find(l => l.id === logId);
+        if (logEntry) printCutSlip(logEntry);
       } else if (target.id === 'btnOpenCutLogsModal') {
         openCutLogsModal();
       } else if (target.id === 'btnExportCutLogsCsv') {
