@@ -7,6 +7,7 @@ interface RodRecord {
     sku?: string;
     name?: string;
     diameterMm?: number;
+    lengthIn?: number;
     lengthFt?: number;
     quantity?: number;
     notes?: string;
@@ -18,9 +19,12 @@ interface CutLogRecord {
     timestamp?: number | string;
     rodName?: string;
     diameterMm?: number;
+    originalLengthIn?: number;
     originalLengthFt?: number;
+    cutLengthIn?: number;
     cutLengthFt?: number;
     quantity?: number;
+    remainderIn?: number;
     remainderFt?: number;
     remnantAdded?: boolean | string;
     reason?: string;
@@ -152,33 +156,45 @@ export async function GET(req: Request) {
             const rodsSheet = doc.sheetsByTitle['Rods Inventory'];
             if (rodsSheet) {
                 const rows = await rodsSheet.getRows();
-                rods = rows.map((r) => ({
-                    id: r.get('id') || '',
-                    sku: r.get('sku') || '',
-                    name: r.get('name') || '',
-                    diameterMm: Number(r.get('diameterMm')) || 0,
-                    lengthFt: Number(r.get('lengthFt')) || 0,
-                    quantity: Number(r.get('quantity')) || 0,
-                    notes: r.get('notes') || '',
-                    updatedAt: r.get('updatedAt') || ''
-                }));
+                rods = rows.map((r) => {
+                    const len = Number(r.get('lengthIn') || r.get('lengthFt')) || 0;
+                    return {
+                        id: r.get('id') || '',
+                        sku: r.get('sku') || '',
+                        name: r.get('name') || '',
+                        diameterMm: Number(r.get('diameterMm')) || 0,
+                        lengthIn: len,
+                        lengthFt: len,
+                        quantity: Number(r.get('quantity')) || 0,
+                        notes: r.get('notes') || '',
+                        updatedAt: r.get('updatedAt') || ''
+                    };
+                });
             }
 
             const logsSheet = doc.sheetsByTitle['Cut Logs'];
             if (logsSheet) {
                 const rows = await logsSheet.getRows();
-                cutLogs = rows.map((r) => ({
-                    id: r.get('id') || '',
-                    timestamp: r.get('timestamp') || '',
-                    rodName: r.get('rodName') || '',
-                    diameterMm: Number(r.get('diameterMm')) || 0,
-                    originalLengthFt: Number(r.get('originalLengthFt')) || 0,
-                    cutLengthFt: Number(r.get('cutLengthFt')) || 0,
-                    quantity: Number(r.get('quantity')) || 0,
-                    remainderFt: Number(r.get('remainderFt')) || 0,
-                    remnantAdded: r.get('remnantAdded') === 'Yes',
-                    reason: r.get('reason') || ''
-                }));
+                cutLogs = rows.map((r) => {
+                    const origLen = Number(r.get('originalLengthIn') || r.get('originalLengthFt')) || 0;
+                    const cutLen = Number(r.get('cutLengthIn') || r.get('cutLengthFt')) || 0;
+                    const remLen = Number(r.get('remainderIn') || r.get('remainderFt')) || 0;
+                    return {
+                        id: r.get('id') || '',
+                        timestamp: r.get('timestamp') || '',
+                        rodName: r.get('rodName') || '',
+                        diameterMm: Number(r.get('diameterMm')) || 0,
+                        originalLengthIn: origLen,
+                        originalLengthFt: origLen,
+                        cutLengthIn: cutLen,
+                        cutLengthFt: cutLen,
+                        quantity: Number(r.get('quantity')) || 0,
+                        remainderIn: remLen,
+                        remainderFt: remLen,
+                        remnantAdded: r.get('remnantAdded') === 'Yes',
+                        reason: r.get('reason') || ''
+                    };
+                });
             }
 
             return NextResponse.json({ success: true, configured: true, mode: 'service-account', rods, cutLogs });
@@ -270,21 +286,24 @@ export async function POST(req: Request) {
                 if (!rodsSheet) {
                     rodsSheet = await doc.addSheet({
                         title: 'Rods Inventory',
-                        headerValues: ['id', 'sku', 'name', 'diameterMm', 'lengthFt', 'quantity', 'notes', 'updatedAt']
+                        headerValues: ['id', 'sku', 'name', 'diameterMm', 'lengthIn', 'quantity', 'notes', 'updatedAt']
                     });
                 }
                 await rodsSheet.clearRows();
 
-                const rowsToInsert = payload.rods.map((r: RodRecord) => ({
-                    id: r.id || '',
-                    sku: r.sku || '',
-                    name: r.name || '',
-                    diameterMm: r.diameterMm || 0,
-                    lengthFt: r.lengthFt || 0,
-                    quantity: r.quantity || 0,
-                    notes: r.notes || '',
-                    updatedAt: r.updatedAt ? new Date(r.updatedAt).toISOString() : new Date().toISOString()
-                }));
+                const rowsToInsert = payload.rods.map((r: RodRecord) => {
+                    const len = Number(r.lengthIn !== undefined && r.lengthIn !== null ? r.lengthIn : (r.lengthFt || 0));
+                    return {
+                        id: r.id || '',
+                        sku: r.sku || '',
+                        name: r.name || '',
+                        diameterMm: r.diameterMm || 0,
+                        lengthIn: len,
+                        quantity: r.quantity || 0,
+                        notes: r.notes || '',
+                        updatedAt: r.updatedAt ? new Date(r.updatedAt).toISOString() : new Date().toISOString()
+                    };
+                });
 
                 if (rowsToInsert.length > 0) {
                     await rodsSheet.addRows(rowsToInsert);
@@ -296,23 +315,28 @@ export async function POST(req: Request) {
                 if (!cutLogsSheet) {
                     cutLogsSheet = await doc.addSheet({
                         title: 'Cut Logs',
-                        headerValues: ['id', 'timestamp', 'rodName', 'diameterMm', 'originalLengthFt', 'cutLengthFt', 'quantity', 'remainderFt', 'remnantAdded', 'reason']
+                        headerValues: ['id', 'timestamp', 'rodName', 'diameterMm', 'originalLengthIn', 'cutLengthIn', 'quantity', 'remainderIn', 'remnantAdded', 'reason']
                     });
                 }
                 await cutLogsSheet.clearRows();
 
-                const logsToInsert = payload.cutLogs.map((l: CutLogRecord) => ({
-                    id: l.id || '',
-                    timestamp: l.timestamp ? new Date(l.timestamp).toISOString() : '',
-                    rodName: l.rodName || '',
-                    diameterMm: l.diameterMm || 0,
-                    originalLengthFt: l.originalLengthFt || 0,
-                    cutLengthFt: l.cutLengthFt || 0,
-                    quantity: l.quantity || 0,
-                    remainderFt: l.remainderFt || 0,
-                    remnantAdded: l.remnantAdded === true || l.remnantAdded === 'Yes' ? 'Yes' : 'No',
-                    reason: l.reason || ''
-                }));
+                const logsToInsert = payload.cutLogs.map((l: CutLogRecord) => {
+                    const origLen = Number(l.originalLengthIn !== undefined && l.originalLengthIn !== null ? l.originalLengthIn : (l.originalLengthFt || 0));
+                    const cutLen = Number(l.cutLengthIn !== undefined && l.cutLengthIn !== null ? l.cutLengthIn : (l.cutLengthFt || 0));
+                    const remLen = Number(l.remainderIn !== undefined && l.remainderIn !== null ? l.remainderIn : (l.remainderFt || 0));
+                    return {
+                        id: l.id || '',
+                        timestamp: l.timestamp ? new Date(l.timestamp).toISOString() : '',
+                        rodName: l.rodName || '',
+                        diameterMm: l.diameterMm || 0,
+                        originalLengthIn: origLen,
+                        cutLengthIn: cutLen,
+                        quantity: l.quantity || 0,
+                        remainderIn: remLen,
+                        remnantAdded: l.remnantAdded === true || l.remnantAdded === 'Yes' ? 'Yes' : 'No',
+                        reason: l.reason || ''
+                    };
+                });
 
                 if (logsToInsert.length > 0) {
                     await cutLogsSheet.addRows(logsToInsert);

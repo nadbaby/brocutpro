@@ -26,6 +26,99 @@
   let lastSmartSearchQuery = null;
   let deferredInstallPrompt = null;
 
+  // --- UNIT HELPERS (INCHES / IN) ---
+  function getRodLength(rod) {
+    if (!rod) return 0;
+    if (rod.lengthIn !== undefined && rod.lengthIn !== null && !isNaN(Number(rod.lengthIn))) {
+      return Number(rod.lengthIn);
+    }
+    if (rod.lengthFt !== undefined && rod.lengthFt !== null && !isNaN(Number(rod.lengthFt))) {
+      return Number(rod.lengthFt);
+    }
+    return 0;
+  }
+
+  function getLogOrigLength(log) {
+    if (!log) return 0;
+    return Number(log.originalLengthIn ?? log.originalLengthFt ?? 0);
+  }
+
+  function getLogCutLength(log) {
+    if (!log) return 0;
+    return Number(log.cutLengthIn ?? log.cutLengthFt ?? 0);
+  }
+
+  function getLogRemainder(log) {
+    if (!log) return 0;
+    return Number(log.remainderIn ?? log.remainderFt ?? 0);
+  }
+
+  // --- ROUND OFF VS DECIMAL LENGTH TOGGLE STATE ---
+  let isRoundLengthEnabled = false;
+  try {
+    isRoundLengthEnabled = localStorage.getItem('rodsync_round_length') === 'true';
+  } catch (e) {
+    isRoundLengthEnabled = false;
+  }
+
+  function formatDisplayLength(val) {
+    if (val === null || val === undefined || val === '') return '';
+    const num = Number(val);
+    if (isNaN(num)) return val;
+    if (isRoundLengthEnabled) {
+      return Math.round(num).toString();
+    } else {
+      // Decimal mode: always show decimal representation (e.g. 6.0, 5.5, 11.25)
+      if (Number.isInteger(num)) {
+        return num.toFixed(1);
+      }
+      return parseFloat(num.toFixed(2)).toString();
+    }
+  }
+
+  function updateLengthToggleUI() {
+    const btn = document.getElementById('btnToggleRoundLength');
+    const thTitle = document.getElementById('thLengthTitle');
+    const smartThTitle = document.getElementById('smartThLengthTitle');
+    if (btn) {
+      btn.setAttribute('aria-checked', isRoundLengthEnabled ? 'true' : 'false');
+      btn.classList.toggle('active', isRoundLengthEnabled);
+      btn.title = isRoundLengthEnabled
+        ? 'Lengths shown in Round Off (≈). Click for Decimal (.0).'
+        : 'Lengths shown in Decimal (.0). Click for Round Off (≈).';
+    }
+    if (thTitle) {
+      thTitle.textContent = isRoundLengthEnabled ? 'LENGTH (IN) ≈' : 'LENGTH (IN) .0';
+    }
+    if (smartThTitle) {
+      smartThTitle.textContent = isRoundLengthEnabled ? 'Length (In) ≈' : 'Length (In) .0';
+    }
+  }
+
+  let lastToggleTime = 0;
+  function setRoundLengthEnabled(enabled) {
+    isRoundLengthEnabled = Boolean(enabled);
+    try {
+      localStorage.setItem('rodsync_round_length', isRoundLengthEnabled ? 'true' : 'false');
+    } catch (e) {}
+    updateLengthToggleUI();
+    renderInventoryTable();
+    if (lastSmartSearchQuery && typeof executeSmartSearch === 'function') {
+      executeSmartSearch(lastSmartSearchQuery.diameter, lastSmartSearchQuery.length, false);
+    }
+    if (typeof renderCutLogsTable === 'function' && cutLogsModalOverlay && !cutLogsModalOverlay.classList.contains('hidden')) {
+      renderCutLogsTable();
+    }
+    showToast(isRoundLengthEnabled ? '📏 Length display: Round Off (≈)' : '📏 Length display: Decimal (.0)', 'info', 2000);
+  }
+
+  function toggleRoundLength() {
+    const now = Date.now();
+    if (now - lastToggleTime < 200) return;
+    lastToggleTime = now;
+    setRoundLengthEnabled(!isRoundLengthEnabled);
+  }
+
   // --- DOM ELEMENT REFERENCES (DYNAMICALLY RESOLVED) ---
   let statTotalTypes, statTotalQuantity, statInStockTypes, statLowStockCount;
   let smartSearchForm, searchDiameterInput, searchLengthInput, btnResetSmartSearch;
@@ -41,7 +134,7 @@
   let cutModalOverlay, btnCloseCutModal, btnCancelCutModal, cutForm, cutRodId, cutRodName, cutRodDiameter;
   let cutRodFullLength, cutRodAvailableQty, cutRequiredLengthInput, cutPiecesQtyInput;
   let btnCutStepDown, btnCutStepUp, calcOrigLength, calcCutLength, calcRemainLength, calcRemainNote;
-  let cutAutoAddRemnant, cutReasonInput, btnConfirmCut;
+  let cutAutoAddRemnant, cutReasonInput, cutCreatedByInput, cutAssignedByInput, btnConfirmCut;
   let cutLogsModalOverlay, btnOpenCutLogsModal, btnCloseCutLogsModal, btnCloseCutLogsBottom, cutLogsBadge;
   let cutLogsTableBody, cutLogsEmptyState, filterCutLogsInput, btnExportCutLogsCsv, btnClearCutLogs;
   let cutLogsCountText, cutLogsContentArea, cutLogsTableWrapper, cutLogsCardsContainer;
@@ -131,6 +224,8 @@
     calcRemainNote = document.getElementById('calcRemainNote');
     cutAutoAddRemnant = document.getElementById('cutAutoAddRemnant');
     cutReasonInput = document.getElementById('cutReasonInput');
+    cutCreatedByInput = document.getElementById('cutCreatedByInput');
+    cutAssignedByInput = document.getElementById('cutAssignedByInput');
     btnConfirmCut = document.getElementById('btnConfirmCut');
 
     cutLogsModalOverlay = document.getElementById('cutLogsModalOverlay');
@@ -197,6 +292,15 @@
     btnSheetDeduct = document.getElementById('btnSheetDeduct');
     btnSheetEdit = document.getElementById('btnSheetEdit');
     btnSheetDelete = document.getElementById('btnSheetDelete');
+
+    const toggleRoundBtn = document.getElementById('btnToggleRoundLength');
+    if (toggleRoundBtn && !toggleRoundBtn._hasBoundClick) {
+      toggleRoundBtn._hasBoundClick = true;
+      toggleRoundBtn.onclick = function (e) {
+        if (e) { e.preventDefault(); e.stopPropagation(); }
+        toggleRoundLength();
+      };
+    }
   }
 
   // --- INITIALIZATION ---
@@ -212,6 +316,7 @@
       initMobileNavigation();
       isAppInitialized = true;
     }
+    updateLengthToggleUI();
     updateDashboard();
     updateCutLogsBadge();
   }
@@ -508,6 +613,7 @@
   // --- DASHBOARD REFRESH & STATS ---
   function updateDashboard() {
     refreshDomElements();
+    updateLengthToggleUI();
 
     // 1. Calculate KPI Metrics
     const totalTypes = rods.length;
@@ -623,9 +729,14 @@
       let valA = a[sortColumn];
       let valB = b[sortColumn];
 
-      if (['diameterMm', 'lengthFt', 'quantity'].includes(sortColumn)) {
-        valA = Number(valA) || 0;
-        valB = Number(valB) || 0;
+      if (['diameterMm', 'lengthFt', 'lengthIn', 'quantity'].includes(sortColumn)) {
+        if (sortColumn === 'lengthFt' || sortColumn === 'lengthIn') {
+          valA = getRodLength(a);
+          valB = getRodLength(b);
+        } else {
+          valA = Number(valA) || 0;
+          valB = Number(valB) || 0;
+        }
       } else {
         valA = (valA || '').toString().toLowerCase();
         valB = (valB || '').toString().toLowerCase();
@@ -673,9 +784,9 @@
           </div>
         </td>
         <td class="col-diameter hide-mobile text-right font-mono"><strong>${rod.diameterMm}</strong> <span class="text-muted">mm</span></td>
-        <td class="col-length hide-mobile text-right font-mono"><strong>${rod.lengthFt}</strong> <span class="text-muted">ft</span></td>
+        <td class="col-length hide-mobile text-right font-mono"><strong>${formatDisplayLength(getRodLength(rod))}</strong> <span class="text-muted">In</span></td>
         <td class="col-size mobile-only text-center font-mono">
-          <span class="size-badge-pill"><strong>${rod.diameterMm}</strong>mm × <strong>${rod.lengthFt}</strong>ft</span>
+          <span class="size-badge-pill"><strong>${rod.diameterMm}</strong>mm × <strong>${formatDisplayLength(getRodLength(rod))}</strong>In</span>
         </td>
         <td class="col-qty text-right font-mono">
           <span class="qty-pill ${qty === 0 ? 'qty-zero' : ''}">${qty}</span>
@@ -733,19 +844,19 @@
     const results = rods
       .filter(rod =>
         Number(rod.diameterMm) === searchDiameter &&
-        Number(rod.lengthFt) >= requiredLength &&
+        getRodLength(rod) >= requiredLength &&
         Number(rod.quantity) > 0
       )
-      .sort((a, b) => Number(a.lengthFt) - Number(b.lengthFt));
+      .sort((a, b) => getRodLength(a) - getRodLength(b));
 
-    smartResultsCriteria.textContent = `Criteria: ${searchDiameter} mm diameter × ≥ ${requiredLength} ft length`;
+    smartResultsCriteria.textContent = `Criteria: ${searchDiameter} mm diameter × ≥ ${requiredLength} In length`;
 
     if (results.length === 0) {
       smartSearchResultsContainer.classList.add('hidden');
       smartSearchEmptyState.classList.remove('hidden');
-      smartSearchEmptyDesc.textContent = `No active rods found with exactly ${searchDiameter} mm diameter and at least ${requiredLength} ft available in stock.`;
+      smartSearchEmptyDesc.textContent = `No active rods found with exactly ${searchDiameter} mm diameter and at least ${requiredLength} In available in stock.`;
       if (showNotification) {
-        showToast(`No available rods found for ${searchDiameter} mm (≥ ${requiredLength} ft)`, 'warning');
+        showToast(`No available rods found for ${searchDiameter} mm (≥ ${requiredLength} In)`, 'warning');
       }
       return;
     }
@@ -758,7 +869,7 @@
     results.forEach((rod, index) => {
       const tr = document.createElement('tr');
       const isBestFit = index === 0;
-      const extraLength = Number((rod.lengthFt - requiredLength).toFixed(2));
+      const extraLength = Number((getRodLength(rod) - requiredLength).toFixed(2));
 
       let fitBadge = '';
       if (isBestFit) {
@@ -780,7 +891,7 @@
       if (extraLength === 0) {
         remnantBadge = `<span class="badge-cut-exact">Exact fit (0 scrap)</span>`;
       } else {
-        remnantBadge = `<span class="badge-cut-rem">✂️ <strong>${extraLength} ft</strong> offcut</span>`;
+        remnantBadge = `<span class="badge-cut-rem">✂️ <strong>${extraLength} In</strong> offcut</span>`;
       }
 
       tr.innerHTML = `
@@ -791,16 +902,16 @@
           <div class="font-mono text-muted" style="font-size: 0.725rem;">${escapeHtml(rod.sku || 'No SKU')}</div>
         </td>
         <td class="smart-col-dia hide-mobile text-right font-mono"><strong>${rod.diameterMm}</strong> mm</td>
-        <td class="smart-col-len hide-mobile text-right font-mono"><strong>${rod.lengthFt}</strong> ft</td>
+        <td class="smart-col-len hide-mobile text-right font-mono"><strong>${formatDisplayLength(getRodLength(rod))}</strong> In</td>
         <td class="smart-col-size mobile-only text-right font-mono">
-          <div style="font-weight: 700; font-size: 0.85rem;">${rod.lengthFt} ft</div>
+          <div style="font-weight: 700; font-size: 0.85rem;">${formatDisplayLength(getRodLength(rod))} In</div>
           <div style="font-size: 0.7rem; margin-top: 0.15rem;">${remnantBadge}</div>
         </td>
         <td class="smart-col-qty text-right font-mono"><strong style="color: var(--primary-700); font-size: 1rem;">${rod.quantity}</strong></td>
         <td class="smart-col-rem hide-mobile">${remnantBadge}</td>
         <td class="smart-col-action text-center">
           <div class="table-actions">
-            <button class="btn btn-primary btn-xs btn-open-cut" data-id="${rod.id}" data-cut-len="${requiredLength}" title="Cut ${requiredLength} ft and keep the ${extraLength} ft offcut">
+            <button class="btn btn-primary btn-xs btn-open-cut" data-id="${rod.id}" data-cut-len="${requiredLength}" title="Cut ${requiredLength} In and keep the ${extraLength} In offcut">
               ✂️ Cut
             </button>
             <button class="desktop-only btn btn-secondary btn-xs btn-open-deduct" data-id="${rod.id}" title="Deduct whole rods">
@@ -838,18 +949,21 @@
     cutRodId.value = rod.id;
     cutRodName.textContent = rod.name + (rod.sku ? ` (${rod.sku})` : '');
     cutRodDiameter.textContent = rod.diameterMm;
-    cutRodFullLength.textContent = Number(rod.lengthFt).toFixed(1);
+    const rodLen = getRodLength(rod);
+    cutRodFullLength.textContent = rodLen.toFixed(1);
     cutRodAvailableQty.textContent = rod.quantity;
 
-    calcOrigLength.textContent = `${Number(rod.lengthFt).toFixed(1)} ft`;
+    calcOrigLength.textContent = `${rodLen.toFixed(1)} In`;
 
     // Prefill cut length if passed from smart search
-    const initialCutLen = defaultCutLength ? parseFloat(defaultCutLength) : Number(rod.lengthFt);
+    const initialCutLen = defaultCutLength ? parseFloat(defaultCutLength) : rodLen;
     cutRequiredLengthInput.value = initialCutLen;
-    cutRequiredLengthInput.max = rod.lengthFt;
+    cutRequiredLengthInput.max = rodLen;
     cutPiecesQtyInput.value = '1';
     cutPiecesQtyInput.max = rod.quantity;
     cutReasonInput.value = '';
+    if (cutCreatedByInput) cutCreatedByInput.value = '';
+    if (cutAssignedByInput) cutAssignedByInput.value = '';
     cutAutoAddRemnant.checked = true;
 
     updateCutCalculations();
@@ -867,41 +981,41 @@
     const rod = rods.find(r => r.id === cutRodId.value);
     if (!rod) return;
 
-    const fullLen = Number(rod.lengthFt);
+    const fullLen = getRodLength(rod);
     const cutLen = parseFloat(cutRequiredLengthInput.value);
     const qty = parseInt(cutPiecesQtyInput.value, 10) || 1;
 
-    calcOrigLength.textContent = `${fullLen.toFixed(1)} ft`;
+    calcOrigLength.textContent = `${fullLen.toFixed(1)} In`;
 
     if (isNaN(cutLen) || cutLen <= 0) {
-      calcCutLength.textContent = '- 0.0 ft';
+      calcCutLength.textContent = '- 0.0 In';
       calcRemainLength.textContent = '—';
       calcRemainNote.className = 'cut-calc-note warning';
-      calcRemainNote.textContent = 'Please enter a valid positive cut length in feet.';
+      calcRemainNote.textContent = 'Please enter a valid positive cut length in inches.';
       btnConfirmCut.disabled = true;
       return;
     }
 
-    calcCutLength.textContent = `- ${cutLen.toFixed(1)} ft`;
+    calcCutLength.textContent = `- ${cutLen.toFixed(1)} In`;
 
     if (cutLen > fullLen) {
       calcRemainLength.textContent = 'Invalid!';
       calcRemainNote.className = 'cut-calc-note error';
-      calcRemainNote.innerHTML = `⚠️ <strong>Cannot Cut!</strong> Required cut (${cutLen} ft) exceeds full rod length (${fullLen} ft).`;
+      calcRemainNote.innerHTML = `⚠️ <strong>Cannot Cut!</strong> Required cut (${cutLen} In) exceeds full rod length (${fullLen} In).`;
       btnConfirmCut.disabled = true;
       return;
     }
 
     btnConfirmCut.disabled = false;
     const remainder = Number((fullLen - cutLen).toFixed(2));
-    calcRemainLength.textContent = `${remainder} ft`;
+    calcRemainLength.textContent = `${remainder} In`;
 
     if (remainder === 0) {
       calcRemainNote.className = 'cut-calc-note';
       calcRemainNote.innerHTML = `🎯 <strong>Exact Fit!</strong> Full rod length consumed with <strong>0 scrap</strong>. Deducting <strong>${qty}</strong> whole rod(s).`;
     } else {
       calcRemainNote.className = 'cut-calc-note';
-      calcRemainNote.innerHTML = `✂️ <strong>${qty} unit(s)</strong> of <strong>${rod.diameterMm} mm × ${remainder} ft</strong> offcut remnant rod will be added to your inventory!`;
+      calcRemainNote.innerHTML = `✂️ <strong>${qty} unit(s)</strong> of <strong>${rod.diameterMm} mm × ${remainder} In</strong> offcut remnant rod will be added to your inventory!`;
     }
   }
 
@@ -916,14 +1030,17 @@
     const piecesQty = parseInt(cutPiecesQtyInput.value, 10);
     const shouldAddRemnant = cutAutoAddRemnant.checked;
     const reason = cutReasonInput.value.trim();
+    const createdBy = cutCreatedByInput ? cutCreatedByInput.value.trim() : '';
+    const assignedBy = cutAssignedByInput ? cutAssignedByInput.value.trim() : '';
 
     if (isNaN(cutLen) || cutLen <= 0) {
-      showToast('Please enter a valid cut length in feet', 'warning');
+      showToast('Please enter a valid cut length in inches', 'warning');
       return;
     }
 
-    if (cutLen > rod.lengthFt) {
-      showToast(`Cut length (${cutLen} ft) cannot exceed available rod length (${rod.lengthFt} ft)`, 'danger');
+    const sourceLen = getRodLength(rod);
+    if (cutLen > sourceLen) {
+      showToast(`Cut length (${cutLen} In) cannot exceed available rod length (${sourceLen} In)`, 'danger');
       return;
     }
 
@@ -937,7 +1054,7 @@
       return;
     }
 
-    const origLength = Number(rod.lengthFt);
+    const origLength = sourceLen;
     const remainder = Number((origLength - cutLen).toFixed(2));
     let remnantMsg = '';
 
@@ -950,7 +1067,7 @@
           r.id !== rod.id &&
           r.name.toLowerCase() === rod.name.toLowerCase() &&
           Number(r.diameterMm) === Number(rod.diameterMm) &&
-          Number(r.lengthFt) === remainder
+          getRodLength(r) === remainder
         );
 
         if (existingRemnant) {
@@ -958,15 +1075,16 @@
           existingRemnant.quantity += piecesQty;
           existingRemnant.updatedAt = Date.now();
           rods = rods.filter(r => r.id !== rod.id);
-          remnantMsg = ` Merged into existing ${rod.diameterMm}mm × ${remainder}ft stock (Total: <strong>${existingRemnant.quantity} units</strong>)!`;
+          remnantMsg = ` Merged into existing ${rod.diameterMm}mm × ${remainder}In stock (Total: <strong>${existingRemnant.quantity} units</strong>)!`;
         } else {
           // DIRECTLY MODIFY PREVIOUS ENTRY!
+          rod.lengthIn = remainder;
           rod.lengthFt = remainder;
           rod.updatedAt = Date.now();
           if (reason) {
             rod.notes = rod.notes ? `${rod.notes} | Cut: ${reason}` : `Cut: ${reason}`;
           }
-          remnantMsg = ` Modified entry length to <strong>${remainder} ft</strong> (${rod.quantity} units in stock)!`;
+          remnantMsg = ` Modified entry length to <strong>${remainder} In</strong> (${rod.quantity} units in stock)!`;
         }
       } else {
         // Remainder is 0 or remnant offcut not kept
@@ -983,27 +1101,28 @@
         const existingRemnant = rods.find(r =>
           r.name.toLowerCase() === rod.name.toLowerCase() &&
           Number(r.diameterMm) === Number(rod.diameterMm) &&
-          Number(r.lengthFt) === remainder
+          getRodLength(r) === remainder
         );
 
         if (existingRemnant) {
           existingRemnant.quantity += piecesQty;
           existingRemnant.updatedAt = Date.now();
-          remnantMsg = ` Added to existing ${rod.diameterMm}mm × ${remainder}ft stock (Total: <strong>${existingRemnant.quantity} units</strong>)!`;
+          remnantMsg = ` Added to existing ${rod.diameterMm}mm × ${remainder}In stock (Total: <strong>${existingRemnant.quantity} units</strong>)!`;
         } else {
           const newOffcutRod = {
             id: 'rod-cut-' + Date.now(),
-            sku: rod.sku ? `${rod.sku}-CUT` : `ROD-${Math.round(rod.diameterMm)}MM-${Math.round(remainder)}FT`,
+            sku: rod.sku ? `${rod.sku}-CUT` : `ROD-${Math.round(rod.diameterMm)}MM-${Math.round(remainder)}IN`,
             name: rod.name,
             diameterMm: Number(rod.diameterMm),
+            lengthIn: remainder,
             lengthFt: remainder,
             quantity: piecesQty,
-            notes: `Cut from ${origLength}ft${reason ? ' (' + reason + ')' : ''}`,
+            notes: `Cut from ${origLength} In${reason ? ' (' + reason + ')' : ''}`,
             createdAt: Date.now(),
             updatedAt: Date.now()
           };
           rods.push(newOffcutRod);
-          remnantMsg = ` Created entry for <strong>${piecesQty} unit(s)</strong> of ${rod.diameterMm}mm × ${remainder}ft offcut!`;
+          remnantMsg = ` Created entry for <strong>${piecesQty} unit(s)</strong> of ${rod.diameterMm}mm × ${remainder}In offcut!`;
         }
       }
     }
@@ -1014,12 +1133,17 @@
       timestamp: Date.now(),
       rodName: rod.name,
       diameterMm: Number(rod.diameterMm),
+      originalLengthIn: origLength,
       originalLengthFt: origLength,
+      cutLengthIn: cutLen,
       cutLengthFt: cutLen,
       quantity: piecesQty,
+      remainderIn: remainder,
       remainderFt: remainder,
       remnantAdded: remainder > 0 && shouldAddRemnant,
-      reason: reason || 'Job Cut'
+      reason: reason || 'Job Cut',
+      createdBy: createdBy || '',
+      assignedBy: assignedBy || ''
     };
     cutLogs.unshift(logEntry);
 
@@ -1036,7 +1160,7 @@
     }));
 
     showToast(
-      `✂️ <strong>Cut Successful!</strong> Processed cut of ${cutLen}ft from ${origLength}ft rod.${remnantMsg} Click 🖨️ in Cut Logs to reprint the slip.`,
+      `✂️ <strong>Cut Successful!</strong> Processed cut of ${cutLen} In from ${origLength} In rod.${remnantMsg} Click 🖨️ in Cut Logs to reprint the slip.`,
       'success',
       5500
     );
@@ -1052,9 +1176,10 @@
       hour: '2-digit', minute: '2-digit', second: '2-digit'
     });
     const refNo = log.id.toUpperCase().replace('LOG-', 'CUT-');
-    const remnantLine = log.remainderFt > 0
-      ? `<span class="slip-tag slip-tag-rem">✂️ ${log.remainderFt} ft offcut ${log.remnantAdded ? '(Added to Stock)' : '(Not Added)'}</span>`
-      : `<span class="slip-tag slip-tag-exact">🎯 Exact Cut — 0 ft scrap</span>`;
+    const remVal = getLogRemainder(log);
+    const remnantLine = remVal > 0
+      ? `<span class="slip-tag slip-tag-rem">✂️ ${remVal} In offcut ${log.remnantAdded ? '(Added to Stock)' : '(Not Added)'}</span>`
+      : `<span class="slip-tag slip-tag-exact">🎯 Exact Cut — 0 In scrap</span>`;
 
     const html = `<!DOCTYPE html>
 <html lang="en">
@@ -1223,11 +1348,11 @@
         </div>
         <div class="slip-field">
           <span class="slip-field-label">📐 Cut Length</span>
-          <span class="slip-field-value large danger">${log.cutLengthFt} ft</span>
+          <span class="slip-field-value large danger">${getLogCutLength(log)} In</span>
         </div>
         <div class="slip-field">
           <span class="slip-field-label">📏 Original Length</span>
-          <span class="slip-field-value">${log.originalLengthFt} ft</span>
+          <span class="slip-field-value">${getLogOrigLength(log)} In</span>
         </div>
       </div>
 
@@ -1350,11 +1475,15 @@
         minute: '2-digit'
       });
 
+      const origLen = getLogOrigLength(log);
+      const cutLen = getLogCutLength(log);
+      const remLen = getLogRemainder(log);
+
       let remnantDisplay = '';
       let remnantCardBadge = '';
-      if (log.remainderFt > 0) {
-        remnantDisplay = `<span class="badge-cut-rem">✂️ +${log.remainderFt} ft</span> ${log.remnantAdded ? '<span style="font-size: 0.725rem; color: var(--success-solid); font-weight: 600;">(Added to stock)</span>' : ''}`;
-        remnantCardBadge = `<span class="badge-cut-rem">✂️ Offcut +${log.remainderFt} ft</span> ${log.remnantAdded ? '<span style="font-size: 0.725rem; color: var(--success-solid); font-weight: 600;">(In Stock)</span>' : ''}`;
+      if (remLen > 0) {
+        remnantDisplay = `<span class="badge-cut-rem">✂️ +${formatDisplayLength(remLen)} In</span> ${log.remnantAdded ? '<span style="font-size: 0.725rem; color: var(--success-solid); font-weight: 600;">(Added to stock)</span>' : ''}`;
+        remnantCardBadge = `<span class="badge-cut-rem">✂️ Offcut +${formatDisplayLength(remLen)} In</span> ${log.remnantAdded ? '<span style="font-size: 0.725rem; color: var(--success-solid); font-weight: 600;">(In Stock)</span>' : ''}`;
       } else {
         remnantDisplay = `<span class="badge-cut-exact">Exact Cut (0 scrap)</span>`;
         remnantCardBadge = `<span class="badge-cut-exact">Exact Cut (0 scrap)</span>`;
@@ -1368,11 +1497,17 @@
           <div style="font-weight: 600;">${escapeHtml(log.rodName)}</div>
           <div class="font-mono text-muted" style="font-size: 0.75rem;">${log.diameterMm} mm diameter</div>
         </td>
-        <td class="text-right font-mono">${log.originalLengthFt} ft</td>
-        <td class="text-right font-mono" style="color: var(--danger-solid); font-weight: 700;">-${log.cutLengthFt} ft</td>
+        <td class="text-right font-mono">${formatDisplayLength(origLen)} In</td>
+        <td class="text-right font-mono" style="color: var(--danger-solid); font-weight: 700;">-${formatDisplayLength(cutLen)} In</td>
         <td class="text-right font-mono"><strong>${log.quantity}</strong></td>
         <td>${remnantDisplay}</td>
         <td><span style="font-size: 0.825rem; color: var(--text-secondary);">${escapeHtml(log.reason || '—')}</span></td>
+        <td style="text-align:center;">
+          <div style="font-size:0.75rem; color:var(--text-secondary); line-height:1.5;">
+            ${log.createdBy ? `<div><span style="font-weight:500;">👤 Created:</span> ${escapeHtml(log.createdBy)}</div>` : ''}
+            ${log.assignedBy ? `<div><span style="font-weight:500;">🏷️ Assigned:</span> ${escapeHtml(log.assignedBy)}</div>` : (!log.createdBy ? '—' : '')}
+          </div>
+        </td>
         <td style="text-align:center;">
           <button class="btn btn-secondary btn-xs btn-print-slip" data-log-id="${log.id}" title="Print cut invoice slip"
             style="padding:3px 8px; font-size:0.72rem; white-space:nowrap;">
@@ -1398,11 +1533,11 @@
           <div class="cut-log-card-metrics">
             <div class="cut-log-metric-item">
               <span class="cut-log-metric-label">Original</span>
-              <span class="cut-log-metric-value font-mono">${log.originalLengthFt} ft</span>
+              <span class="cut-log-metric-value font-mono">${formatDisplayLength(origLen)} In</span>
             </div>
             <div class="cut-log-metric-item">
               <span class="cut-log-metric-label">Cut Size</span>
-              <span class="cut-log-metric-value cut-length font-mono">-${log.cutLengthFt} ft</span>
+              <span class="cut-log-metric-value cut-length font-mono">-${formatDisplayLength(cutLen)} In</span>
             </div>
             <div class="cut-log-metric-item">
               <span class="cut-log-metric-label">Quantity</span>
@@ -1419,6 +1554,13 @@
           <div class="cut-log-card-reason">
             <span class="cut-log-reason-icon">📌</span>
             <span class="cut-log-reason-text">${escapeHtml(log.reason)}</span>
+          </div>
+          ` : ''}
+
+          ${(log.createdBy || log.assignedBy) ? `
+          <div class="cut-log-card-reason" style="margin-top:4px; display:flex; flex-direction:column; gap:2px;">
+            ${log.createdBy ? `<div style="font-size:0.78rem; color:var(--text-secondary);"><strong>👤 Created by:</strong> ${escapeHtml(log.createdBy)}</div>` : ''}
+            ${log.assignedBy ? `<div style="font-size:0.78rem; color:var(--text-secondary);"><strong>🏷️ Assigned by:</strong> ${escapeHtml(log.assignedBy)}</div>` : ''}
           </div>
           ` : ''}
 
@@ -1440,15 +1582,15 @@
       return;
     }
 
-    const headers = ['Timestamp', 'Rod Name', 'Diameter (mm)', 'Original Length (ft)', 'Cut Length (ft)', 'Quantity', 'Remainder Offcut (ft)', 'Remnant Added', 'Job Reason'];
+    const headers = ['Timestamp', 'Rod Name', 'Diameter (mm)', 'Original Length (In)', 'Cut Length (In)', 'Quantity', 'Remainder Offcut (In)', 'Remnant Added', 'Job Reason'];
     const rows = cutLogs.map(log => [
       escapeCsvField(new Date(log.timestamp).toISOString()),
       escapeCsvField(log.rodName || ''),
       log.diameterMm,
-      log.originalLengthFt,
-      log.cutLengthFt,
+      getLogOrigLength(log),
+      getLogCutLength(log),
       log.quantity,
-      log.remainderFt,
+      getLogRemainder(log),
       log.remnantAdded ? 'Yes' : 'No',
       escapeCsvField(log.reason || '')
     ]);
@@ -1513,7 +1655,7 @@
     if (rodEditId) rodEditId.value = rod.id;
     if (formRodName) formRodName.value = rod.name || '';
     if (formDiameterMm) formDiameterMm.value = rod.diameterMm ?? '';
-    if (formLengthFt) formLengthFt.value = rod.lengthFt ?? '';
+    if (formLengthFt) formLengthFt.value = getRodLength(rod) || '';
     if (formQuantity) formQuantity.value = rod.quantity ?? 0;
     if (formSku) formSku.value = rod.sku || '';
     if (formNotes) formNotes.value = rod.notes || '';
@@ -1539,7 +1681,7 @@
 
     const name = formRodName ? formRodName.value.trim() : '';
     const diameterMm = formDiameterMm ? parseFloat(formDiameterMm.value) : NaN;
-    const lengthFt = formLengthFt ? parseFloat(formLengthFt.value) : NaN;
+    const lengthVal = formLengthFt ? parseFloat(formLengthFt.value) : NaN;
     const quantity = formQuantity ? parseInt(formQuantity.value, 10) : NaN;
     const customSku = formSku ? formSku.value.trim() : '';
     const notes = formNotes ? formNotes.value.trim() : '';
@@ -1553,8 +1695,8 @@
       showToast('Please specify a positive diameter in millimeters', 'warning');
       return;
     }
-    if (isNaN(lengthFt) || lengthFt <= 0) {
-      showToast('Please specify a positive length in feet', 'warning');
+    if (isNaN(lengthVal) || lengthVal <= 0) {
+      showToast('Please specify a positive length in inches', 'warning');
       return;
     }
     if (isNaN(quantity) || quantity < 0) {
@@ -1562,7 +1704,7 @@
       return;
     }
 
-    const autoSku = customSku || `ROD-${Math.round(diameterMm)}MM-${Math.round(lengthFt)}FT-${Math.random().toString(36).substring(2, 6).toUpperCase()}`;
+    const autoSku = customSku || `ROD-${Math.round(diameterMm)}MM-${Math.round(lengthVal)}IN-${Math.random().toString(36).substring(2, 6).toUpperCase()}`;
 
     // Editing Existing Rod
     if (editId) {
@@ -1572,7 +1714,8 @@
           ...rods[index],
           name,
           diameterMm,
-          lengthFt,
+          lengthIn: lengthVal,
+          lengthFt: lengthVal,
           quantity,
           sku: customSku || rods[index].sku,
           notes,
@@ -1590,7 +1733,7 @@
     const duplicateMatch = rods.find(r =>
       r.name.toLowerCase() === name.toLowerCase() &&
       Number(r.diameterMm) === diameterMm &&
-      Number(r.lengthFt) === lengthFt
+      getRodLength(r) === lengthVal
     );
 
     if (duplicateMatch) {
@@ -1601,7 +1744,8 @@
           sku: autoSku,
           name,
           diameterMm,
-          lengthFt,
+          lengthIn: lengthVal,
+          lengthFt: lengthVal,
           quantity,
           notes,
           createdAt: Date.now()
@@ -1617,7 +1761,8 @@
       sku: autoSku,
       name,
       diameterMm,
-      lengthFt,
+      lengthIn: lengthVal,
+      lengthFt: lengthVal,
       quantity,
       notes,
       createdAt: Date.now()
@@ -1633,7 +1778,7 @@
   // --- DUPLICATE RESOLUTION DIALOG ---
   function showDuplicatePrompt(existingRod, addQuantity) {
     duplicateDetailsCard.innerHTML = `
-      <div><strong>Existing Entry:</strong> ${escapeHtml(existingRod.name)} (${existingRod.diameterMm} mm × ${existingRod.lengthFt} ft)</div>
+      <div><strong>Existing Entry:</strong> ${escapeHtml(existingRod.name)} (${existingRod.diameterMm} mm × ${formatDisplayLength(getRodLength(existingRod))} In)</div>
       <div style="margin-top: 4px;"><strong>Current Quantity:</strong> <span class="font-mono">${existingRod.quantity}</span> units</div>
       <div style="margin-top: 4px;"><strong>New Quantity to Add:</strong> <span class="font-mono">+${addQuantity}</span> units (New total: ${existingRod.quantity + addQuantity})</div>
     `;
@@ -1685,7 +1830,8 @@
 
     deductRodId.value = rod.id;
     deductRodName.textContent = rod.name;
-    deductRodDimensions.textContent = `${rod.diameterMm} mm diameter × ${rod.lengthFt} ft length (${rod.sku || 'No SKU'})`;
+    const rLen = getRodLength(rod);
+    deductRodDimensions.textContent = `${rod.diameterMm} mm diameter × ${rLen} In length (${rod.sku || 'No SKU'})`;
     deductRodAvailableQty.textContent = `${rod.quantity} units`;
 
     deductQuantityInput.max = rod.quantity;
@@ -1730,6 +1876,7 @@
       return;
     }
 
+    const currentLen = getRodLength(rod);
     rod.quantity -= deductAmount;
     rod.updatedAt = Date.now();
 
@@ -1738,9 +1885,12 @@
       timestamp: Date.now(),
       rodName: rod.name,
       diameterMm: rod.diameterMm,
-      originalLengthFt: rod.lengthFt,
-      cutLengthFt: rod.lengthFt,
+      originalLengthIn: currentLen,
+      originalLengthFt: currentLen,
+      cutLengthIn: currentLen,
+      cutLengthFt: currentLen,
       quantity: deductAmount,
+      remainderIn: 0,
       remainderFt: 0,
       remnantAdded: false,
       reason: reason || 'Whole Rod Deduction'
@@ -1757,7 +1907,7 @@
     }));
 
     const reasonMsg = reason ? ` for "${reason}"` : '';
-    showToast(`Deducted ${deductAmount} units of ${rod.name} (${rod.diameterMm}mm × ${rod.lengthFt}ft)${reasonMsg}. Remaining: ${rod.quantity}`, 'success');
+    showToast(`Deducted ${deductAmount} units of ${rod.name} (${rod.diameterMm}mm × ${currentLen}In)${reasonMsg}. Remaining: ${rod.quantity}`, 'success');
   }
 
   // --- QUICK QUANTITY ADJUSTMENTS ---
@@ -1785,7 +1935,7 @@
 
     showConfirm(
       'Delete Rod from Stock?',
-      `Are you sure you want to permanently delete "${rod.name}" (${rod.diameterMm}mm × ${rod.lengthFt}ft)? This action cannot be undone.`,
+      `Are you sure you want to permanently delete "${rod.name}" (${rod.diameterMm}mm × ${formatDisplayLength(getRodLength(rod))}In)? This action cannot be undone.`,
       () => {
         rods = rods.filter(r => r.id !== id);
         saveRodsToStorage();
@@ -1803,12 +1953,12 @@
       return;
     }
 
-    const headers = ['SKU', 'Rod Name', 'Diameter (mm)', 'Length (ft)', 'Quantity', 'Notes'];
+    const headers = ['SKU', 'Rod Name', 'Diameter (mm)', 'Length (In)', 'Quantity', 'Notes'];
     const rows = rods.map(r => [
       escapeCsvField(r.sku || ''),
       escapeCsvField(r.name || ''),
       r.diameterMm,
-      r.lengthFt,
+      getRodLength(r),
       r.quantity,
       escapeCsvField(r.notes || '')
     ]);
@@ -1873,20 +2023,21 @@
       const sku = (parts[0] || '').trim();
       const name = (parts[1] || '').trim();
       const diameterMm = parseFloat(parts[2]);
-      const lengthFt = parseFloat(parts[3]);
+      const lengthVal = parseFloat(parts[3]);
       const quantity = parseInt(parts[4], 10);
       const notes = (parts.length >= 7 ? parts[6] : parts[5] || '').trim();
 
-      if (!name || isNaN(diameterMm) || diameterMm <= 0 || isNaN(lengthFt) || lengthFt <= 0 || isNaN(quantity) || quantity < 0) {
+      if (!name || isNaN(diameterMm) || diameterMm <= 0 || isNaN(lengthVal) || lengthVal <= 0 || isNaN(quantity) || quantity < 0) {
         continue;
       }
 
       rods.push({
         id: 'rod-csv-' + Date.now() + '-' + i,
-        sku: sku || `ROD-${Math.round(diameterMm)}MM-${Math.round(lengthFt)}FT`,
+        sku: sku || `ROD-${Math.round(diameterMm)}MM-${Math.round(lengthVal)}IN`,
         name,
         diameterMm,
-        lengthFt,
+        lengthIn: lengthVal,
+        lengthFt: lengthVal,
         quantity,
         notes,
         createdAt: Date.now()
@@ -2067,8 +2218,21 @@
         if (filterKeyword) filterKeyword.value = '';
         if (filterDiameter) filterDiameter.value = 'all';
         if (filterStockStatus) filterStockStatus.value = 'all';
+        const clearBtn = document.getElementById('btnClearFilterKeyword');
+        if (clearBtn) clearBtn.classList.add('hidden');
         renderQuickDiameterChips();
         renderInventoryTable();
+      } else if (target.id === 'btnClearFilterKeyword' || target.closest('#btnClearFilterKeyword')) {
+        refreshDomElements();
+        if (filterKeyword) {
+          filterKeyword.value = '';
+          filterKeyword.focus();
+        }
+        const clearBtn = document.getElementById('btnClearFilterKeyword');
+        if (clearBtn) clearBtn.classList.add('hidden');
+        renderInventoryTable();
+      } else if (target.id === 'btnToggleRoundLength' || target.closest('#btnToggleRoundLength')) {
+        toggleRoundLength();
       } else if (target.id === 'btnResetSmartSearch') {
         resetSmartSearch();
       } else if (target.id === 'btnInstallPwa' || target.id === 'mobNavInstall' || target.id === 'btnTriggerInstallPrompt') {
@@ -2196,6 +2360,14 @@
     document.addEventListener('input', (e) => {
       if (!e.target) return;
       if (e.target.id === 'filterKeyword') {
+        const clearBtn = document.getElementById('btnClearFilterKeyword');
+        if (clearBtn) {
+          if (e.target.value.trim().length > 0) {
+            clearBtn.classList.remove('hidden');
+          } else {
+            clearBtn.classList.add('hidden');
+          }
+        }
         renderInventoryTable();
       } else if (e.target.id === 'filterCutLogsInput') {
         renderCutLogsTable();
@@ -2249,7 +2421,7 @@
     if (actionSheetRodName) actionSheetRodName.textContent = rod.name;
     if (actionSheetRodSku) actionSheetRodSku.textContent = rod.sku || 'No SKU';
     if (actionSheetDiameter) actionSheetDiameter.textContent = `${rod.diameterMm} mm`;
-    if (actionSheetLength) actionSheetLength.textContent = `${rod.lengthFt} ft`;
+    if (actionSheetLength) actionSheetLength.textContent = `${formatDisplayLength(getRodLength(rod))} In`;
     if (actionSheetQty) actionSheetQty.textContent = `${rod.quantity} pcs`;
     if (sheetQtyDisplay) sheetQtyDisplay.textContent = rod.quantity;
 
@@ -2295,6 +2467,9 @@
   // Expose to window for Next.js to call after fetching Google Sheets data
   window.initVanillaApp = initApp;
   window.updateDashboardExternal = updateDashboard;
+  window.toggleRoundLength = toggleRoundLength;
+  window.setRoundLengthEnabled = setRoundLengthEnabled;
+  window.isRoundLengthEnabled = () => isRoundLengthEnabled;
   window.setVanillaRods = (newRods) => {
     if (Array.isArray(newRods)) {
       rods = newRods;

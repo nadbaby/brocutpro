@@ -36,6 +36,7 @@ function doGet(e) {
                     sku: String(row[1] || ''),
                     name: String(row[2] || ''),
                     diameterMm: Number(row[3]) || 0,
+                    lengthIn: Number(row[4]) || 0,
                     lengthFt: Number(row[4]) || 0,
                     quantity: Number(row[5]) || 0,
                     notes: String(row[6] || ''),
@@ -55,9 +56,12 @@ function doGet(e) {
                     timestamp: lRow[1] || '',
                     rodName: String(lRow[2] || ''),
                     diameterMm: Number(lRow[3]) || 0,
+                    originalLengthIn: Number(lRow[4]) || 0,
                     originalLengthFt: Number(lRow[4]) || 0,
+                    cutLengthIn: Number(lRow[5]) || 0,
                     cutLengthFt: Number(lRow[5]) || 0,
                     quantity: Number(lRow[6]) || 0,
+                    remainderIn: Number(lRow[7]) || 0,
                     remainderFt: Number(lRow[7]) || 0,
                     remnantAdded: lRow[8] === 'Yes' || lRow[8] === true,
                     reason: String(lRow[9] || '')
@@ -95,15 +99,16 @@ function doPost(e) {
                 rodsSheet = ss.insertSheet("Rods Inventory");
             }
             rodsSheet.clear();
-            rodsSheet.appendRow(['id', 'sku', 'name', 'diameterMm', 'lengthFt', 'quantity', 'notes', 'updatedAt']);
+            rodsSheet.appendRow(['id', 'sku', 'name', 'diameterMm', 'lengthIn', 'quantity', 'notes', 'updatedAt']);
             if (postData.rods.length > 0) {
                 var rows = postData.rods.map(function (r) {
+                    var len = (r.lengthIn !== undefined && r.lengthIn !== null) ? r.lengthIn : (r.lengthFt || 0);
                     return [
                         r.id || '',
                         r.sku || '',
                         r.name || '',
                         r.diameterMm || 0,
-                        r.lengthFt || 0,
+                        len,
                         r.quantity || 0,
                         r.notes || '',
                         r.updatedAt ? new Date(r.updatedAt).toISOString() : new Date().toISOString()
@@ -122,18 +127,21 @@ function doPost(e) {
                 logsSheet = ss.insertSheet("Cut Logs");
             }
             logsSheet.clear();
-            logsSheet.appendRow(['id', 'timestamp', 'rodName', 'diameterMm', 'originalLengthFt', 'cutLengthFt', 'quantity', 'remainderFt', 'remnantAdded', 'reason']);
+            logsSheet.appendRow(['id', 'timestamp', 'rodName', 'diameterMm', 'originalLengthIn', 'cutLengthIn', 'quantity', 'remainderIn', 'remnantAdded', 'reason']);
             if (postData.cutLogs.length > 0) {
                 var logRows = postData.cutLogs.map(function (l) {
+                    var origLen = (l.originalLengthIn !== undefined && l.originalLengthIn !== null) ? l.originalLengthIn : (l.originalLengthFt || 0);
+                    var cutLen = (l.cutLengthIn !== undefined && l.cutLengthIn !== null) ? l.cutLengthIn : (l.cutLengthFt || 0);
+                    var remLen = (l.remainderIn !== undefined && l.remainderIn !== null) ? l.remainderIn : (l.remainderFt || 0);
                     return [
                         l.id || '',
                         l.timestamp ? new Date(l.timestamp).toISOString() : '',
                         l.rodName || '',
                         l.diameterMm || 0,
-                        l.originalLengthFt || 0,
-                        l.cutLengthFt || 0,
+                        origLen,
+                        cutLen,
                         l.quantity || 0,
-                        l.remainderFt || 0,
+                        remLen,
                         (l.remnantAdded === true || l.remnantAdded === 'Yes') ? 'Yes' : 'No',
                         l.reason || ''
                     ];

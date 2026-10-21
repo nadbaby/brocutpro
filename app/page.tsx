@@ -33,6 +33,7 @@ const APPS_SCRIPT_SNIPPET = `function doGet(e) {
           sku: String(row[1] || ''),
           name: String(row[2] || ''),
           diameterMm: Number(row[3]) || 0,
+          lengthIn: Number(row[4]) || 0,
           lengthFt: Number(row[4]) || 0,
           quantity: Number(row[5]) || 0,
           notes: String(row[6] || ''),
@@ -51,9 +52,12 @@ const APPS_SCRIPT_SNIPPET = `function doGet(e) {
           timestamp: lRow[1] || '',
           rodName: String(lRow[2] || ''),
           diameterMm: Number(lRow[3]) || 0,
+          originalLengthIn: Number(lRow[4]) || 0,
           originalLengthFt: Number(lRow[4]) || 0,
+          cutLengthIn: Number(lRow[5]) || 0,
           cutLengthFt: Number(lRow[5]) || 0,
           quantity: Number(lRow[6]) || 0,
+          remainderIn: Number(lRow[7]) || 0,
           remainderFt: Number(lRow[7]) || 0,
           remnantAdded: lRow[8] === 'Yes' || lRow[8] === true,
           reason: String(lRow[9] || '')
@@ -75,10 +79,11 @@ function doPost(e) {
     if (postData.rods && Array.isArray(postData.rods)) {
       var rodsSheet = ss.getSheetByName("Rods Inventory") || ss.insertSheet("Rods Inventory");
       rodsSheet.clear();
-      rodsSheet.appendRow(['id', 'sku', 'name', 'diameterMm', 'lengthFt', 'quantity', 'notes', 'updatedAt']);
+      rodsSheet.appendRow(['id', 'sku', 'name', 'diameterMm', 'lengthIn', 'quantity', 'notes', 'updatedAt']);
       if (postData.rods.length > 0) {
         var rows = postData.rods.map(function(r) {
-          return [r.id || '', r.sku || '', r.name || '', r.diameterMm || 0, r.lengthFt || 0, r.quantity || 0, r.notes || '', r.updatedAt ? new Date(r.updatedAt).toISOString() : new Date().toISOString()];
+          var len = (r.lengthIn !== undefined && r.lengthIn !== null) ? r.lengthIn : (r.lengthFt || 0);
+          return [r.id || '', r.sku || '', r.name || '', r.diameterMm || 0, len, r.quantity || 0, r.notes || '', r.updatedAt ? new Date(r.updatedAt).toISOString() : new Date().toISOString()];
         });
         rodsSheet.getRange(2, 1, rows.length, 8).setValues(rows);
       }
@@ -88,10 +93,13 @@ function doPost(e) {
     if (postData.cutLogs && Array.isArray(postData.cutLogs)) {
       var logsSheet = ss.getSheetByName("Cut Logs") || ss.insertSheet("Cut Logs");
       logsSheet.clear();
-      logsSheet.appendRow(['id', 'timestamp', 'rodName', 'diameterMm', 'originalLengthFt', 'cutLengthFt', 'quantity', 'remainderFt', 'remnantAdded', 'reason']);
+      logsSheet.appendRow(['id', 'timestamp', 'rodName', 'diameterMm', 'originalLengthIn', 'cutLengthIn', 'quantity', 'remainderIn', 'remnantAdded', 'reason']);
       if (postData.cutLogs.length > 0) {
         var logRows = postData.cutLogs.map(function(l) {
-          return [l.id || '', l.timestamp ? new Date(l.timestamp).toISOString() : '', l.rodName || '', l.diameterMm || 0, l.originalLengthFt || 0, l.cutLengthFt || 0, l.quantity || 0, l.remainderFt || 0, (l.remnantAdded === true || l.remnantAdded === 'Yes') ? 'Yes' : 'No', l.reason || ''];
+          var origLen = (l.originalLengthIn !== undefined && l.originalLengthIn !== null) ? l.originalLengthIn : (l.originalLengthFt || 0);
+          var cutLen = (l.cutLengthIn !== undefined && l.cutLengthIn !== null) ? l.cutLengthIn : (l.cutLengthFt || 0);
+          var remLen = (l.remainderIn !== undefined && l.remainderIn !== null) ? l.remainderIn : (l.remainderFt || 0);
+          return [l.id || '', l.timestamp ? new Date(l.timestamp).toISOString() : '', l.rodName || '', l.diameterMm || 0, origLen, cutLen, l.quantity || 0, remLen, (l.remnantAdded === true || l.remnantAdded === 'Yes') ? 'Yes' : 'No', l.reason || ''];
         });
         logsSheet.getRange(2, 1, logRows.length, 10).setValues(logRows);
       }
@@ -114,6 +122,32 @@ export default function Home() {
   const [isSheetsModalOpen, setIsSheetsModalOpen] = useState(false);
   const [inputScriptUrl, setInputScriptUrl] = useState(() => (typeof window !== 'undefined' ? (localStorage.getItem('rodsync_gsheets_script_url') || process.env.NEXT_PUBLIC_GOOGLE_SCRIPT_URL || '') : (process.env.NEXT_PUBLIC_GOOGLE_SCRIPT_URL || '')));
   const [copiedSnippet, setCopiedSnippet] = useState(false);
+  const [isRoundLength, setIsRoundLength] = useState(false);
+
+  useEffect(() => {
+    try {
+      const saved = localStorage.getItem('rodsync_round_length') === 'true';
+      setIsRoundLength(saved);
+      if (typeof window !== 'undefined' && (window as any).setRoundLengthEnabled) {
+        (window as any).setRoundLengthEnabled(saved);
+      }
+    } catch {}
+  }, []);
+
+  const handleToggleRoundLength = () => {
+    const next = !isRoundLength;
+    setIsRoundLength(next);
+    try {
+      localStorage.setItem('rodsync_round_length', next ? 'true' : 'false');
+    } catch {}
+    if (typeof window !== 'undefined') {
+      if ((window as any).setRoundLengthEnabled) {
+        (window as any).setRoundLengthEnabled(next);
+      } else if ((window as any).toggleRoundLength) {
+        (window as any).toggleRoundLength();
+      }
+    }
+  };
 
   useEffect(() => {
     // Check initial theme from document element after mount
@@ -722,11 +756,11 @@ export default function Home() {
               <div className="input-field-group">
                 <label htmlFor="searchLengthInput" className="field-label">
                   <span>Minimum Required Length</span>
-                  <span className="field-unit">(ft)</span>
+                  <span className="field-unit">(In)</span>
                 </label>
                 <div className="input-with-icon">
                   <input type="number" id="searchLengthInput" className="input-control" placeholder="e.g. 6.0" step="0.1" min="0.1" required />
-                  <span className="input-addon">ft</span>
+                  <span className="input-addon">In</span>
                 </div>
                 <div className="field-hint">Length &ge; required value</div>
               </div>
@@ -771,7 +805,7 @@ export default function Home() {
                       <span className="mobile-only">Rod &amp; Fit</span>
                     </th>
                     <th className="smart-col-dia hide-mobile text-right">Diameter (mm)</th>
-                    <th className="smart-col-len hide-mobile text-right">Length (ft)</th>
+                    <th className="smart-col-len hide-mobile text-right"><span id="smartThLengthTitle">Length (In)</span></th>
                     <th className="smart-col-size mobile-only text-right">Length &amp; Offcut</th>
                     <th className="smart-col-qty text-right">Available</th>
                     <th className="smart-col-rem hide-mobile">Cut Remainder</th>
@@ -828,6 +862,7 @@ export default function Home() {
                     <line x1="21" y1="21" x2="16.65" y2="16.65"></line>
                   </svg>
                   <input type="text" id="filterKeyword" className="input-control filter-search" placeholder="Search by name, SKU, notes..." />
+                  <button type="button" id="btnClearFilterKeyword" className="search-clear-btn hidden" aria-label="Clear search" title="Clear search">✕</button>
                 </div>
 
                 {/*  Row 2: Diameter & Status Dropdowns in ONE LINE on mobile  */}
@@ -839,16 +874,34 @@ export default function Home() {
 
                 </div>
 
-                {/*  View Switcher (Row View vs Cards View)  */}
-                <div className="view-toggle-group" id="viewToggleGroup" role="group" aria-label="Display View">
-                  <button type="button" className="view-toggle-btn active" id="btnViewRow" title="Single-line row view">
-                    <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><line x1="8" y1="6" x2="21" y2="6"></line><line x1="8" y1="12" x2="21" y2="12"></line><line x1="8" y1="18" x2="21" y2="18"></line><line x1="3" y1="6" x2="3.01" y2="6"></line><line x1="3" y1="12" x2="3.01" y2="12"></line><line x1="3" y1="18" x2="3.01" y2="18"></line></svg>
-                    <span>Row</span>
+                {/*  Display Options: Length Round Off Toggle & View Switcher  */}
+                <div className="filter-actions-row">
+                  <button
+                    type="button"
+                    className={`btn-length-toggle ${isRoundLength ? 'active' : ''}`}
+                    id="btnToggleRoundLength"
+                    role="switch"
+                    aria-checked={isRoundLength ? 'true' : 'false'}
+                    title={isRoundLength ? 'Lengths shown in Round Off (≈). Click for Decimal (.0).' : 'Lengths shown in Decimal (.0). Click for Round Off (≈).'}
+                    onClick={handleToggleRoundLength}
+                  >
+                    <span className="length-toggle-switch">
+                      <span className="length-toggle-knob"></span>
+                    </span>
+                    <span>Round</span>
                   </button>
-                  <button type="button" className="view-toggle-btn" id="btnViewCards" title="Card grid view">
-                    <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><rect x="3" y="3" width="7" height="7"></rect><rect x="14" y="3" width="7" height="7"></rect><rect x="14" y="14" width="7" height="7"></rect><rect x="3" y="14" width="7" height="7"></rect></svg>
-                    <span>Cards</span>
-                  </button>
+
+                  {/*  View Switcher (Row View vs Cards View)  */}
+                  <div className="view-toggle-group" id="viewToggleGroup" role="group" aria-label="Display View">
+                    <button type="button" className="view-toggle-btn active" id="btnViewRow" title="Single-line row view">
+                      <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><line x1="8" y1="6" x2="21" y2="6"></line><line x1="8" y1="12" x2="21" y2="12"></line><line x1="8" y1="18" x2="21" y2="18"></line><line x1="3" y1="6" x2="3.01" y2="6"></line><line x1="3" y1="12" x2="3.01" y2="12"></line><line x1="3" y1="18" x2="3.01" y2="18"></line></svg>
+                      <span>Row</span>
+                    </button>
+                    <button type="button" className="view-toggle-btn" id="btnViewCards" title="Card grid view">
+                      <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><rect x="3" y="3" width="7" height="7"></rect><rect x="14" y="3" width="7" height="7"></rect><rect x="14" y="14" width="7" height="7"></rect><rect x="3" y="14" width="7" height="7"></rect></svg>
+                      <span>Cards</span>
+                    </button>
+                  </div>
                 </div>
               </div>
             </div>
@@ -862,7 +915,7 @@ export default function Home() {
 
                   <th className="col-name sortable" data-sort="name">ROD NAME / MATERIAL</th>
                   <th className="col-diameter hide-mobile sortable text-center" data-sort="diameterMm">DIAMETER (MM)</th>
-                  <th className="col-length hide-mobile sortable text-center" data-sort="lengthFt">LENGTH (FT)</th>
+                  <th className="col-length hide-mobile sortable text-center" data-sort="lengthIn"><span id="thLengthTitle">LENGTH (IN)</span></th>
                   <th className="col-size mobile-only text-right" data-sort="diameterMm">Size</th>
                   <th className="col-qty sortable text-center" data-sort="quantity">STOCK</th>
 
@@ -912,7 +965,7 @@ export default function Home() {
             <button
               className="btn btn-secondary"
               onClick={() => {
-                const csvContent = "data:text/csv;charset=utf-8,Rod Name or Material Type,Diameter (mm),Length (ft),Quantity Available\nExample Steel Rebar,12,6.0,15";
+                const csvContent = "data:text/csv;charset=utf-8,Rod Name or Material Type,Diameter (mm),Length (In),Quantity Available\nExample Steel Rebar,12,6.0,15";
                 const encodedUri = encodeURI(csvContent);
                 const link = document.createElement("a");
                 link.setAttribute("href", encodedUri);
@@ -974,10 +1027,10 @@ export default function Home() {
               </div>
 
               <div className="form-group col-6">
-                <label htmlFor="formLengthFt" className="field-label">Length (ft) <span className="required">*</span></label>
+                <label htmlFor="formLengthFt" className="field-label">Length (In) <span className="required">*</span></label>
                 <div className="input-with-icon">
                   <input type="number" id="formLengthFt" className="input-control" placeholder="6.0" step="0.1" min="0.1" required />
-                  <span className="input-addon">ft</span>
+                  <span className="input-addon">In</span>
                 </div>
               </div>
             </div>
@@ -1093,7 +1146,7 @@ export default function Home() {
             <div className="cut-source-card">
               <div className="cut-source-title" id="cutRodName">—</div>
               <div className="cut-source-dims">
-                Diameter: <strong id="cutRodDiameter">—</strong> mm &bull; Full Length: <strong id="cutRodFullLength">—</strong> ft &bull; In Stock: <strong id="cutRodAvailableQty">—</strong> units
+                Diameter: <strong id="cutRodDiameter">—</strong> mm &bull; Full Length: <strong id="cutRodFullLength">—</strong> In &bull; In Stock: <strong id="cutRodAvailableQty">—</strong> units
               </div>
             </div>
 
@@ -1102,7 +1155,7 @@ export default function Home() {
                 <label htmlFor="cutRequiredLengthInput" className="field-label">Required Cut Length <span className="required">*</span></label>
                 <div className="input-with-icon">
                   <input type="number" id="cutRequiredLengthInput" className="input-control" placeholder="5.0" step="0.1" min="0.1" required />
-                  <span className="input-addon">ft</span>
+                  <span className="input-addon">In</span>
                 </div>
                 <div className="field-hint">Piece length you are cutting out</div>
               </div>
@@ -1122,19 +1175,19 @@ export default function Home() {
             <div className="cut-calculation-card" id="cutCalcCard">
               <div className="cut-calc-row">
                 <span>Original Rod Length:</span>
-                <strong className="font-mono" id="calcOrigLength">0.0 ft</strong>
+                <strong className="font-mono" id="calcOrigLength">0.0 In</strong>
               </div>
               <div className="cut-calc-row">
                 <span>Cut Length (Deducted):</span>
-                <strong className="font-mono text-danger" id="calcCutLength">- 0.0 ft</strong>
+                <strong className="font-mono text-danger" id="calcCutLength">- 0.0 In</strong>
               </div>
               <div className="cut-calc-divider"></div>
               <div className="cut-calc-row highlight">
                 <span>Remaining Offcut Piece:</span>
-                <strong className="font-mono text-success" id="calcRemainLength">0.0 ft</strong>
+                <strong className="font-mono text-success" id="calcRemainLength">0.0 In</strong>
               </div>
               <div className="cut-calc-note" id="calcRemainNote">
-                ✂️ <strong>1 unit</strong> of <strong>12 mm × 1.0 ft</strong> offcut rod will be added back into your inventory!
+                ✂️ <strong>1 unit</strong> of <strong>12 mm × 1.0 In</strong> offcut rod will be added back into your inventory!
               </div>
             </div>
 
@@ -1148,6 +1201,21 @@ export default function Home() {
             <div className="form-group">
               <label htmlFor="cutReasonInput" className="field-label">Job / Work Order / Project Reference <span className="optional">(Optional)</span></label>
               <input type="text" id="cutReasonInput" className="input-control" placeholder="e.g. Work Order #1042, Site Project A" />
+            </div>
+
+            <div className="form-row">
+              <div className="form-group col-6">
+                <label htmlFor="cutCreatedByInput" className="field-label">
+                  👤 Job Created By <span className="optional">(Optional)</span>
+                </label>
+                <input type="text" id="cutCreatedByInput" className="input-control" placeholder="e.g. Ahmed, Supervisor" />
+              </div>
+              <div className="form-group col-6">
+                <label htmlFor="cutAssignedByInput" className="field-label">
+                  🏷️ Job Assigned By <span className="optional">(Optional)</span>
+                </label>
+                <input type="text" id="cutAssignedByInput" className="input-control" placeholder="e.g. Manager Raza" />
+              </div>
             </div>
 
             <div className="modal-footer">
@@ -1276,6 +1344,7 @@ export default function Home() {
                     <th className="text-right">Qty</th>
                     <th>Remnant Offcut</th>
                     <th>Job / Reference</th>
+                    <th className="text-center">Created / Assigned</th>
                     <th className="text-center">Slip</th>
                   </tr>
                 </thead>
@@ -1718,7 +1787,7 @@ export default function Home() {
 
       {/* We load the script with afterInteractive strategy and trigger initialization on load */}
       <Script
-        src="/script.js?v=7"
+        src="/script.js?v=12"
         strategy="afterInteractive"
         onLoad={() => {
           if (window.initVanillaApp) {
