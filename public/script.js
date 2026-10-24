@@ -66,7 +66,13 @@
     const num = Number(val);
     if (isNaN(num)) return val;
     if (isRoundLengthEnabled) {
-      return Math.round(num).toString();
+      const sign = num < 0 ? -1 : 1;
+      const abs = Math.abs(num);
+      const integerPart = Math.floor(abs);
+      const frac = abs - integerPart;
+      // Round .5 down to round figure (e.g. 5.5 -> 5; 5.6 -> 6)
+      const rounded = (frac <= 0.50001) ? integerPart : (integerPart + 1);
+      return (sign * rounded).toString();
     } else {
       // Decimal mode: always show decimal representation (e.g. 6.0, 5.5, 11.25)
       if (Number.isInteger(num)) {
@@ -104,7 +110,7 @@
     updateLengthToggleUI();
     renderInventoryTable();
     if (lastSmartSearchQuery && typeof executeSmartSearch === 'function') {
-      executeSmartSearch(lastSmartSearchQuery.diameter, lastSmartSearchQuery.length, false);
+      executeSmartSearch(lastSmartSearchQuery.diameter, lastSmartSearchQuery.length, false, lastSmartSearchQuery.unit);
     }
     if (typeof renderCutLogsTable === 'function' && cutLogsModalOverlay && !cutLogsModalOverlay.classList.contains('hidden')) {
       renderCutLogsTable();
@@ -122,6 +128,8 @@
   // --- DOM ELEMENT REFERENCES (DYNAMICALLY RESOLVED) ---
   let statTotalTypes, statTotalQuantity, statInStockTypes, statLowStockCount;
   let smartSearchForm, searchDiameterInput, searchLengthInput, btnResetSmartSearch;
+  let searchLengthUnit = 'in';
+  let unitPillIn, unitPillFt, searchLengthUnitSelect, searchLengthUnitBadge, searchLengthHint, smartThLengthTitle;
   let smartSearchResultsContainer, smartResultsTableBody, smartResultsCount, smartResultsCriteria;
   let smartSearchEmptyState, smartSearchEmptyDesc, btnEmptySuggestAdd;
   let inventoryTableBody, inventoryEmptyState, inventoryCountSummary;
@@ -139,6 +147,8 @@
   let cutLogsTableBody, cutLogsEmptyState, filterCutLogsInput, btnExportCutLogsCsv, btnClearCutLogs;
   let cutLogsCountText, cutLogsContentArea, cutLogsTableWrapper, cutLogsCardsContainer;
   let btnCutLogsCards, btnCutLogsTable;
+  let selectedCutLogIds = new Set();
+  let btnPrintCombinedSlip, btnFooterPrintCombinedSlip, selectAllCutLogs, selectedLogsCount, selectedLogsCountFooter;
   let cutLogsViewMode = window.innerWidth <= 768 ? 'cards' : 'table';
   let btnInstallPwa, mobNavInstall, installModalOverlay, btnCloseInstallModal, btnCloseInstallModalBtn;
   let installPromptDirect, btnTriggerInstallPrompt, mobNavSearch, mobNavInventory, mobNavAdd, mobNavCutLogs;
@@ -160,6 +170,12 @@
     searchDiameterInput = document.getElementById('searchDiameterInput');
     searchLengthInput = document.getElementById('searchLengthInput');
     btnResetSmartSearch = document.getElementById('btnResetSmartSearch');
+    unitPillIn = document.getElementById('unitPillIn');
+    unitPillFt = document.getElementById('unitPillFt');
+    searchLengthUnitSelect = document.getElementById('searchLengthUnitSelect');
+    searchLengthUnitBadge = document.getElementById('searchLengthUnitBadge');
+    searchLengthHint = document.getElementById('searchLengthHint');
+    smartThLengthTitle = document.getElementById('smartThLengthTitle');
     smartSearchResultsContainer = document.getElementById('smartSearchResultsContainer');
     smartResultsTableBody = document.getElementById('smartResultsTableBody');
     smartResultsCount = document.getElementById('smartResultsCount');
@@ -244,6 +260,11 @@
     cutLogsCardsContainer = document.getElementById('cutLogsCardsContainer');
     btnCutLogsCards = document.getElementById('btnCutLogsCards');
     btnCutLogsTable = document.getElementById('btnCutLogsTable');
+    btnPrintCombinedSlip = document.getElementById('btnPrintCombinedSlip');
+    btnFooterPrintCombinedSlip = document.getElementById('btnFooterPrintCombinedSlip');
+    selectAllCutLogs = document.getElementById('selectAllCutLogs');
+    selectedLogsCount = document.getElementById('selectedLogsCount');
+    selectedLogsCountFooter = document.getElementById('selectedLogsCountFooter');
 
     btnInstallPwa = document.getElementById('btnInstallPwa');
     mobNavInstall = document.getElementById('mobNavInstall');
@@ -639,7 +660,7 @@
 
     // 4. If a Smart Search is active, refresh its results live
     if (lastSmartSearchQuery) {
-      executeSmartSearch(lastSmartSearchQuery.diameter, lastSmartSearchQuery.length, false);
+      executeSmartSearch(lastSmartSearchQuery.diameter, lastSmartSearchQuery.length, false, lastSmartSearchQuery.unit);
     }
   }
 
@@ -703,14 +724,14 @@
 
     const keyword = filterKeyword ? filterKeyword.value.trim().toLowerCase() : '';
     const diaFilter = filterDiameter ? filterDiameter.value : 'all';
-
+    const statusFilter = filterStockStatus ? filterStockStatus.value : 'all';
 
     let filtered = rods.filter(rod => {
       // Keyword match across name, sku, notes
       if (keyword) {
-        const matchName = rod.name.toLowerCase().includes(keyword);
-        const matchSku = false;
-        const matchNotes = false;
+        const matchName = rod.name ? rod.name.toLowerCase().includes(keyword) : false;
+        const matchSku = rod.sku ? rod.sku.toLowerCase().includes(keyword) : false;
+        const matchNotes = rod.notes ? rod.notes.toLowerCase().includes(keyword) : false;
         if (!matchName && !matchSku && !matchNotes) return false;
       }
 
@@ -720,6 +741,12 @@
       }
 
       // Stock status filter
+      if (statusFilter && statusFilter !== 'all') {
+        const qty = Number(rod.quantity) || 0;
+        if (statusFilter === 'in_stock' && qty <= 0) return false;
+        if (statusFilter === 'out_of_stock' && qty > 0) return false;
+        if (statusFilter === 'low_stock' && (qty <= 0 || qty > LOW_STOCK_THRESHOLD)) return false;
+      }
 
       return true;
     });
@@ -825,38 +852,120 @@
   }
 
   // --- SMART ROD SEARCH LOGIC ---
-  function executeSmartSearch(diameter, minLength, showNotification = true) {
-    const searchDiameter = Number(diameter);
-    const requiredLength = Number(minLength);
+  function setSmartSearchUnit(newUnit, shouldConvertValue = true) {
+    if (!['in', 'ft'].includes(newUnit)) return;
+    refreshDomElements();
+    const prevUnit = searchLengthUnit;
+    searchLengthUnit = newUnit;
 
-    if (isNaN(searchDiameter) || searchDiameter <= 0 || isNaN(requiredLength) || requiredLength <= 0) {
+    if (unitPillIn) unitPillIn.classList.toggle('active', newUnit === 'in');
+    if (unitPillFt) unitPillFt.classList.toggle('active', newUnit === 'ft');
+    if (searchLengthUnitSelect) searchLengthUnitSelect.value = newUnit;
+    if (searchLengthUnitBadge) searchLengthUnitBadge.textContent = newUnit === 'ft' ? '(Ft)' : '(In)';
+    if (smartThLengthTitle) smartThLengthTitle.textContent = newUnit === 'ft' ? 'Length (Ft / In)' : 'Length (In)';
+
+    if (searchLengthInput) {
+      searchLengthInput.placeholder = newUnit === 'ft' ? 'e.g. 2.0' : 'e.g. 6.0';
+      const rawVal = parseFloat(searchLengthInput.value);
+      if (shouldConvertValue && !isNaN(rawVal) && rawVal > 0) {
+        if (newUnit === 'ft' && prevUnit === 'in') {
+          // Convert Inches to Feet (divide by 12)
+          const ftVal = Number((rawVal / 12).toFixed(3));
+          searchLengthInput.value = ftVal;
+        } else if (newUnit === 'in' && prevUnit === 'ft') {
+          // Convert Feet to Inches (multiply by 12)
+          const inVal = Number((rawVal * 12).toFixed(2));
+          searchLengthInput.value = inVal;
+        }
+      }
+    }
+
+    updateSearchLengthHint();
+
+    // If diameter is entered and length is entered, immediately refresh search results
+    if (
+      searchDiameterInput &&
+      parseFloat(searchDiameterInput.value) > 0 &&
+      searchLengthInput &&
+      parseFloat(searchLengthInput.value) > 0
+    ) {
+      executeSmartSearch(searchDiameterInput.value, searchLengthInput.value, false, newUnit);
+    }
+  }
+
+  function updateSearchLengthHint() {
+    refreshDomElements();
+    if (!searchLengthHint) return;
+    const rawVal = searchLengthInput ? parseFloat(searchLengthInput.value) : NaN;
+    if (!isNaN(rawVal) && rawVal > 0) {
+      if (searchLengthUnit === 'ft') {
+        const inEquiv = Number((rawVal * 12).toFixed(2));
+        searchLengthHint.innerHTML = `📐 <strong>${rawVal} Ft</strong> = <strong>${inEquiv} In</strong> (Length &ge; ${inEquiv} In)`;
+      } else {
+        const ftEquiv = Number((rawVal / 12).toFixed(2));
+        searchLengthHint.innerHTML = `📐 <strong>${rawVal} In</strong> = <strong>${ftEquiv} Ft</strong> (Length &ge; ${rawVal} In)`;
+      }
+    } else {
+      if (searchLengthUnit === 'ft') {
+        searchLengthHint.textContent = '1 Ft = 12 In • Length ≥ required value';
+      } else {
+        searchLengthHint.textContent = 'Length ≥ required value';
+      }
+    }
+  }
+
+  function executeSmartSearch(diameter, minLength, showNotification = true, unitOverride = null) {
+    refreshDomElements();
+    const unit = unitOverride || searchLengthUnit;
+    const searchDiameter = Number(diameter);
+    const inputLength = Number(minLength);
+
+    if (isNaN(searchDiameter) || searchDiameter <= 0 || isNaN(inputLength) || inputLength <= 0) {
       showToast('Please enter valid positive numbers for diameter and length', 'warning');
       return;
     }
 
-    lastSmartSearchQuery = { diameter: searchDiameter, length: requiredLength };
+    // Convert length to inches for matching inventory (rods are stored in inches)
+    const requiredLengthInches = unit === 'ft'
+      ? Number((inputLength * 12).toFixed(3))
+      : inputLength;
+
+    lastSmartSearchQuery = {
+      diameter: searchDiameter,
+      length: inputLength,
+      unit: unit,
+      lengthInches: requiredLengthInches
+    };
 
     // Core Business Rule:
     // 1. Exact diameter match
-    // 2. Length >= requiredLength
+    // 2. Length in inches >= requiredLengthInches
     // 3. Stock quantity > 0
     // 4. Sorted ascending by length (closest length first)
     const results = rods
       .filter(rod =>
         Number(rod.diameterMm) === searchDiameter &&
-        getRodLength(rod) >= requiredLength &&
+        getRodLength(rod) >= requiredLengthInches &&
         Number(rod.quantity) > 0
       )
       .sort((a, b) => getRodLength(a) - getRodLength(b));
 
-    smartResultsCriteria.textContent = `Criteria: ${searchDiameter} mm diameter × ≥ ${requiredLength} In length`;
+    const ftEquiv = Number((requiredLengthInches / 12).toFixed(2));
+    if (unit === 'ft') {
+      smartResultsCriteria.textContent = `Criteria: ${searchDiameter} mm diameter × ≥ ${inputLength} Ft (${requiredLengthInches} In) length`;
+    } else {
+      smartResultsCriteria.textContent = `Criteria: ${searchDiameter} mm diameter × ≥ ${inputLength} In (${ftEquiv} Ft) length`;
+    }
 
     if (results.length === 0) {
       smartSearchResultsContainer.classList.add('hidden');
       smartSearchEmptyState.classList.remove('hidden');
-      smartSearchEmptyDesc.textContent = `No active rods found with exactly ${searchDiameter} mm diameter and at least ${requiredLength} In available in stock.`;
+      const lengthDesc = unit === 'ft'
+        ? `${inputLength} Ft (${requiredLengthInches} In)`
+        : `${inputLength} In (${ftEquiv} Ft)`;
+      smartSearchEmptyDesc.textContent = `No active rods found with exactly ${searchDiameter} mm diameter and at least ${lengthDesc} available in stock.`;
       if (showNotification) {
-        showToast(`No available rods found for ${searchDiameter} mm (≥ ${requiredLength} In)`, 'warning');
+        showToast(`No available rods found for ${searchDiameter} mm (≥ ${lengthDesc})`, 'warning');
       }
       return;
     }
@@ -869,7 +978,10 @@
     results.forEach((rod, index) => {
       const tr = document.createElement('tr');
       const isBestFit = index === 0;
-      const extraLength = Number((getRodLength(rod) - requiredLength).toFixed(2));
+      const rodLenInches = getRodLength(rod);
+      const rodLenFeet = Number((rodLenInches / 12).toFixed(2));
+      const extraLengthInches = Number((rodLenInches - requiredLengthInches).toFixed(2));
+      const extraLengthFeet = Number((extraLengthInches / 12).toFixed(2));
 
       let fitBadge = '';
       if (isBestFit) {
@@ -888,10 +1000,32 @@
 
       // Cut Remainder badge
       let remnantBadge = '';
-      if (extraLength === 0) {
+      if (extraLengthInches === 0) {
         remnantBadge = `<span class="badge-cut-exact">Exact fit (0 scrap)</span>`;
+      } else if (unit === 'ft') {
+        remnantBadge = `<span class="badge-cut-rem">✂️ <strong>${extraLengthFeet} Ft</strong> (${extraLengthInches} In) offcut</span>`;
       } else {
-        remnantBadge = `<span class="badge-cut-rem">✂️ <strong>${extraLength} In</strong> offcut</span>`;
+        remnantBadge = `<span class="badge-cut-rem">✂️ <strong>${extraLengthInches} In</strong> offcut</span>`;
+      }
+
+      // Length display formatting (desktop and mobile)
+      let lengthDisplayDesktop = '';
+      let lengthDisplayMobile = '';
+      if (unit === 'ft') {
+        lengthDisplayDesktop = `
+          <div style="font-weight: 700; font-size: 0.95rem;">${formatDisplayLength(rodLenFeet)} <span style="font-size: 0.75rem; color: var(--primary-600); font-weight: 600;">Ft</span></div>
+          <div class="text-muted font-mono" style="font-size: 0.75rem;">${formatDisplayLength(rodLenInches)} In</div>
+        `;
+        lengthDisplayMobile = `
+          <div style="font-weight: 700; font-size: 0.85rem;">${formatDisplayLength(rodLenFeet)} Ft <span style="font-size: 0.725rem; font-weight: normal; color: var(--text-muted);">(${formatDisplayLength(rodLenInches)} In)</span></div>
+          <div style="font-size: 0.7rem; margin-top: 0.15rem;">${remnantBadge}</div>
+        `;
+      } else {
+        lengthDisplayDesktop = `<strong>${formatDisplayLength(rodLenInches)}</strong> In <span class="text-muted" style="font-size: 0.75rem;">(${rodLenFeet} Ft)</span>`;
+        lengthDisplayMobile = `
+          <div style="font-weight: 700; font-size: 0.85rem;">${formatDisplayLength(rodLenInches)} In</div>
+          <div style="font-size: 0.7rem; margin-top: 0.15rem;">${remnantBadge}</div>
+        `;
       }
 
       tr.innerHTML = `
@@ -902,16 +1036,13 @@
           <div class="font-mono text-muted" style="font-size: 0.725rem;">${escapeHtml(rod.sku || 'No SKU')}</div>
         </td>
         <td class="smart-col-dia hide-mobile text-right font-mono"><strong>${rod.diameterMm}</strong> mm</td>
-        <td class="smart-col-len hide-mobile text-right font-mono"><strong>${formatDisplayLength(getRodLength(rod))}</strong> In</td>
-        <td class="smart-col-size mobile-only text-right font-mono">
-          <div style="font-weight: 700; font-size: 0.85rem;">${formatDisplayLength(getRodLength(rod))} In</div>
-          <div style="font-size: 0.7rem; margin-top: 0.15rem;">${remnantBadge}</div>
-        </td>
+        <td class="smart-col-len hide-mobile text-right font-mono">${lengthDisplayDesktop}</td>
+        <td class="smart-col-size mobile-only text-right font-mono">${lengthDisplayMobile}</td>
         <td class="smart-col-qty text-right font-mono"><strong style="color: var(--primary-700); font-size: 1rem;">${rod.quantity}</strong></td>
         <td class="smart-col-rem hide-mobile">${remnantBadge}</td>
         <td class="smart-col-action text-center">
           <div class="table-actions">
-            <button class="btn btn-primary btn-xs btn-open-cut" data-id="${rod.id}" data-cut-len="${requiredLength}" title="Cut ${requiredLength} In and keep the ${extraLength} In offcut">
+            <button class="btn btn-primary btn-xs btn-open-cut" data-id="${rod.id}" data-cut-len="${requiredLengthInches}" title="Cut ${inputLength} ${unit === 'ft' ? 'Ft' : 'In'} (${requiredLengthInches} In) and keep the offcut">
               ✂️ Cut
             </button>
             <button class="desktop-only btn btn-secondary btn-xs btn-open-deduct" data-id="${rod.id}" title="Deduct whole rods">
@@ -924,13 +1055,16 @@
     });
 
     if (showNotification) {
-      showToast(`Found ${results.length} suitable rod length(s) for ${searchDiameter} mm!`, 'success');
+      const unitLabel = unit === 'ft' ? `${inputLength} Ft` : `${inputLength} In`;
+      showToast(`Found ${results.length} suitable rod length(s) for ${searchDiameter} mm (≥ ${unitLabel})!`, 'success');
     }
   }
 
   function resetSmartSearch() {
+    refreshDomElements();
     searchDiameterInput.value = '';
     searchLengthInput.value = '';
+    setSmartSearchUnit('in', false);
     lastSmartSearchQuery = null;
     smartSearchResultsContainer.classList.add('hidden');
     smartSearchEmptyState.classList.add('hidden');
@@ -950,10 +1084,10 @@
     cutRodName.textContent = rod.name + (rod.sku ? ` (${rod.sku})` : '');
     cutRodDiameter.textContent = rod.diameterMm;
     const rodLen = getRodLength(rod);
-    cutRodFullLength.textContent = rodLen.toFixed(1);
+    cutRodFullLength.textContent = `${rodLen.toFixed(1)} In (${(rodLen / 12).toFixed(2)} Ft)`;
     cutRodAvailableQty.textContent = rod.quantity;
 
-    calcOrigLength.textContent = `${rodLen.toFixed(1)} In`;
+    calcOrigLength.textContent = `${rodLen.toFixed(1)} In (${(rodLen / 12).toFixed(2)} Ft)`;
 
     // Prefill cut length if passed from smart search
     const initialCutLen = defaultCutLength ? parseFloat(defaultCutLength) : rodLen;
@@ -985,7 +1119,7 @@
     const cutLen = parseFloat(cutRequiredLengthInput.value);
     const qty = parseInt(cutPiecesQtyInput.value, 10) || 1;
 
-    calcOrigLength.textContent = `${fullLen.toFixed(1)} In`;
+    calcOrigLength.textContent = `${fullLen.toFixed(1)} In (${(fullLen / 12).toFixed(2)} Ft)`;
 
     if (isNaN(cutLen) || cutLen <= 0) {
       calcCutLength.textContent = '- 0.0 In';
@@ -996,26 +1130,43 @@
       return;
     }
 
-    calcCutLength.textContent = `- ${cutLen.toFixed(1)} In`;
+    calcCutLength.textContent = `- ${cutLen.toFixed(1)} In (${(cutLen / 12).toFixed(2)} Ft)`;
 
     if (cutLen > fullLen) {
       calcRemainLength.textContent = 'Invalid!';
       calcRemainNote.className = 'cut-calc-note error';
-      calcRemainNote.innerHTML = `⚠️ <strong>Cannot Cut!</strong> Required cut (${cutLen} In) exceeds full rod length (${fullLen} In).`;
+      calcRemainNote.innerHTML = `⚠️ <strong>Cannot Cut!</strong> Required cut (${cutLen} In / ${(cutLen / 12).toFixed(2)} Ft) exceeds full rod length (${fullLen} In / ${(fullLen / 12).toFixed(2)} Ft).`;
       btnConfirmCut.disabled = true;
       return;
     }
 
     btnConfirmCut.disabled = false;
     const remainder = Number((fullLen - cutLen).toFixed(2));
-    calcRemainLength.textContent = `${remainder} In`;
+    const remainderFt = Number((remainder / 12).toFixed(2));
+    calcRemainLength.textContent = `${remainder} In (${remainderFt} Ft)`;
+
+    // Interactive Cut Proportion Bar
+    const barWrap = document.getElementById('cutVisualBarWrap');
+    const barCutSegment = document.getElementById('barCutSegment');
+    const barRemainSegment = document.getElementById('barRemainSegment');
+    if (barWrap && barCutSegment && barRemainSegment) {
+      barWrap.style.display = 'block';
+      const cutPct = Math.min(100, Math.max(0, (cutLen / fullLen) * 100));
+      const remPct = Math.max(0, 100 - cutPct);
+      barCutSegment.style.width = `${cutPct.toFixed(1)}%`;
+      barCutSegment.textContent = cutPct >= 18 ? `Cut ${cutPct.toFixed(0)}%` : '';
+      barCutSegment.title = `Cut length: ${cutLen.toFixed(1)} In (${(cutLen / 12).toFixed(2)} Ft)`;
+      barRemainSegment.style.width = `${remPct.toFixed(1)}%`;
+      barRemainSegment.textContent = remPct >= 18 ? `Offcut ${remPct.toFixed(0)}%` : '';
+      barRemainSegment.title = `Offcut remainder: ${remainder.toFixed(1)} In (${remainderFt} Ft)`;
+    }
 
     if (remainder === 0) {
       calcRemainNote.className = 'cut-calc-note';
       calcRemainNote.innerHTML = `🎯 <strong>Exact Fit!</strong> Full rod length consumed with <strong>0 scrap</strong>. Deducting <strong>${qty}</strong> whole rod(s).`;
     } else {
       calcRemainNote.className = 'cut-calc-note';
-      calcRemainNote.innerHTML = `✂️ <strong>${qty} unit(s)</strong> of <strong>${rod.diameterMm} mm × ${remainder} In</strong> offcut remnant rod will be added to your inventory!`;
+      calcRemainNote.innerHTML = `✂️ <strong>${qty} unit(s)</strong> of <strong>${rod.diameterMm} mm × ${remainder} In (${remainderFt} Ft)</strong> offcut remnant rod will be added to your inventory!`;
     }
   }
 
@@ -1143,7 +1294,9 @@
       remnantAdded: remainder > 0 && shouldAddRemnant,
       reason: reason || 'Job Cut',
       createdBy: createdBy || '',
-      assignedBy: assignedBy || ''
+      assignedBy: assignedBy || '',
+      assignBy: createdBy || '',
+      assignTo: assignedBy || ''
     };
     cutLogs.unshift(logEntry);
 
@@ -1169,231 +1322,679 @@
     printCutSlip(logEntry);
   }
 
-  // --- CUT SLIP INVOICE PRINTER ---
-  function printCutSlip(log) {
-    const dateStr = new Date(log.timestamp).toLocaleString([], {
-      year: 'numeric', month: 'long', day: 'numeric',
-      hour: '2-digit', minute: '2-digit', second: '2-digit'
+  // --- HELPER TO UPDATE CUT LOG ASSIGNEES FROM SLIP PREVIEW (1 OR MANY) ---
+  window.updateCutLogAssignees = function(logIds, assignBy, assignTo) {
+    const ids = Array.isArray(logIds) ? logIds : String(logIds || '').split(',').map(s => s.trim()).filter(Boolean);
+    let updated = false;
+    ids.forEach(id => {
+      const entry = cutLogs.find(l => l.id === id);
+      if (entry) {
+        entry.assignBy = assignBy;
+        entry.assignTo = assignTo;
+        if (assignTo) entry.assignedBy = assignTo;
+        if (assignBy) entry.createdBy = assignBy;
+        updated = true;
+      }
     });
-    const refNo = log.id.toUpperCase().replace('LOG-', 'CUT-');
-    const remVal = getLogRemainder(log);
-    const remnantLine = remVal > 0
-      ? `<span class="slip-tag slip-tag-rem">✂️ ${remVal} In offcut ${log.remnantAdded ? '(Added to Stock)' : '(Not Added)'}</span>`
-      : `<span class="slip-tag slip-tag-exact">🎯 Exact Cut — 0 In scrap</span>`;
+    if (updated) {
+      try {
+        localStorage.setItem(CUT_LOGS_STORAGE_KEY, JSON.stringify(cutLogs));
+        renderCutLogsTable();
+      } catch (err) {}
+    }
+  };
+
+  // --- CUT SLIP INVOICE PRINTER (SUPPORTS 1 OR MANY CUTTING LOGS IN ONE SLIP) ---
+  function printCutSlip(input) {
+    let logs = [];
+    if (Array.isArray(input)) {
+      logs = input.filter(Boolean);
+    } else if (input && typeof input === 'object') {
+      logs = [input];
+    } else {
+      if (selectedCutLogIds && selectedCutLogIds.size > 0) {
+        logs = cutLogs.filter(l => selectedCutLogIds.has(l.id));
+      }
+    }
+
+    if (!logs || logs.length === 0) {
+      showToast('Please select 1 or more cut logs using checkboxes to print a combined slip', 'warning');
+      return;
+    }
+
+    const isMulti = logs.length > 1;
+
+    // Format clean Ref number like Cut14070316 or CutBatch-8821-3Items
+    let cleanRef = '';
+    if (!isMulti) {
+      cleanRef = String(logs[0].id || ('Cut' + Date.now()))
+        .replace(/^log[-_]?/i, 'Cut')
+        .replace(/^cut[-_]?/i, 'Cut');
+      if (!cleanRef.startsWith('Cut')) cleanRef = 'Cut' + cleanRef;
+    } else {
+      const firstPart = String(logs[0].id || Date.now()).replace(/\D/g, '').slice(-4) || 'M';
+      cleanRef = `CutBatch-${firstPart}-${logs.length}Items`;
+    }
+
+    // Resolve initial Assign By and Assign To
+    let defaultAssignBy = '';
+    let defaultAssignTo = '';
+    for (const log of logs) {
+      if (!defaultAssignBy) {
+        defaultAssignBy = log.assignBy || log.createdBy || log.assignedBy || '';
+      }
+      if (!defaultAssignTo) {
+        defaultAssignTo = log.assignTo || (log.assignedBy && log.assignedBy !== defaultAssignBy ? log.assignedBy : '');
+      }
+      if (defaultAssignBy && defaultAssignTo) break;
+    }
+
+    // Totals
+    let totalPieces = 0;
+    logs.forEach(l => {
+      totalPieces += (parseInt(l.quantity, 10) || 1);
+    });
+
+    // Date & Time formatted as: Oct 10, 2026, 12:04 PM
+    const latestTimestamp = Math.max(...logs.map(l => l.timestamp || 0)) || Date.now();
+    const dateObj = new Date(latestTimestamp);
+    const dateStr = dateObj.toLocaleDateString('en-US', {
+      month: 'short',
+      day: 'numeric',
+      year: 'numeric'
+    }) + ', ' + dateObj.toLocaleTimeString('en-US', {
+      hour: 'numeric',
+      minute: '2-digit',
+      hour12: true
+    });
+
+    // Content for Single Item vs Multiple Items
+    let slipContentHtml = '';
+    if (!isMulti) {
+      const log = logs[0];
+      const cutLenNum = getLogCutLength(log);
+      const cutLenFormatted = (Number.isInteger(cutLenNum) ? cutLenNum : parseFloat(cutLenNum.toFixed(2))) + 'in';
+      const diaFormatted = String(log.diameterMm || '').toLowerCase().endsWith('mm')
+        ? String(log.diameterMm)
+        : (log.diameterMm + 'mm');
+      const qty = parseInt(log.quantity, 10) || 1;
+      const qtyFormatted = `${qty} pc${qty > 1 ? 's' : ''}`;
+      const remLen = getLogRemainder(log);
+
+      slipContentHtml = `
+        <div class="slip-rod-title">${escapeForHtml(log.rodName)}</div>
+
+        <div class="slip-data-row">
+          <span class="slip-data-label">Assign By :</span>
+          <span class="slip-data-value" id="displayAssignBy">${escapeForHtml(defaultAssignBy || '—')}</span>
+        </div>
+
+        <div class="slip-data-row">
+          <span class="slip-data-label">Assign To :</span>
+          <span class="slip-data-value" id="displayAssignTo">${escapeForHtml(defaultAssignTo || '—')}</span>
+        </div>
+
+        <div class="slip-data-row">
+          <span class="slip-data-label">Diameter :</span>
+          <span class="slip-data-value">${escapeForHtml(diaFormatted)}</span>
+        </div>
+
+        <div class="slip-data-row">
+          <span class="slip-data-label">Length :</span>
+          <span class="slip-data-value">${escapeForHtml(cutLenFormatted)}</span>
+        </div>
+
+        <div class="slip-data-row">
+          <span class="slip-data-label">QTY :</span>
+          <span class="slip-data-value">${escapeForHtml(qtyFormatted)}</span>
+        </div>
+
+        ${remLen > 0 ? `
+        <div class="slip-data-row">
+          <span class="slip-data-label">Offcut Remnant :</span>
+          <span class="slip-data-value">+${escapeForHtml(formatDisplayLength(remLen))} in ${log.remnantAdded ? '(In Stock)' : ''}</span>
+        </div>
+        ` : ''}
+
+        ${log.reason ? `
+        <div class="slip-data-row">
+          <span class="slip-data-label">Job Ref :</span>
+          <span class="slip-data-value">${escapeForHtml(log.reason)}</span>
+        </div>
+        ` : ''}
+      `;
+    } else {
+      slipContentHtml = `
+        <div class="slip-data-row" style="margin-bottom: 4px;">
+          <span class="slip-data-label">Assign By :</span>
+          <span class="slip-data-value" id="displayAssignBy">${escapeForHtml(defaultAssignBy || '—')}</span>
+        </div>
+
+        <div class="slip-data-row" style="margin-bottom: 8px;">
+          <span class="slip-data-label">Assign To :</span>
+          <span class="slip-data-value" id="displayAssignTo">${escapeForHtml(defaultAssignTo || '—')}</span>
+        </div>
+
+        <table class="slip-items-table">
+          <thead>
+            <tr>
+              <th style="width: 14px; text-align: left;">#</th>
+              <th style="text-align: left;">Rod</th>
+              <th style="text-align: center; width: 44px;">Size</th>
+              <th style="text-align: right; width: 44px;">Cut</th>
+              <th style="text-align: right; width: 30px;">Qty</th>
+            </tr>
+          </thead>
+          <tbody>
+            ${logs.map((log, idx) => {
+              const cutLenN = getLogCutLength(log);
+              const cutFmt = (Number.isInteger(cutLenN) ? cutLenN : parseFloat(cutLenN.toFixed(2))) + 'in';
+              const diaFmt = String(log.diameterMm || '').toLowerCase().endsWith('mm') ? String(log.diameterMm) : (log.diameterMm + 'mm');
+              const q = parseInt(log.quantity, 10) || 1;
+              const rem = getLogRemainder(log);
+              return `
+              <tr>
+                <td style="font-weight: 700; vertical-align: top; padding: 4px 2px;">${idx + 1}.</td>
+                <td style="padding: 4px 2px;">
+                  <div style="font-weight: 800; font-size: 0.72rem; line-height: 1.2;">${escapeForHtml(log.rodName)}</div>
+                  ${rem > 0 ? `<div style="font-size: 0.61rem; color: #475569; margin-top: 1px;">Offcut: +${formatDisplayLength(rem)}in</div>` : ''}
+                </td>
+                <td style="text-align: center; font-weight: 800; font-size: 0.72rem; vertical-align: top; padding: 4px 2px; white-space: nowrap;">${escapeForHtml(diaFmt)}</td>
+                <td style="text-align: right; font-weight: 800; font-size: 0.72rem; vertical-align: top; padding: 4px 2px; white-space: nowrap;">${escapeForHtml(cutFmt)}</td>
+                <td style="text-align: right; font-weight: 800; font-size: 0.72rem; vertical-align: top; padding: 4px 2px;">${q}</td>
+              </tr>
+              `;
+            }).join('')}
+          </tbody>
+        </table>
+
+        <div style="display: flex; justify-content: space-between; font-size: 0.72rem; font-weight: 800; padding: 5px 0; border-top: 1px dashed #000; border-bottom: 1px dashed #000; margin: 6px 0 8px 0;">
+          <span>TOTAL: ${logs.length} Cut Items</span>
+          <span>${totalPieces} Total Pieces</span>
+        </div>
+      `;
+    }
+
+    const logIdsJson = JSON.stringify(logs.map(l => l.id));
 
     const html = `<!DOCTYPE html>
 <html lang="en">
 <head>
   <meta charset="UTF-8" />
-  <title>Cut Invoice — ${refNo}</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>RodSync Slip — [${cleanRef}]</title>
   <style>
-    @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap');
+    @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&display=swap');
     *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
     body {
-      font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
-      background: #f0f4f8;
-      display: flex; align-items: center; justify-content: center;
-      min-height: 100vh; padding: 16px;
-      print-color-adjust: exact; -webkit-print-color-adjust: exact;
+      font-family: 'Inter', -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+      background: #f1f5f9;
+      color: #0f172a;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: flex-start;
+      min-height: 100vh;
+      padding: 16px 14px 28px;
+      -webkit-font-smoothing: antialiased;
+      print-color-adjust: exact;
+      -webkit-print-color-adjust: exact;
     }
-    .slip {
-      width: 340px; background: #ffffff;
-      border-radius: 16px;
-      box-shadow: 0 4px 24px rgba(0,0,0,0.13);
-      overflow: hidden;
-      page-break-inside: avoid;
+
+    /* ---- TOP CONTROLS (PREVIEW BOX) ---- */
+    .preview-card {
+      width: 100%;
+      max-width: 310px;
+      background: #ffffff;
+      border: 1px solid #e2e8f0;
+      border-radius: 12px;
+      box-shadow: 0 2px 10px rgba(0, 0, 0, 0.05);
+      padding: 12px 14px;
+      margin-bottom: 12px;
     }
-    /* ---- Header ---- */
-    .slip-header {
-      background: linear-gradient(135deg, #0f172a 0%, #1e3a5f 100%);
-      color: #fff;
-      padding: 20px 22px 16px;
-      display: flex; align-items: center; gap: 12px;
+    .preview-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 8px;
     }
-    .slip-logo {
-      width: 38px; height: 38px;
-      background: rgba(255,255,255,0.12);
-      border-radius: 10px;
-      display: flex; align-items: center; justify-content: center;
-      flex-shrink: 0;
+    .preview-left {
+      display: flex;
+      align-items: center;
+      gap: 7px;
     }
-    .slip-brand { font-size: 1.15rem; font-weight: 800; letter-spacing: -0.3px; }
-    .slip-brand span { color: #38bdf8; }
-    .slip-tagline { font-size: 0.7rem; color: rgba(255,255,255,0.55); margin-top: 1px; }
-    /* ---- Title bar ---- */
-    .slip-title-bar {
-      background: #0ea5e9;
-      color: #fff;
+    .preview-icon {
+      font-size: 1.15rem;
+      line-height: 1;
+    }
+    .preview-title-col {
+      display: flex;
+      flex-direction: column;
+      line-height: 1.08;
+    }
+    .preview-title-col span {
+      font-size: 0.8rem;
+      font-weight: 800;
+      color: #0f172a;
+      letter-spacing: -0.2px;
+    }
+    .preview-badge {
+      background: #e0f2fe;
+      color: #0284c7;
+      font-size: 0.6rem;
+      font-weight: 800;
+      letter-spacing: 0.6px;
+      padding: 2px 5px;
+      border-radius: 4px;
+      margin-left: 2px;
+    }
+    .preview-right {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
+    .btn-print-slip {
+      background: #1d4ed8;
+      color: #ffffff;
+      border: none;
+      border-radius: 8px;
+      padding: 5px 12px;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      font-family: inherit;
+      box-shadow: 0 2px 6px rgba(29, 78, 216, 0.28);
+      transition: background 0.15s, transform 0.1s;
+    }
+    .btn-print-slip:hover {
+      background: #1e40af;
+    }
+    .btn-print-slip:active {
+      transform: scale(0.97);
+    }
+    .btn-print-slip-text {
+      text-align: left;
+      line-height: 1.12;
+      font-size: 0.72rem;
+      font-weight: 700;
+    }
+    .btn-close-slip {
+      background: #f1f5f9;
+      color: #64748b;
+      border: 1px solid #e2e8f0;
+      border-radius: 8px;
+      width: 28px;
+      height: 28px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      cursor: pointer;
+      font-size: 0.75rem;
+      font-weight: 700;
+      transition: background 0.15s;
+    }
+    .btn-close-slip:hover {
+      background: #e2e8f0;
+      color: #334155;
+    }
+    .preview-hint {
+      font-size: 0.67rem;
+      color: #64748b;
+      margin-top: 8px;
+      margin-bottom: 7px;
+      line-height: 1.3;
+    }
+    .preview-field {
+      margin-bottom: 6px;
+    }
+    .preview-field:last-child {
+      margin-bottom: 2px;
+    }
+    .preview-label {
+      display: block;
+      font-size: 0.68rem;
+      font-weight: 600;
+      color: #475569;
+      margin-bottom: 3px;
+    }
+    .preview-input {
+      width: 100%;
+      background: #ffffff;
+      border: 1px solid #cbd5e1;
+      border-radius: 7px;
+      padding: 5px 9px;
+      font-size: 0.78rem;
+      font-family: inherit;
+      color: #0f172a;
+      font-weight: 500;
+      outline: none;
+      transition: border-color 0.15s, box-shadow 0.15s;
+    }
+    .preview-input:focus {
+      border-color: #2563eb;
+      box-shadow: 0 0 0 2px rgba(37, 99, 235, 0.15);
+    }
+
+    /* ---- THE SLIP RECEIPT (FIT FOR 80MM THERMAL PRINTER ROLL) ---- */
+    .slip-container {
+      width: 100%;
+      max-width: 275px; /* Exactly fits the 72mm active printable area on 80mm thermal paper */
+      background: #ffffff;
+      border: 1px solid #cbd5e1;
+      border-radius: 8px;
+      box-shadow: 0 2px 10px rgba(0, 0, 0, 0.05);
+      padding: 12px 10px 14px;
+      color: #000000;
+      box-sizing: border-box;
+    }
+    .slip-company-name {
       text-align: center;
-      padding: 8px 12px;
-      font-size: 0.72rem; font-weight: 700;
-      letter-spacing: 1.5px; text-transform: uppercase;
+      font-size: 0.78rem;
+      font-weight: 900;
+      letter-spacing: 0.2px;
+      color: #000000;
+      text-transform: uppercase;
+      line-height: 1.25;
     }
-    /* ---- Body ---- */
-    .slip-body { padding: 18px 22px; }
-    .slip-ref {
-      font-size: 0.68rem; color: #64748b; font-weight: 600;
-      letter-spacing: 0.8px; text-transform: uppercase;
-      margin-bottom: 4px;
-    }
-    .slip-rod-name {
-      font-size: 1.05rem; font-weight: 800; color: #0f172a;
-      line-height: 1.25; margin-bottom: 14px;
-      border-bottom: 2px dashed #e2e8f0; padding-bottom: 12px;
-    }
-    .slip-grid {
-      display: grid; grid-template-columns: 1fr 1fr;
-      gap: 10px; margin-bottom: 14px;
-    }
-    .slip-field { display: flex; flex-direction: column; gap: 2px; }
-    .slip-field-label {
-      font-size: 0.62rem; color: #94a3b8;
-      font-weight: 600; letter-spacing: 0.6px; text-transform: uppercase;
-    }
-    .slip-field-value {
-      font-size: 0.95rem; font-weight: 700; color: #1e293b;
-      font-variant-numeric: tabular-nums;
-    }
-    .slip-field-value.large { font-size: 1.1rem; color: #0071e3; }
-    .slip-field-value.danger { color: #dc2626; }
-    .slip-divider { border: none; border-top: 1px dashed #cbd5e1; margin: 12px 0; }
-    .slip-row { display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 8px; }
-    .slip-row-label { font-size: 0.72rem; color: #64748b; font-weight: 500; }
-    .slip-row-val { font-size: 0.8rem; font-weight: 600; color: #1e293b; text-align: right; max-width: 58%; }
-    /* ---- Tags ---- */
-    .slip-tag {
-      display: inline-block; border-radius: 6px;
-      font-size: 0.7rem; font-weight: 700; padding: 3px 8px;
-      margin-top: 4px;
-    }
-    .slip-tag-rem { background: #fef3c7; color: #92400e; border: 1px solid #fde68a; }
-    .slip-tag-exact { background: #dcfce7; color: #166534; border: 1px solid #bbf7d0; }
-    /* ---- Footer ---- */
-    .slip-footer {
-      background: #f8fafc;
-      border-top: 1px solid #e2e8f0;
-      padding: 12px 22px;
+    .slip-disclaimer {
       text-align: center;
+      font-size: 0.58rem;
+      color: #334155;
+      line-height: 1.3;
+      margin-top: 3px;
+      padding: 0 2px;
     }
-    .slip-footer-date { font-size: 0.68rem; color: #94a3b8; margin-bottom: 6px; }
-    .slip-barcode {
-      display: flex; justify-content: center; gap: 1.5px;
-      margin: 6px auto 4px; width: 120px; height: 22px;
+    .slip-divider {
+      border: none;
+      border-top: 1px dashed #000000;
+      margin: 8px 0;
     }
-    .slip-barcode-bar {
-      background: #475569;
-      border-radius: 1px;
+    .slip-meta-row {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      margin-bottom: 7px;
     }
-    .slip-verified {
-      font-size: 0.62rem; color: #94a3b8;
-      letter-spacing: 0.5px; text-transform: uppercase;
+    .slip-ref-no {
+      font-size: 0.68rem;
+      font-weight: 400;
+      color: #000000;
     }
-    /* ---- Print controls (hidden in print) ---- */
-    .slip-actions {
-      padding: 14px 22px 20px;
-      display: flex; gap: 8px; justify-content: center;
+    .slip-brand-logo {
+      font-size: 0.74rem;
+      font-weight: 900;
+      letter-spacing: 0.4px;
+      color: #000000;
     }
-    .btn-slip {
-      border: none; border-radius: 10px; cursor: pointer;
-      font-family: inherit; font-weight: 600; font-size: 0.85rem;
-      padding: 9px 20px;
-      transition: transform 0.15s, box-shadow 0.15s;
+    .slip-rod-title {
+      font-size: 0.8rem;
+      font-weight: 900;
+      color: #000000;
+      margin-bottom: 7px;
+      line-height: 1.25;
     }
-    .btn-slip:active { transform: scale(0.97); }
-    .btn-slip-print {
-      background: #0071e3; color: #fff;
-      box-shadow: 0 2px 10px rgba(0,113,227,0.35);
+    .slip-data-row {
+      display: flex;
+      align-items: baseline;
+      justify-content: space-between;
+      margin-bottom: 5px;
+      font-size: 0.71rem;
     }
-    .btn-slip-close { background: #e2e8f0; color: #475569; }
+    .slip-data-label {
+      font-weight: 700;
+      color: #000000;
+      white-space: nowrap;
+    }
+    .slip-data-value {
+      font-weight: 700;
+      color: #000000;
+      text-align: right;
+      word-break: break-word;
+      padding-left: 8px;
+    }
+    .slip-items-table {
+      width: 100%;
+      border-collapse: collapse;
+      margin: 6px 0;
+      font-size: 0.7rem;
+    }
+    .slip-items-table th {
+      font-weight: 800;
+      border-bottom: 1.5px solid #000000;
+      padding: 4px 2px;
+      color: #000000;
+      font-size: 0.65rem;
+      text-transform: uppercase;
+      letter-spacing: 0.2px;
+    }
+    .slip-items-table td {
+      border-bottom: 1px dotted #94a3b8;
+    }
+    .slip-items-table tr:last-child td {
+      border-bottom: none;
+    }
+    .slip-signs-row {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      margin-top: 13px;
+      margin-bottom: 10px;
+      font-size: 0.7rem;
+      font-weight: 700;
+      color: #000000;
+    }
+    .slip-date-row {
+      display: flex;
+      align-items: baseline;
+      justify-content: space-between;
+      font-size: 0.68rem;
+      margin-bottom: 10px;
+    }
+    .slip-date-label {
+      font-weight: 700;
+      color: #000000;
+    }
+    .slip-date-value {
+      font-weight: 500;
+      color: #000000;
+      text-align: right;
+    }
+    .slip-barcode-area {
+      text-align: center;
+      margin-top: 3px;
+    }
+    .slip-barcode-title {
+      font-size: 0.62rem;
+      color: #334155;
+      font-weight: 600;
+      margin-bottom: 3px;
+    }
+    .slip-barcode-svg {
+      display: block;
+      margin: 0 auto;
+      max-width: 130px;
+      height: 25px;
+    }
+
+    /* ---- PRINT MEDIA (80mm Continuous Thermal Receipt Roll) ---- */
     @media print {
-      body { background: #fff; min-height: unset; padding: 0; }
-      .slip {
-        box-shadow: none; border-radius: 0;
-        width: 100%; page-break-inside: avoid;
+      @page {
+        size: 80mm auto;
+        margin: 0mm !important;
       }
-      .slip-actions { display: none !important; }
+      html, body {
+        width: 80mm !important;
+        margin: 0 !important;
+        padding: 0 !important;
+        background: #ffffff !important;
+        color: #000000 !important;
+        min-height: unset !important;
+        display: block !important;
+        -webkit-print-color-adjust: exact !important;
+        print-color-adjust: exact !important;
+      }
+      .preview-card {
+        display: none !important;
+      }
+      .slip-container {
+        width: 72mm !important;
+        max-width: 72mm !important;
+        margin: 0 auto !important;
+        box-shadow: none !important;
+        border: none !important;
+        border-radius: 0 !important;
+        padding: 3mm 1mm 4mm !important;
+        page-break-inside: avoid !important;
+        break-inside: avoid !important;
+      }
+      .slip-divider {
+        border-top: 1px dashed #000000 !important;
+      }
+      .slip-items-table th {
+        border-bottom: 1.5px solid #000000 !important;
+        color: #000000 !important;
+      }
+      .slip-items-table td {
+        border-bottom: 1px dotted #000000 !important;
+        color: #000000 !important;
+      }
+      * {
+        color: #000000 !important;
+      }
     }
   </style>
 </head>
 <body>
-  <div class="slip">
-    <div class="slip-header">
-      <div class="slip-logo">
-        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#38bdf8" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
-          <line x1="4" y1="20" x2="20" y2="4"/>
-          <circle cx="8" cy="8" r="3"/>
-          <circle cx="16" cy="16" r="3"/>
-        </svg>
+  <!-- PREVIEW / CONTROLS CARD -->
+  <div class="preview-card">
+    <div class="preview-header">
+      <div class="preview-left">
+        <span class="preview-icon">✂️</span>
+        <div class="preview-title-col">
+          <span>${isMulti ? `Cut Slip (${logs.length} Items)` : 'Cut Slip'}</span>
+          <span>${isMulti ? `${totalPieces} Total Pcs` : 'Preview'}</span>
+        </div>
+        <span class="preview-badge">${isMulti ? 'MULTI-ITEM' : 'PREVIEW'}</span>
       </div>
-      <div>
-        <div class="slip-brand">Rod<span>Sync</span></div>
-        <div class="slip-tagline">Metal Rod Inventory &amp; Cut Optimizer</div>
+      <div class="preview-right">
+        <button class="btn-print-slip" onclick="window.print()" title="Print Slip">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+            <polyline points="6 9 6 2 18 2 18 9"></polyline>
+            <path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2"></path>
+            <rect x="6" y="14" width="12" height="8"></rect>
+          </svg>
+          <div class="btn-print-slip-text">
+            <div>Print</div>
+            <div>Slip</div>
+          </div>
+        </button>
+        <button class="btn-close-slip" onclick="window.close()" title="Close Preview">✕</button>
       </div>
     </div>
 
-    <div class="slip-title-bar">✂ Cut Invoice / Dispatch Slip</div>
+    <div class="preview-hint">You can edit Assign By and Assign To before printing:</div>
 
-    <div class="slip-body">
-      <div class="slip-ref">🔢 Ref: ${refNo}</div>
-      <div class="slip-rod-name">${escapeForHtml(log.rodName)}</div>
-
-      <div class="slip-grid">
-        <div class="slip-field">
-          <span class="slip-field-label">📏 Diameter</span>
-          <span class="slip-field-value">${log.diameterMm} mm</span>
-        </div>
-        <div class="slip-field">
-          <span class="slip-field-label">📦 Qty Cut</span>
-          <span class="slip-field-value">${log.quantity} pc${log.quantity > 1 ? 's' : ''}</span>
-        </div>
-        <div class="slip-field">
-          <span class="slip-field-label">📐 Cut Length</span>
-          <span class="slip-field-value large danger">${getLogCutLength(log)} In</span>
-        </div>
-        <div class="slip-field">
-          <span class="slip-field-label">📏 Original Length</span>
-          <span class="slip-field-value">${getLogOrigLength(log)} In</span>
-        </div>
-      </div>
-
-      <div class="slip-field" style="margin-bottom: 12px;">
-        <span class="slip-field-label">📏 Remaining Offcut</span>
-        <span class="slip-field-value" style="font-size:0.9rem; margin-top:3px;">${remnantLine}</span>
-      </div>
-
-      <hr class="slip-divider" />
-
-      <div class="slip-row">
-        <span class="slip-row-label">👤 Operator / Job Ref</span>
-        <span class="slip-row-val">${escapeForHtml(log.reason || 'Not specified')}</span>
-      </div>
-      <div class="slip-row">
-        <span class="slip-row-label">📅 Date &amp; Time</span>
-        <span class="slip-row-val">${dateStr}</span>
-      </div>
+    <div class="preview-field">
+      <label class="preview-label" for="inputAssignBy">Assign By :</label>
+      <input type="text" id="inputAssignBy" class="preview-input" value="${escapeForHtml(defaultAssignBy)}" placeholder="e.g. Roshni, Suman, Bhawna" />
     </div>
 
-    <div class="slip-footer">
-      <div class="slip-footer-date">Printed: ${new Date().toLocaleString([], { year: 'numeric', month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' })}</div>
-      <div class="slip-barcode">
-        ${Array.from({ length: 28 }, (_, i) =>
-      `<div class="slip-barcode-bar" style="width:${[2, 1, 3, 1, 2, 1, 1, 2, 3, 1, 2, 1, 3, 2, 1, 3, 1, 2, 1, 3, 2, 1, 1, 3, 2, 1, 2, 1][i] || 1}px; opacity:${0.5 + Math.random() * 0.5};"></div>`
-    ).join('')}
-      </div>
-      <div class="slip-verified">RodSync Verified Cut Record</div>
-    </div>
-
-    <div class="slip-actions">
-      <button class="btn-slip btn-slip-print" onclick="window.print()">🖨️ Print Slip</button>
-      <button class="btn-slip btn-slip-close" onclick="window.close()">✕ Close</button>
+    <div class="preview-field">
+      <label class="preview-label" for="inputAssignTo">Assign To :</label>
+      <input type="text" id="inputAssignTo" class="preview-input" value="${escapeForHtml(defaultAssignTo)}" placeholder="e.g. Jai Parkash, Bhushan" />
     </div>
   </div>
+
+  <!-- THE RECEIPT SLIP -->
+  <div class="slip-container">
+    <div class="slip-company-name">FINE BEARINGS &amp; OIL SEAL STORE</div>
+    <div class="slip-disclaimer">Note: This is not an official invoice. It is a computer-generated slip for store use only.</div>
+
+    <hr class="slip-divider" />
+
+    <div class="slip-meta-row">
+      <span class="slip-ref-no">Ref: ${escapeForHtml(cleanRef)}</span>
+      <span class="slip-brand-logo">RODSYNC</span>
+    </div>
+
+    ${slipContentHtml}
+
+    <div class="slip-signs-row">
+      <span>Sign : ________</span>
+      <span>Sign : ________</span>
+    </div>
+
+    <div class="slip-date-row">
+      <span class="slip-date-label">Date &amp; Time :</span>
+      <span class="slip-date-value">${escapeForHtml(dateStr)}</span>
+    </div>
+
+    <div class="slip-barcode-area">
+      <div class="slip-barcode-title">Barcode</div>
+      <svg class="slip-barcode-svg" viewBox="0 0 132 26" preserveAspectRatio="none">
+        <rect x="2" y="0" width="3" height="26" fill="#000" />
+        <rect x="7" y="0" width="1.5" height="26" fill="#000" />
+        <rect x="10" y="0" width="1.5" height="26" fill="#000" />
+        <rect x="13" y="0" width="3" height="26" fill="#000" />
+        <rect x="18" y="0" width="4.5" height="26" fill="#000" />
+        <rect x="24" y="0" width="1.5" height="26" fill="#000" />
+        <rect x="27" y="0" width="3" height="26" fill="#000" />
+        <rect x="32" y="0" width="1.5" height="26" fill="#000" />
+        <rect x="35" y="0" width="4.5" height="26" fill="#000" />
+        <rect x="42" y="0" width="1.5" height="26" fill="#000" />
+        <rect x="45" y="0" width="3" height="26" fill="#000" />
+        <rect x="50" y="0" width="1.5" height="26" fill="#000" />
+        <rect x="53" y="0" width="4.5" height="26" fill="#000" />
+        <rect x="60" y="0" width="1.5" height="26" fill="#000" />
+        <rect x="63" y="0" width="3" height="26" fill="#000" />
+        <rect x="68" y="0" width="4.5" height="26" fill="#000" />
+        <rect x="74" y="0" width="1.5" height="26" fill="#000" />
+        <rect x="78" y="0" width="3" height="26" fill="#000" />
+        <rect x="83" y="0" width="1.5" height="26" fill="#000" />
+        <rect x="86" y="0" width="4.5" height="26" fill="#000" />
+        <rect x="93" y="0" width="3" height="26" fill="#000" />
+        <rect x="98" y="0" width="1.5" height="26" fill="#000" />
+        <rect x="101" y="0" width="4.5" height="26" fill="#000" />
+        <rect x="107" y="0" width="1.5" height="26" fill="#000" />
+        <rect x="111" y="0" width="3" height="26" fill="#000" />
+        <rect x="116" y="0" width="1.5" height="26" fill="#000" />
+        <rect x="119" y="0" width="4.5" height="26" fill="#000" />
+        <rect x="126" y="0" width="3" height="26" fill="#000" />
+      </svg>
+    </div>
+  </div>
+
+  <script>
+    (function() {
+      const logIds = ${logIdsJson};
+      const inBy = document.getElementById('inputAssignBy');
+      const inTo = document.getElementById('inputAssignTo');
+      const dispBy = document.getElementById('displayAssignBy');
+      const dispTo = document.getElementById('displayAssignTo');
+
+      function sync() {
+        const byVal = inBy ? inBy.value.trim() : '';
+        const toVal = inTo ? inTo.value.trim() : '';
+        if (dispBy) dispBy.textContent = byVal || '—';
+        if (dispTo) dispTo.textContent = toVal || '—';
+        try {
+          if (window.opener && typeof window.opener.updateCutLogAssignees === 'function') {
+            window.opener.updateCutLogAssignees(logIds, byVal, toVal);
+          }
+        } catch (e) {}
+      }
+
+      if (inBy) inBy.addEventListener('input', sync);
+      if (inTo) inTo.addEventListener('input', sync);
+    })();
+  </script>
 </body>
 </html>`;
 
-    const win = window.open('', '_blank', 'width=420,height=700,toolbar=0,menubar=0,scrollbars=1');
+    const win = window.open('', '_blank', 'width=380,height=720,toolbar=0,menubar=0,scrollbars=1');
     if (!win) {
-      showToast('⚠️ Pop-up blocked! Please allow pop-ups to print the cut slip.', 'warning', 6000);
+      showToast('⚠️ Pop-up blocked! Please allow pop-ups to view and print the cut slip.', 'warning', 6000);
       return;
     }
     win.document.open();
@@ -1440,6 +2041,78 @@
     cutLogsModalOverlay.classList.add('hidden');
   }
 
+  function updateSelectedCutLogsUI() {
+    refreshDomElements();
+    const count = selectedCutLogIds.size;
+    if (selectedLogsCount) selectedLogsCount.textContent = count;
+    if (selectedLogsCountFooter) selectedLogsCountFooter.textContent = count;
+
+    // Synchronize individual checkboxes
+    document.querySelectorAll('.cut-log-checkbox').forEach(cb => {
+      const id = cb.dataset.logId;
+      const checked = selectedCutLogIds.has(id);
+      cb.checked = checked;
+      const row = cb.closest('tr');
+      if (row) row.classList.toggle('selected-cut-log-row', checked);
+      const card = cb.closest('.cut-log-card');
+      if (card) card.classList.toggle('selected-card', checked);
+    });
+
+    // Synchronize selectAll header checkbox
+    if (selectAllCutLogs) {
+      const visibleCheckboxes = Array.from(document.querySelectorAll('#cutLogsTableBody .cut-log-checkbox'));
+      if (visibleCheckboxes.length > 0) {
+        const allChecked = visibleCheckboxes.every(cb => cb.checked);
+        const someChecked = visibleCheckboxes.some(cb => cb.checked);
+        selectAllCutLogs.checked = allChecked;
+        selectAllCutLogs.indeterminate = !allChecked && someChecked;
+      } else {
+        selectAllCutLogs.checked = false;
+        selectAllCutLogs.indeterminate = false;
+      }
+    }
+
+    // Visual emphasis on combined print buttons
+    if (btnPrintCombinedSlip) {
+      if (count > 0) {
+        btnPrintCombinedSlip.classList.remove('btn-secondary');
+        btnPrintCombinedSlip.classList.add('btn-primary');
+      } else {
+        btnPrintCombinedSlip.classList.remove('btn-primary');
+        btnPrintCombinedSlip.classList.add('btn-secondary');
+      }
+    }
+  }
+
+  function handlePrintSelectedSlip() {
+    if (selectedCutLogIds.size === 0) {
+      const keyword = filterCutLogsInput ? filterCutLogsInput.value.trim().toLowerCase() : '';
+      const filteredLogs = cutLogs.filter(log => {
+        if (!keyword) return true;
+        const matchName = (log.rodName || '').toLowerCase().includes(keyword);
+        const matchReason = (log.reason || '').toLowerCase().includes(keyword);
+        const matchDia = (log.diameterMm + 'mm').includes(keyword);
+        return matchName || matchReason || matchDia;
+      });
+
+      if (filteredLogs.length === 1) {
+        printCutSlip(filteredLogs[0]);
+        return;
+      }
+
+      showToast('Please select 1 or more cut logs using the checkboxes to print a combined slip', 'warning');
+      return;
+    }
+
+    const logsToPrint = cutLogs.filter(log => selectedCutLogIds.has(log.id));
+    if (logsToPrint.length === 0) {
+      showToast('No matching cut logs found for selection', 'warning');
+      return;
+    }
+
+    printCutSlip(logsToPrint);
+  }
+
   function renderCutLogsTable() {
     const keyword = filterCutLogsInput.value.trim().toLowerCase();
 
@@ -1459,6 +2132,7 @@
       if (cutLogsTableWrapper) cutLogsTableWrapper.classList.add('hidden');
       if (cutLogsCardsContainer) cutLogsCardsContainer.classList.add('hidden');
       cutLogsEmptyState.classList.remove('hidden');
+      updateSelectedCutLogsUI();
       return;
     }
 
@@ -1467,6 +2141,7 @@
     cutLogsEmptyState.classList.add('hidden');
 
     filteredLogs.forEach(log => {
+      const isSelected = selectedCutLogIds.has(log.id);
       const dateStr = new Date(log.timestamp).toLocaleString([], {
         year: 'numeric',
         month: 'short',
@@ -1491,7 +2166,11 @@
 
       // 1. Table Row (for Desktop view)
       const tr = document.createElement('tr');
+      if (isSelected) tr.classList.add('selected-cut-log-row');
       tr.innerHTML = `
+        <td style="text-align: center; vertical-align: middle;">
+          <input type="checkbox" class="cut-log-checkbox" data-log-id="${log.id}" ${isSelected ? 'checked' : ''} title="Select this cut for slip" style="cursor: pointer; width: 16px; height: 16px; accent-color: var(--primary-600);" />
+        </td>
         <td style="font-size: 0.8rem; color: var(--text-muted); white-space: nowrap;">${dateStr}</td>
         <td>
           <div style="font-weight: 600;">${escapeHtml(log.rodName)}</div>
@@ -1520,15 +2199,19 @@
       // 2. Card Element (for Mobile Phone view)
       if (cutLogsCardsContainer) {
         const card = document.createElement('div');
-        card.className = 'cut-log-card';
+        card.className = `cut-log-card ${isSelected ? 'selected-card' : ''}`;
         card.innerHTML = `
-          <div class="cut-log-card-header">
-            <div class="cut-log-card-title-group">
+          <div class="cut-log-card-header" style="display:flex; justify-content:space-between; align-items:flex-start; gap:8px;">
+            <div class="cut-log-card-title-group" style="flex:1;">
               <span class="cut-log-rod-name">${escapeHtml(log.rodName)}</span>
               <span class="cut-log-spec-pill">⌀ ${log.diameterMm} mm</span>
             </div>
-            <span class="cut-log-date">${dateStr}</span>
+            <label class="cut-log-select-pill" style="display:inline-flex; align-items:center; gap:5px; font-size:0.75rem; font-weight:700; cursor:pointer; background:var(--bg-surface-elevated, #f1f5f9); border:1px solid var(--border-medium, #cbd5e1); border-radius:9999px; padding:3px 9px; user-select:none; flex-shrink:0;">
+              <input type="checkbox" class="cut-log-checkbox" data-log-id="${log.id}" ${isSelected ? 'checked' : ''} style="cursor:pointer; width:15px; height:15px; accent-color: var(--primary-600);" />
+              <span>Select</span>
+            </label>
           </div>
+          <div style="font-size:0.75rem; color:var(--text-muted); margin-bottom:6px;">${dateStr}</div>
 
           <div class="cut-log-card-metrics">
             <div class="cut-log-metric-item">
@@ -1567,13 +2250,15 @@
           <div style="margin-top: 10px; border-top: 1px dashed var(--border-subtle); padding-top: 10px;">
             <button class="btn btn-secondary btn-sm btn-print-slip" data-log-id="${log.id}"
               style="width:100%; font-size:0.8rem; display:flex; align-items:center; justify-content:center; gap:6px;">
-              🖨️ Print Cut Invoice Slip
+              🖨️ Print Single Slip
             </button>
           </div>
         `;
         cutLogsCardsContainer.appendChild(card);
       }
     });
+
+    updateSelectedCutLogsUI();
   }
 
   function exportCutLogsCsv() {
@@ -1616,9 +2301,11 @@
       'This will delete all recorded cutting log entries from storage. This will not change current stock quantities.',
       () => {
         cutLogs = [];
+        selectedCutLogIds.clear();
         saveCutLogsToStorage();
         updateCutLogsBadge();
         renderCutLogsTable();
+        updateSelectedCutLogsUI();
         showToast('All cut history logs cleared', 'info');
       },
       true
@@ -2099,17 +2786,49 @@
 
   // --- EVENT LISTENERS SETUP ---
   function setupEventListeners() {
+    let touchStartY = 0;
+    let touchStartX = 0;
+    let isTouchScrolling = false;
+
+    // Detect actual scrolling gestures on mobile to prevent accidental synthetic clicks
+    document.addEventListener('touchstart', (e) => {
+      if (e.touches && e.touches[0]) {
+        touchStartY = e.touches[0].clientY;
+        touchStartX = e.touches[0].clientX;
+        isTouchScrolling = false;
+      }
+    }, { passive: true });
+
+    document.addEventListener('touchmove', (e) => {
+      if (e.touches && e.touches[0]) {
+        const dy = Math.abs(e.touches[0].clientY - touchStartY);
+        const dx = Math.abs(e.touches[0].clientX - touchStartX);
+        if (dy > 8 || dx > 8) {
+          isTouchScrolling = true;
+        }
+      }
+    }, { passive: true });
+
     // Delegated click handling on document
     document.addEventListener('click', (e) => {
+      // If user was swiping or scrolling, ignore synthetic click
+      if (isTouchScrolling) {
+        return;
+      }
+
       // 1. Add Rod Stock / Add Product button triggers
       const addBtn = e.target.closest('#btnOpenAddModal, .btn-add-main, #mobNavAdd, #btnEmptySuggestAdd');
       if (addBtn) {
         e.preventDefault();
         if (addBtn.id === 'btnEmptySuggestAdd') {
           refreshDomElements();
+          const rawLen = searchLengthInput ? parseFloat(searchLengthInput.value) : NaN;
+          const lenInches = (!isNaN(rawLen) && searchLengthUnit === 'ft')
+            ? Number((rawLen * 12).toFixed(2))
+            : rawLen;
           openAddRodModal({
             diameter: searchDiameterInput ? searchDiameterInput.value : '',
-            length: searchLengthInput ? searchLengthInput.value : ''
+            length: !isNaN(lenInches) ? lenInches : ''
           });
         } else {
           openAddRodModal();
@@ -2159,6 +2878,26 @@
       if (e.target.id === 'duplicateModalOverlay') { resolveDuplicateCancel(); return; }
       if (e.target.id === 'confirmModalOverlay') { closeConfirmModal(); return; }
 
+      // 6.5 KPI card interactive filter click - purely in-place filtering without jumping/scrolling
+      const kpiCard = e.target.closest('.kpi-card');
+      if (kpiCard && kpiCard.dataset.kpiFilter) {
+        if (isTouchScrolling) return;
+        const filterType = kpiCard.dataset.kpiFilter;
+        refreshDomElements();
+        if (filterType === 'all' || filterType === 'stock') {
+          if (filterStockStatus) filterStockStatus.value = 'all';
+          if (filterDiameter) filterDiameter.value = 'all';
+          if (filterKeyword) filterKeyword.value = '';
+        } else if (filterType === 'in_stock') {
+          if (filterStockStatus) filterStockStatus.value = 'in_stock';
+        } else if (filterType === 'low_stock') {
+          if (filterStockStatus) filterStockStatus.value = 'low_stock';
+        }
+        renderQuickDiameterChips();
+        renderInventoryTable();
+        return;
+      }
+
       // 7. Table sorting click
       const th = e.target.closest('#inventoryTable th.sortable');
       if (th) {
@@ -2176,6 +2915,21 @@
       // 8. General button clicks
       const target = e.target.closest('button');
       if (!target) return;
+
+      if (target.classList.contains('btn-dia-preset')) {
+        const dia = target.dataset.dia;
+        refreshDomElements();
+        if (searchDiameterInput) {
+          searchDiameterInput.value = dia;
+          searchDiameterInput.focus();
+        }
+        document.querySelectorAll('.btn-dia-preset').forEach(b => b.classList.remove('active'));
+        target.classList.add('active');
+        if (searchLengthInput && parseFloat(searchLengthInput.value) > 0) {
+          executeSmartSearch(dia, searchLengthInput.value, false, searchLengthUnit);
+        }
+        return;
+      }
 
       if (target.classList.contains('btn-quick-inc')) {
         const id = target.dataset.id;
@@ -2203,6 +2957,8 @@
         const logId = target.dataset.logId;
         const logEntry = cutLogs.find(l => l.id === logId);
         if (logEntry) printCutSlip(logEntry);
+      } else if (target.id === 'btnPrintCombinedSlip' || target.closest('#btnPrintCombinedSlip') || target.id === 'btnFooterPrintCombinedSlip' || target.closest('#btnFooterPrintCombinedSlip')) {
+        handlePrintSelectedSlip();
       } else if (target.id === 'btnOpenCutLogsModal') {
         openCutLogsModal();
       } else if (target.id === 'btnExportCutLogsCsv') {
@@ -2235,6 +2991,10 @@
         toggleRoundLength();
       } else if (target.id === 'btnResetSmartSearch') {
         resetSmartSearch();
+      } else if (target.id === 'unitPillIn' || target.closest('#unitPillIn')) {
+        setSmartSearchUnit('in');
+      } else if (target.id === 'unitPillFt' || target.closest('#unitPillFt')) {
+        setSmartSearchUnit('ft');
       } else if (target.id === 'btnInstallPwa' || target.id === 'mobNavInstall' || target.id === 'btnTriggerInstallPrompt') {
         openInstallModal();
       } else if (target.id === 'btnCloseInstallModal' || target.id === 'btnCloseInstallModalBtn') {
@@ -2352,14 +3112,31 @@
       } else if (e.target.id === 'smartSearchForm') {
         e.preventDefault();
         refreshDomElements();
-        executeSmartSearch(searchDiameterInput ? searchDiameterInput.value : '', searchLengthInput ? searchLengthInput.value : '', true);
+        executeSmartSearch(
+          searchDiameterInput ? searchDiameterInput.value : '',
+          searchLengthInput ? searchLengthInput.value : '',
+          true,
+          searchLengthUnit
+        );
       }
     });
+
+    let smartSearchDebounceTimer = null;
 
     // Delegated input / change on document
     document.addEventListener('input', (e) => {
       if (!e.target) return;
-      if (e.target.id === 'filterKeyword') {
+      if (e.target.id === 'searchLengthInput' || e.target.id === 'searchDiameterInput') {
+        updateSearchLengthHint();
+        const dia = searchDiameterInput ? parseFloat(searchDiameterInput.value) : NaN;
+        const len = searchLengthInput ? parseFloat(searchLengthInput.value) : NaN;
+        if (!isNaN(dia) && dia > 0 && !isNaN(len) && len > 0) {
+          if (smartSearchDebounceTimer) clearTimeout(smartSearchDebounceTimer);
+          smartSearchDebounceTimer = setTimeout(() => {
+            executeSmartSearch(dia, len, false, searchLengthUnit);
+          }, 250);
+        }
+      } else if (e.target.id === 'filterKeyword') {
         const clearBtn = document.getElementById('btnClearFilterKeyword');
         if (clearBtn) {
           if (e.target.value.trim().length > 0) {
@@ -2383,11 +3160,37 @@
 
     document.addEventListener('change', (e) => {
       if (!e.target) return;
-      if (e.target.id === 'filterDiameter') {
+      if (e.target.id === 'searchLengthUnitSelect') {
+        setSmartSearchUnit(e.target.value);
+      } else if (e.target.id === 'filterDiameter') {
         renderQuickDiameterChips();
         renderInventoryTable();
       } else if (e.target.id === 'filterStockStatus') {
         renderInventoryTable();
+      } else if (e.target.id === 'selectAllCutLogs') {
+        const isChecked = e.target.checked;
+        const visibleCheckboxes = document.querySelectorAll('#cutLogsTableBody .cut-log-checkbox, #cutLogsCardsContainer .cut-log-checkbox');
+        visibleCheckboxes.forEach(cb => {
+          const id = cb.dataset.logId;
+          if (id) {
+            if (isChecked) {
+              selectedCutLogIds.add(id);
+            } else {
+              selectedCutLogIds.delete(id);
+            }
+          }
+        });
+        updateSelectedCutLogsUI();
+      } else if (e.target.classList.contains('cut-log-checkbox')) {
+        const id = e.target.dataset.logId;
+        if (id) {
+          if (e.target.checked) {
+            selectedCutLogIds.add(id);
+          } else {
+            selectedCutLogIds.delete(id);
+          }
+        }
+        updateSelectedCutLogsUI();
       } else if (e.target.id === 'csvFileInput') {
         handleCsvImport(e);
       }

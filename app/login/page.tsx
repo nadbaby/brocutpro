@@ -87,44 +87,80 @@ export default function Login() {
             display: 'flex',
             alignItems: 'center',
             justifyContent: 'center',
-            background: 'linear-gradient(135deg, #e0eafc 0%, #cfdef3 100%)',
-            fontFamily: 'Plus Jakarta Sans, sans-serif'
+            backgroundColor: '#ea580c',
+            backgroundImage: "url('/app-bg.png')",
+            backgroundSize: 'cover',
+            backgroundPosition: 'center center',
+            backgroundRepeat: 'no-repeat',
+            backgroundAttachment: 'fixed',
+            fontFamily: 'Plus Jakarta Sans, sans-serif',
+            position: 'relative',
+            padding: '1.5rem'
         }}>
             <div style={{
-                background: 'rgba(255, 255, 255, 0.4)',
-                backdropFilter: 'blur(16px)',
-                WebkitBackdropFilter: 'blur(16px)',
-                border: '1px solid rgba(255, 255, 255, 0.3)',
+                position: 'absolute',
+                inset: 0,
+                background: 'radial-gradient(circle at 50% 30%, rgba(255, 255, 255, 0.25) 0%, rgba(255, 255, 255, 0.5) 100%)',
+                backdropFilter: 'blur(3px)',
+                WebkitBackdropFilter: 'blur(3px)',
+                pointerEvents: 'none'
+            }}></div>
+
+            <div style={{
+                background: 'rgba(255, 255, 255, 0.88)',
+                backdropFilter: 'blur(24px) saturate(180%)',
+                WebkitBackdropFilter: 'blur(24px) saturate(180%)',
+                border: '1px solid rgba(255, 255, 255, 0.95)',
                 borderRadius: '24px',
                 padding: '3rem 2.5rem',
                 width: '100%',
                 maxWidth: '420px',
-                boxShadow: '0 8px 32px rgba(0, 0, 0, 0.05)',
-                textAlign: 'center'
+                boxShadow: '0 20px 60px rgba(180, 83, 9, 0.22), 0 4px 16px rgba(0, 0, 0, 0.06)',
+                textAlign: 'center',
+                position: 'relative',
+                zIndex: 1
             }}>
-                <div style={{ marginBottom: '1.5rem' }}>
-                    <h1 style={{ fontSize: '2rem', fontWeight: 800, color: '#1a1f36', marginBottom: '0.2rem' }}>
-                        Rod<span style={{ color: '#2563eb' }}>Sync</span>
+                <div style={{ marginBottom: '1.75rem' }}>
+                    <div style={{
+                        width: '52px',
+                        height: '52px',
+                        margin: '0 auto 1rem auto',
+                        background: 'linear-gradient(135deg, #f97316 0%, #ea580c 100%)',
+                        borderRadius: '16px',
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        boxShadow: '0 8px 24px rgba(234, 88, 12, 0.35)',
+                        color: 'white'
+                    }}>
+                        <svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+                            <line x1="4" y1="20" x2="20" y2="4"></line>
+                            <circle cx="8" cy="8" r="3"></circle>
+                            <circle cx="16" cy="16" r="3"></circle>
+                        </svg>
+                    </div>
+                    <h1 style={{ fontSize: '2rem', fontWeight: 800, color: '#1e293b', marginBottom: '0.25rem', letterSpacing: '-0.02em' }}>
+                        Rod<span style={{ color: '#ea580c' }}>Sync</span>
                     </h1>
-                    <p style={{ color: '#4b5563', fontSize: '0.95rem' }}>Secure Portal Access</p>
+                    <p style={{ color: '#64748b', fontSize: '0.95rem', margin: 0 }}>Secure Portal Access</p>
                 </div>
 
                 <form onSubmit={handleLogin} style={{ display: 'flex', flexDirection: 'column', gap: '1.25rem' }}>
                     {error && (
-                        <div style={{ backgroundColor: '#fee2e2', color: '#b91c1c', padding: '0.75rem', borderRadius: '8px', fontSize: '0.85rem', textAlign: 'left', lineHeight: '1.4' }}>
+                        <div style={{ backgroundColor: '#fee2e2', color: '#b91c1c', padding: '0.75rem', borderRadius: '10px', fontSize: '0.85rem', textAlign: 'left', lineHeight: '1.4', border: '1px solid #fca5a5' }}>
                             {error}
                         </div>
                     )}
 
                     <div style={{ textAlign: 'left' }}>
-                        <label style={{ display: 'block', fontSize: '0.85rem', fontWeight: 600, color: '#374151', marginBottom: '0.4rem' }}>Email Address</label>
+                        <label style={{ display: 'block', fontSize: '0.85rem', fontWeight: 600, color: '#334155', marginBottom: '0.4rem' }}>Email Address</label>
                         <input
                             type="email"
                             value={email}
                             onChange={(e) => setEmail(e.target.value)}
                             style={{
-                                width: '100%', padding: '0.875rem', borderRadius: '12px', border: '1px solid rgba(0,0,0,0.08)',
-                                background: 'rgba(255,255,255,0.7)', fontSize: '0.95rem', outline: 'none', transition: 'all 0.2s ease',
+                                width: '100%', padding: '0.875rem 1rem', borderRadius: '12px', border: '1px solid rgba(0,0,0,0.12)',
+                                background: 'rgba(255,255,255,0.9)', fontSize: '0.95rem', outline: 'none', transition: 'all 0.2s ease',
                                 boxSizing: 'border-box'
                             }}
                             placeholder="user@rodsync.com"
@@ -133,14 +169,14 @@ export default function Login() {
                     </div>
 
                     <div style={{ textAlign: 'left' }}>
-                        <label style={{ display: 'block', fontSize: '0.85rem', fontWeight: 600, color: '#374151', marginBottom: '0.4rem' }}>Password</label>
+                        <label style={{ display: 'block', fontSize: '0.85rem', fontWeight: 600, color: '#334155', marginBottom: '0.4rem' }}>Password</label>
                         <input
                             type="password"
                             value={password}
                             onChange={(e) => setPassword(e.target.value)}
                             style={{
-                                width: '100%', padding: '0.875rem', borderRadius: '12px', border: '1px solid rgba(0,0,0,0.08)',
-                                background: 'rgba(255,255,255,0.7)', fontSize: '0.95rem', outline: 'none', transition: 'all 0.2s ease',
+                                width: '100%', padding: '0.875rem 1rem', borderRadius: '12px', border: '1px solid rgba(0,0,0,0.12)',
+                                background: 'rgba(255,255,255,0.9)', fontSize: '0.95rem', outline: 'none', transition: 'all 0.2s ease',
                                 boxSizing: 'border-box'
                             }}
                             placeholder="••••••••"
@@ -152,16 +188,20 @@ export default function Login() {
                         type="submit"
                         disabled={loading}
                         style={{
-                            marginTop: '0.75rem', width: '100%', backgroundColor: '#2563eb', color: 'white', border: 'none',
-                            padding: '1rem', borderRadius: '12px', fontSize: '1rem', fontWeight: 600, cursor: loading ? 'not-allowed' : 'pointer',
-                            boxShadow: '0 4px 12px rgba(37, 99, 235, 0.2)', transition: 'background-color 0.2s ease, transform 0.1s ease',
-                            opacity: loading ? 0.7 : 1
+                            marginTop: '0.75rem', width: '100%',
+                            background: 'linear-gradient(135deg, #f97316 0%, #ea580c 100%)',
+                            color: 'white', border: 'none',
+                            padding: '1rem', borderRadius: '12px', fontSize: '1rem', fontWeight: 700,
+                            cursor: loading ? 'not-allowed' : 'pointer',
+                            boxShadow: '0 6px 20px rgba(234, 88, 12, 0.35)',
+                            transition: 'all 0.2s ease',
+                            opacity: loading ? 0.75 : 1
                         }}>
-                        {loading ? 'Authenticating (Async)...' : 'Sign In'}
+                        {loading ? 'Authenticating...' : 'Sign In'}
                     </button>
                 </form>
 
-                <p style={{ marginTop: '2rem', fontSize: '0.8rem', color: '#6b7280' }}>
+                <p style={{ marginTop: '2rem', fontSize: '0.8rem', color: '#94a3b8', margin: '2rem 0 0 0' }}>
                     &copy; 2026 RodSync Management System
                 </p>
             </div>

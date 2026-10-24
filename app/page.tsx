@@ -507,11 +507,8 @@ export default function Home() {
         </div>
       )}
 
-      {/*  Ambient Maple Leaf & White Glass Canvas  */}
+      {/*  Ambient Vibrant Wallpaper & Glass Canvas  */}
       <div className="bg-ambient-canvas" aria-hidden="true">
-        <div className="bg-leaf bg-leaf-1"></div>
-        <div className="bg-leaf bg-leaf-2"></div>
-        <div className="bg-leaf bg-leaf-3"></div>
         <div className="bg-overlay-white"></div>
       </div>
 
@@ -519,53 +516,21 @@ export default function Home() {
       <header className="navbar">
         <div className="nav-container">
           <div className="brand-group">
-            <div className="brand-logo">
-              <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+            <div className="brand-logo" title="RodSync">
+              <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
                 <line x1="4" y1="20" x2="20" y2="4"></line>
                 <circle cx="8" cy="8" r="3"></circle>
                 <circle cx="16" cy="16" r="3"></circle>
               </svg>
             </div>
-            <div>
-              <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                <h1 className="brand-title" style={{ margin: 0 }}>Rod<span className="brand-accent">Sync</span></h1>
-                <button
-                  type="button"
-                  onClick={() => setIsSheetsModalOpen(true)}
-                  className="db-status-pill"
-                  title="Google Sheets Apps Script Connection & Setup"
-                  style={{
-                    display: 'inline-flex',
-                    alignItems: 'center',
-                    gap: '5px',
-                    fontSize: '0.72rem',
-                    fontWeight: 600,
-                    padding: '2px 8px',
-                    borderRadius: '12px',
-                    border: '1px solid var(--border-subtle, rgba(0,0,0,0.1))',
-                    background: 'var(--bg-surface-elevated, rgba(255,255,255,0.7))',
-                    cursor: 'pointer',
-                    color: 'var(--text-secondary, #475569)',
-                    backdropFilter: 'blur(8px)'
-                  }}
-                >
-                  <span style={{
-                    width: '7px',
-                    height: '7px',
-                    borderRadius: '50%',
-                    backgroundColor: sheetsStatus === 'connected' ? '#10b981' : sheetsStatus === 'unconfigured' ? '#94a3b8' : '#f59e0b',
-                    boxShadow: sheetsStatus === 'connected' ? '0 0 6px #10b981' : 'none'
-                  }}></span>
-                  {sheetsStatus === 'connected' ? 'Google Sheets Live' : sheetsStatus === 'unconfigured' ? 'Google Sheets' : 'Sheets Sync'}
-                </button>
-              </div>
-              <p className="brand-subtitle">Metal Rod Inventory &amp; Smart Cut Optimizer</p>
+            <div className="brand-text-wrap">
+              <h1 className="brand-title" style={{ margin: 0 }}>Rod<span className="brand-accent">Sync</span></h1>
             </div>
           </div>
 
           <div className="nav-actions">
-            <button onClick={toggleTheme} className="btn btn-secondary btn-sm btn-icon-mobile" title="Toggle Dark/Light Mode" style={{ transition: 'all 0.3s ease' }}>
-              <div style={{ position: 'relative', width: '15px', height: '15px', overflow: 'hidden' }}>
+            <button onClick={toggleTheme} className="btn btn-secondary btn-sm btn-nav-pill" title="Toggle Dark/Light Mode" style={{ transition: 'all 0.3s ease' }}>
+              <div style={{ position: 'relative', width: '15px', height: '15px', overflow: 'hidden', flexShrink: 0 }}>
                 <div style={{
                   position: 'absolute', top: 0, left: 0,
                   transform: theme === 'dark' ? 'translateY(100%)' : 'translateY(0)',
@@ -593,35 +558,28 @@ export default function Home() {
                   </svg>
                 </div>
               </div>
-              <span className="btn-text-full">Theme</span>
-            </button>
-            <button id="btnInstallPwa" className="btn btn-secondary btn-sm btn-install-pwa" title="Install RodSync as a mobile / desktop App">
-              <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                <rect x="5" y="2" width="14" height="20" rx="2" ry="2"></rect>
-                <line x1="12" y1="18" x2="12.01" y2="18"></line>
-              </svg>
-              <span className="btn-text-full">Install App</span>
+              <span className="btn-nav-text">Theme</span>
             </button>
 
-            <button id="btnExportCsv" className="btn btn-secondary btn-sm btn-icon-mobile" title="Export inventory to CSV file">
+            <button id="btnExportCsv" className="btn btn-secondary btn-sm btn-nav-pill" title="Export inventory to CSV file">
               <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                 <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
                 <polyline points="7 10 12 15 17 10"></polyline>
                 <line x1="12" y1="15" x2="12" y2="3"></line>
               </svg>
-              <span className="btn-text-full">Export CSV</span>
+              <span className="btn-nav-text">Export CSV</span>
             </button>
 
-            <button className="btn btn-secondary btn-sm btn-icon-mobile" title="Import inventory from CSV" onClick={() => setIsImportModalOpen(true)}>
+            <button className="btn btn-secondary btn-sm btn-nav-pill" title="Import inventory from CSV" onClick={() => setIsImportModalOpen(true)}>
               <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                 <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
                 <polyline points="17 8 12 3 7 8"></polyline>
                 <line x1="12" y1="3" x2="12" y2="15"></line>
               </svg>
-              <span className="btn-text-full">Import CSV</span>
+              <span className="btn-nav-text">Import CSV</span>
             </button>
 
-            <button id="btnOpenCutLogsModal" className="btn btn-secondary btn-sm btn-cut-logs" title="View Cut History &amp; Offcut Logs">
+            <button id="btnOpenCutLogsModal" className="btn btn-secondary btn-sm btn-cut-logs btn-nav-pill" title="View Cut History &amp; Offcut Logs">
               <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                 <circle cx="6" cy="6" r="3"></circle>
                 <circle cx="6" cy="18" r="3"></circle>
@@ -629,27 +587,16 @@ export default function Home() {
                 <line x1="14.47" y1="14.48" x2="20" y2="20"></line>
                 <line x1="8.12" y1="8.12" x2="12" y2="12"></line>
               </svg>
-              <span>Cut Logs</span>
+              <span className="btn-nav-text">Cut Logs</span>
               <span className="badge badge-pill badge-primary" id="cutLogsBadge" style={{ marginLeft: '4px', fontSize: '0.7rem', padding: '0.1rem 0.45rem' }}>0</span>
             </button>
 
-            <button id="btnOpenAddModal" className="btn btn-primary btn-sm btn-add-main">
+            <button id="btnOpenAddModal" className="btn btn-primary btn-sm btn-add-main btn-nav-pill">
               <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
                 <line x1="12" y1="5" x2="12" y2="19"></line>
                 <line x1="5" y1="12" x2="19" y2="12"></line>
               </svg>
-              <span>Add Rod Stock</span>
-            </button>
-
-            <div style={{ width: '1px', height: '24px', backgroundColor: 'var(--border-medium)', margin: '0 4px' }}></div>
-
-            <button onClick={handleLogout} className="btn btn-secondary btn-sm text-danger" title="Securely Sign Out" style={{ transition: 'all 0.3s ease' }}>
-              <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
-                <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"></path>
-                <polyline points="16 17 21 12 16 7"></polyline>
-                <line x1="21" y1="12" x2="9" y2="12"></line>
-              </svg>
-              <span className="btn-text-full" style={{ marginLeft: '4px' }}>Log Out</span>
+              <span className="btn-nav-text">Add Rod Stock</span>
             </button>
           </div>
         </div>
@@ -659,7 +606,7 @@ export default function Home() {
       <main className="main-container">
         {/*  Top KPI Summary Cards  */}
         <section className="kpi-grid" aria-label="Inventory Metrics Summary">
-          <div className="kpi-card card-blue">
+          <div className="kpi-card card-blue" data-kpi-filter="all" title="Click to view all catalog rod stock">
             <div className="kpi-icon-wrap">
               <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
                 <path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"></path>
@@ -674,7 +621,7 @@ export default function Home() {
             </div>
           </div>
 
-          <div className="kpi-card card-indigo">
+          <div className="kpi-card card-indigo" data-kpi-filter="stock" title="Click to view total rods in storage">
             <div className="kpi-icon-wrap">
               <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
                 <line x1="8" y1="6" x2="21" y2="6"></line>
@@ -692,7 +639,7 @@ export default function Home() {
             </div>
           </div>
 
-          <div className="kpi-card card-emerald">
+          <div className="kpi-card card-emerald" data-kpi-filter="in_stock" title="Click to filter by available in-stock rods">
             <div className="kpi-icon-wrap">
               <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
                 <path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"></path>
@@ -706,7 +653,7 @@ export default function Home() {
             </div>
           </div>
 
-          <div className="kpi-card card-amber">
+          <div className="kpi-card card-amber" data-kpi-filter="low_stock" title="Click to filter low stock rods (≤ 5 units)">
             <div className="kpi-icon-wrap">
               <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
                 <path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"></path>
@@ -750,19 +697,67 @@ export default function Home() {
                   <input type="number" id="searchDiameterInput" className="input-control" placeholder="e.g. 12" step="0.1" min="0.1" required />
                   <span className="input-addon">mm</span>
                 </div>
+                <div className="quick-dia-chips-row">
+                  <span className="chips-mini-label">Quick:</span>
+                  <div className="chips-mini-scroll">
+                    <button type="button" className="btn-dia-preset" data-dia="8">8mm</button>
+                    <button type="button" className="btn-dia-preset" data-dia="10">10mm</button>
+                    <button type="button" className="btn-dia-preset" data-dia="12">12mm</button>
+                    <button type="button" className="btn-dia-preset" data-dia="16">16mm</button>
+                    <button type="button" className="btn-dia-preset" data-dia="20">20mm</button>
+                    <button type="button" className="btn-dia-preset" data-dia="25">25mm</button>
+                  </div>
+                </div>
                 <div className="field-hint">Exact match required</div>
               </div>
 
               <div className="input-field-group">
-                <label htmlFor="searchLengthInput" className="field-label">
-                  <span>Minimum Required Length</span>
-                  <span className="field-unit">(In)</span>
-                </label>
-                <div className="input-with-icon">
-                  <input type="number" id="searchLengthInput" className="input-control" placeholder="e.g. 6.0" step="0.1" min="0.1" required />
-                  <span className="input-addon">In</span>
+                <div className="field-label-row">
+                  <label htmlFor="searchLengthInput" className="field-label">
+                    <span>Minimum Required Length</span>
+                    <span className="field-unit" id="searchLengthUnitBadge">(In)</span>
+                  </label>
+                  <div className="unit-selector-pills" role="radiogroup" aria-label="Length Unit Selector">
+                    <button
+                      type="button"
+                      className="unit-pill active"
+                      id="unitPillIn"
+                      data-unit="in"
+                      title="Set unit to Inches"
+                    >
+                      In
+                    </button>
+                    <button
+                      type="button"
+                      className="unit-pill"
+                      id="unitPillFt"
+                      data-unit="ft"
+                      title="Set unit to Feet"
+                    >
+                      Ft
+                    </button>
+                  </div>
                 </div>
-                <div className="field-hint">Length &ge; required value</div>
+                <div className="input-with-icon input-with-unit-select">
+                  <input
+                    type="number"
+                    id="searchLengthInput"
+                    className="input-control"
+                    placeholder="e.g. 6.0"
+                    step="any"
+                    min="0.01"
+                    required
+                  />
+                  <select
+                    id="searchLengthUnitSelect"
+                    className="input-addon-select"
+                    aria-label="Select Length Unit"
+                  >
+                    <option value="in">In</option>
+                    <option value="ft">Ft</option>
+                  </select>
+                </div>
+                <div className="field-hint" id="searchLengthHint">Length &ge; required value</div>
               </div>
 
               <div className="search-action-group">
@@ -1186,6 +1181,12 @@ export default function Home() {
                 <span>Remaining Offcut Piece:</span>
                 <strong className="font-mono text-success" id="calcRemainLength">0.0 In</strong>
               </div>
+              <div className="cut-visual-bar-wrap" id="cutVisualBarWrap" style={{ display: 'none' }}>
+                <div className="cut-visual-bar">
+                  <div className="cut-bar-segment segment-cut" id="barCutSegment">Cut</div>
+                  <div className="cut-bar-segment segment-remain" id="barRemainSegment">Offcut</div>
+                </div>
+              </div>
               <div className="cut-calc-note" id="calcRemainNote">
                 ✂️ <strong>1 unit</strong> of <strong>12 mm × 1.0 In</strong> offcut rod will be added back into your inventory!
               </div>
@@ -1294,7 +1295,7 @@ export default function Home() {
               </svg>
               <input type="text" id="filterCutLogsInput" className="input-control filter-search" placeholder="Search logs by rod name, diameter, job ref..." style={{ width: '100%' }} />
             </div>
-            <div style={{ display: 'flex', gap: '0.5rem', alignItems: 'center', flexWrap: 'wrap' }}>
+            <div className="cut-logs-actions-row" style={{ display: 'flex', gap: '0.5rem', alignItems: 'center', flexWrap: 'wrap' }}>
               <div className="view-toggle-group btn-group" id="cutLogsViewToggleGroup" style={{ display: 'inline-flex' }}>
                 <button type="button" className="btn btn-secondary btn-xs" id="btnCutLogsCards" title="Card View (Optimized for phone)">
                   <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
@@ -1317,6 +1318,14 @@ export default function Home() {
                   <span>Table</span>
                 </button>
               </div>
+              <button id="btnPrintCombinedSlip" className="btn btn-primary btn-sm" title="Print a single slip containing 1 or many selected cutting logs">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+                  <polyline points="6 9 6 2 18 2 18 9"></polyline>
+                  <path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2"></path>
+                  <rect x="6" y="14" width="12" height="8"></rect>
+                </svg>
+                <span>Print Slip (<span id="selectedLogsCount">0</span>)</span>
+              </button>
               <button id="btnExportCutLogsCsv" className="btn btn-secondary btn-sm" title="Export cut history to CSV">
                 <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
                   <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
@@ -1337,6 +1346,9 @@ export default function Home() {
               <table className="data-table" id="cutLogsTable">
                 <thead>
                   <tr>
+                    <th style={{ width: '42px', textAlign: 'center' }}>
+                      <input type="checkbox" id="selectAllCutLogs" title="Select / Deselect All Logs for Slip" style={{ cursor: 'pointer', width: '16px', height: '16px' }} />
+                    </th>
                     <th>Date &amp; Time</th>
                     <th>Rod / Spec</th>
                     <th className="text-right">Original</th>
@@ -1373,9 +1385,14 @@ export default function Home() {
             </div>
           </div>
 
-          <div className="modal-footer" style={{ justifyContent: 'space-between' }}>
-            <span className="text-muted" style={{ fontSize: '0.8125rem' }} id="cutLogsCountText">0 log entries</span>
-            <button type="button" className="btn btn-secondary" id="btnCloseCutLogsBottom">Close</button>
+          <div className="modal-footer cut-logs-modal-footer" style={{ justifyContent: 'space-between', flexWrap: 'wrap', gap: '0.5rem' }}>
+            <span className="text-muted cut-logs-count-summary" style={{ fontSize: '0.8125rem' }} id="cutLogsCountText">0 log entries</span>
+            <div className="cut-logs-footer-buttons" style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+              <button type="button" className="btn btn-primary btn-sm" id="btnFooterPrintCombinedSlip" title="Print a single slip with selected items">
+                🧾 Print Slip (<span id="selectedLogsCountFooter">0</span>)
+              </button>
+              <button type="button" className="btn btn-secondary" id="btnCloseCutLogsBottom">Close</button>
+            </div>
           </div>
         </div>
       </div>
@@ -1787,7 +1804,7 @@ export default function Home() {
 
       {/* We load the script with afterInteractive strategy and trigger initialization on load */}
       <Script
-        src="/script.js?v=12"
+        src="/script.js?v=15"
         strategy="afterInteractive"
         onLoad={() => {
           if (window.initVanillaApp) {
