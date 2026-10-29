@@ -87,7 +87,7 @@ export default function Login() {
             display: 'flex',
             alignItems: 'center',
             justifyContent: 'center',
-            backgroundColor: '#ea580c',
+            backgroundColor: '#dbeafe',
             backgroundImage: "url('/app-bg.png')",
             backgroundSize: 'cover',
             backgroundPosition: 'center center',
@@ -100,9 +100,7 @@ export default function Login() {
             <div style={{
                 position: 'absolute',
                 inset: 0,
-                background: 'radial-gradient(circle at 50% 30%, rgba(255, 255, 255, 0.25) 0%, rgba(255, 255, 255, 0.5) 100%)',
-                backdropFilter: 'blur(3px)',
-                WebkitBackdropFilter: 'blur(3px)',
+                background: 'rgba(255, 255, 255, 0.08)',
                 pointerEvents: 'none'
             }}></div>
 
@@ -115,7 +113,7 @@ export default function Login() {
                 padding: '3rem 2.5rem',
                 width: '100%',
                 maxWidth: '420px',
-                boxShadow: '0 20px 60px rgba(180, 83, 9, 0.22), 0 4px 16px rgba(0, 0, 0, 0.06)',
+                boxShadow: '0 20px 60px rgba(0, 113, 227, 0.16), 0 4px 16px rgba(0, 0, 0, 0.06)',
                 textAlign: 'center',
                 position: 'relative',
                 zIndex: 1
@@ -125,12 +123,12 @@ export default function Login() {
                         width: '52px',
                         height: '52px',
                         margin: '0 auto 1rem auto',
-                        background: 'linear-gradient(135deg, #f97316 0%, #ea580c 100%)',
+                        background: 'linear-gradient(135deg, #0071e3 0%, #0051ba 100%)',
                         borderRadius: '16px',
                         display: 'flex',
                         alignItems: 'center',
                         justifyContent: 'center',
-                        boxShadow: '0 8px 24px rgba(234, 88, 12, 0.35)',
+                        boxShadow: '0 8px 24px rgba(0, 113, 227, 0.35)',
                         color: 'white'
                     }}>
                         <svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
@@ -140,7 +138,7 @@ export default function Login() {
                         </svg>
                     </div>
                     <h1 style={{ fontSize: '2rem', fontWeight: 800, color: '#1e293b', marginBottom: '0.25rem', letterSpacing: '-0.02em' }}>
-                        Rod<span style={{ color: '#ea580c' }}>Sync</span>
+                        Rod<span style={{ color: '#0071e3' }}>Sync</span>
                     </h1>
                     <p style={{ color: '#64748b', fontSize: '0.95rem', margin: 0 }}>Secure Portal Access</p>
                 </div>
@@ -189,11 +187,11 @@ export default function Login() {
                         disabled={loading}
                         style={{
                             marginTop: '0.75rem', width: '100%',
-                            background: 'linear-gradient(135deg, #f97316 0%, #ea580c 100%)',
+                            background: 'linear-gradient(135deg, #0071e3 0%, #0051ba 100%)',
                             color: 'white', border: 'none',
                             padding: '1rem', borderRadius: '12px', fontSize: '1rem', fontWeight: 700,
                             cursor: loading ? 'not-allowed' : 'pointer',
-                            boxShadow: '0 6px 20px rgba(234, 88, 12, 0.35)',
+                            boxShadow: '0 6px 20px rgba(0, 113, 227, 0.35)',
                             transition: 'all 0.2s ease',
                             opacity: loading ? 0.75 : 1
                         }}>

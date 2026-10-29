@@ -129,7 +129,7 @@
   let statTotalTypes, statTotalQuantity, statInStockTypes, statLowStockCount;
   let smartSearchForm, searchDiameterInput, searchLengthInput, btnResetSmartSearch;
   let searchLengthUnit = 'in';
-  let unitPillIn, unitPillFt, searchLengthUnitSelect, searchLengthUnitBadge, searchLengthHint, smartThLengthTitle;
+  let unitPillIn, unitPillFt, unitPillM, searchLengthUnitSelect, searchLengthUnitBadge, searchLengthHint, smartThLengthTitle, quickLengthChipsScroll;
   let smartSearchResultsContainer, smartResultsTableBody, smartResultsCount, smartResultsCriteria;
   let smartSearchEmptyState, smartSearchEmptyDesc, btnEmptySuggestAdd;
   let inventoryTableBody, inventoryEmptyState, inventoryCountSummary;
@@ -141,8 +141,20 @@
   let btnDeductStepDown, btnDeductStepUp;
   let cutModalOverlay, btnCloseCutModal, btnCancelCutModal, cutForm, cutRodId, cutRodName, cutRodDiameter;
   let cutRodFullLength, cutRodAvailableQty, cutRequiredLengthInput, cutPiecesQtyInput;
+  let cutPiecesPerRodInput, btnCutPiecesPerRodDown, btnCutPiecesPerRodUp, cutPiecesPerRodHint, cutVisualMultiBar;
+  let cutMultiRodSuggestionCard, cutSuggestionCapacityText, cutSuggestionDesc, cutSuggestedRodContainer;
+  let cutSuggestedRodSelect, cutSuggestedStepsPreview, cutNoStockWarning, btnCutAddNewRodShortcut;
+  let activeModalMultiPlan = null;
   let btnCutStepDown, btnCutStepUp, calcOrigLength, calcCutLength, calcRemainLength, calcRemainNote;
   let cutAutoAddRemnant, cutReasonInput, cutCreatedByInput, cutAssignedByInput, btnConfirmCut;
+  let searchPiecesInput, searchTotalCutHint, btnSearchPiecesDec, btnSearchPiecesInc;
+  let smartCutPlanSection, cutPlanMetricsGrid, cutPlanStepsList, btnStrategyFullLength, btnStrategyOffcuts;
+  let btnExecuteCutPlan, btnPrintPlanSlip, btnToggleAllMatchingTable, toggleMatchingTableText, smartResultsTableContainer;
+  let executePlanModalOverlay, btnCloseExecutePlanModal, btnCancelExecutePlanModal, executePlanForm;
+  let executePlanSummaryDetails, planAutoAddRemnants, planReasonInput, planCreatedByInput, planAssignedByInput, btnConfirmExecutePlan;
+  let activeCutPlan = null;
+  let activeCutStrategy = 'full_length_first';
+  let isMatchingTableVisible = false;
   let cutLogsModalOverlay, btnOpenCutLogsModal, btnCloseCutLogsModal, btnCloseCutLogsBottom, cutLogsBadge;
   let cutLogsTableBody, cutLogsEmptyState, filterCutLogsInput, btnExportCutLogsCsv, btnClearCutLogs;
   let cutLogsCountText, cutLogsContentArea, cutLogsTableWrapper, cutLogsCardsContainer;
@@ -169,13 +181,19 @@
     smartSearchForm = document.getElementById('smartSearchForm');
     searchDiameterInput = document.getElementById('searchDiameterInput');
     searchLengthInput = document.getElementById('searchLengthInput');
+    searchPiecesInput = document.getElementById('searchPiecesInput');
+    searchTotalCutHint = document.getElementById('searchTotalCutHint');
+    btnSearchPiecesDec = document.getElementById('btnSearchPiecesDec');
+    btnSearchPiecesInc = document.getElementById('btnSearchPiecesInc');
     btnResetSmartSearch = document.getElementById('btnResetSmartSearch');
     unitPillIn = document.getElementById('unitPillIn');
     unitPillFt = document.getElementById('unitPillFt');
+    unitPillM = document.getElementById('unitPillM');
     searchLengthUnitSelect = document.getElementById('searchLengthUnitSelect');
     searchLengthUnitBadge = document.getElementById('searchLengthUnitBadge');
     searchLengthHint = document.getElementById('searchLengthHint');
     smartThLengthTitle = document.getElementById('smartThLengthTitle');
+    quickLengthChipsScroll = document.getElementById('quickLengthChipsScroll');
     smartSearchResultsContainer = document.getElementById('smartSearchResultsContainer');
     smartResultsTableBody = document.getElementById('smartResultsTableBody');
     smartResultsCount = document.getElementById('smartResultsCount');
@@ -183,6 +201,28 @@
     smartSearchEmptyState = document.getElementById('smartSearchEmptyState');
     smartSearchEmptyDesc = document.getElementById('smartSearchEmptyDesc');
     btnEmptySuggestAdd = document.getElementById('btnEmptySuggestAdd');
+
+    smartCutPlanSection = document.getElementById('smartCutPlanSection');
+    cutPlanMetricsGrid = document.getElementById('cutPlanMetricsGrid');
+    cutPlanStepsList = document.getElementById('cutPlanStepsList');
+    btnStrategyFullLength = document.getElementById('btnStrategyFullLength');
+    btnStrategyOffcuts = document.getElementById('btnStrategyOffcuts');
+    btnExecuteCutPlan = document.getElementById('btnExecuteCutPlan');
+    btnPrintPlanSlip = document.getElementById('btnPrintPlanSlip');
+    btnToggleAllMatchingTable = document.getElementById('btnToggleAllMatchingTable');
+    toggleMatchingTableText = document.getElementById('toggleMatchingTableText');
+    smartResultsTableContainer = document.getElementById('smartResultsTableContainer');
+
+    executePlanModalOverlay = document.getElementById('executePlanModalOverlay');
+    btnCloseExecutePlanModal = document.getElementById('btnCloseExecutePlanModal');
+    btnCancelExecutePlanModal = document.getElementById('btnCancelExecutePlanModal');
+    executePlanForm = document.getElementById('executePlanForm');
+    executePlanSummaryDetails = document.getElementById('executePlanSummaryDetails');
+    planAutoAddRemnants = document.getElementById('planAutoAddRemnants');
+    planReasonInput = document.getElementById('planReasonInput');
+    planCreatedByInput = document.getElementById('planCreatedByInput');
+    planAssignedByInput = document.getElementById('planAssignedByInput');
+    btnConfirmExecutePlan = document.getElementById('btnConfirmExecutePlan');
 
     inventoryTableBody = document.getElementById('inventoryTableBody');
     inventoryEmptyState = document.getElementById('inventoryEmptyState');
@@ -232,6 +272,11 @@
     cutRodAvailableQty = document.getElementById('cutRodAvailableQty');
     cutRequiredLengthInput = document.getElementById('cutRequiredLengthInput');
     cutPiecesQtyInput = document.getElementById('cutPiecesQtyInput');
+    cutPiecesPerRodInput = document.getElementById('cutPiecesPerRodInput');
+    btnCutPiecesPerRodDown = document.getElementById('btnCutPiecesPerRodDown');
+    btnCutPiecesPerRodUp = document.getElementById('btnCutPiecesPerRodUp');
+    cutPiecesPerRodHint = document.getElementById('cutPiecesPerRodHint');
+    cutVisualMultiBar = document.getElementById('cutVisualMultiBar');
     btnCutStepDown = document.getElementById('btnCutStepDown');
     btnCutStepUp = document.getElementById('btnCutStepUp');
     calcOrigLength = document.getElementById('calcOrigLength');
@@ -243,6 +288,14 @@
     cutCreatedByInput = document.getElementById('cutCreatedByInput');
     cutAssignedByInput = document.getElementById('cutAssignedByInput');
     btnConfirmCut = document.getElementById('btnConfirmCut');
+    cutMultiRodSuggestionCard = document.getElementById('cutMultiRodSuggestionCard');
+    cutSuggestionCapacityText = document.getElementById('cutSuggestionCapacityText');
+    cutSuggestionDesc = document.getElementById('cutSuggestionDesc');
+    cutSuggestedRodContainer = document.getElementById('cutSuggestedRodContainer');
+    cutSuggestedRodSelect = document.getElementById('cutSuggestedRodSelect');
+    cutSuggestedStepsPreview = document.getElementById('cutSuggestedStepsPreview');
+    cutNoStockWarning = document.getElementById('cutNoStockWarning');
+    btnCutAddNewRodShortcut = document.getElementById('btnCutAddNewRodShortcut');
 
     cutLogsModalOverlay = document.getElementById('cutLogsModalOverlay');
     btnOpenCutLogsModal = document.getElementById('btnOpenCutLogsModal');
@@ -853,30 +906,71 @@
 
   // --- SMART ROD SEARCH LOGIC ---
   function setSmartSearchUnit(newUnit, shouldConvertValue = true) {
-    if (!['in', 'ft'].includes(newUnit)) return;
+    if (!['in', 'ft', 'm'].includes(newUnit)) return;
     refreshDomElements();
     const prevUnit = searchLengthUnit;
     searchLengthUnit = newUnit;
 
     if (unitPillIn) unitPillIn.classList.toggle('active', newUnit === 'in');
     if (unitPillFt) unitPillFt.classList.toggle('active', newUnit === 'ft');
+    if (unitPillM) unitPillM.classList.toggle('active', newUnit === 'm');
     if (searchLengthUnitSelect) searchLengthUnitSelect.value = newUnit;
-    if (searchLengthUnitBadge) searchLengthUnitBadge.textContent = newUnit === 'ft' ? '(Ft)' : '(In)';
-    if (smartThLengthTitle) smartThLengthTitle.textContent = newUnit === 'ft' ? 'Length (Ft / In)' : 'Length (In)';
+    if (searchLengthUnitBadge) {
+      searchLengthUnitBadge.textContent = newUnit === 'm' ? '(M)' : (newUnit === 'ft' ? '(Ft)' : '(In)');
+    }
+    if (smartThLengthTitle) {
+      smartThLengthTitle.textContent = newUnit === 'm' ? 'Length (M / In)' : (newUnit === 'ft' ? 'Length (Ft / In)' : 'Length (In)');
+    }
 
     if (searchLengthInput) {
-      searchLengthInput.placeholder = newUnit === 'ft' ? 'e.g. 2.0' : 'e.g. 6.0';
+      searchLengthInput.placeholder = newUnit === 'm' ? 'e.g. 1.0' : (newUnit === 'ft' ? 'e.g. 2.0' : 'e.g. 6.0');
       const rawVal = parseFloat(searchLengthInput.value);
       if (shouldConvertValue && !isNaN(rawVal) && rawVal > 0) {
-        if (newUnit === 'ft' && prevUnit === 'in') {
-          // Convert Inches to Feet (divide by 12)
-          const ftVal = Number((rawVal / 12).toFixed(3));
-          searchLengthInput.value = ftVal;
-        } else if (newUnit === 'in' && prevUnit === 'ft') {
-          // Convert Feet to Inches (multiply by 12)
-          const inVal = Number((rawVal * 12).toFixed(2));
-          searchLengthInput.value = inVal;
+        // Convert from prevUnit to inches first
+        let inchesVal = rawVal;
+        if (prevUnit === 'ft') inchesVal = rawVal * 12;
+        else if (prevUnit === 'm') inchesVal = rawVal * 39.3701;
+
+        // Convert inches to newUnit
+        if (newUnit === 'ft') {
+          searchLengthInput.value = Number((inchesVal / 12).toFixed(3));
+        } else if (newUnit === 'm') {
+          searchLengthInput.value = Number((inchesVal / 39.3701).toFixed(3));
+        } else {
+          searchLengthInput.value = Number(inchesVal.toFixed(2));
         }
+      }
+    }
+
+    // Dynamic quick presets depending on unit
+    if (quickLengthChipsScroll) {
+      if (newUnit === 'm') {
+        quickLengthChipsScroll.innerHTML = `
+          <button type="button" class="btn-len-preset" data-len="0.5">0.5m</button>
+          <button type="button" class="btn-len-preset" data-len="1">1m</button>
+          <button type="button" class="btn-len-preset" data-len="1.5">1.5m</button>
+          <button type="button" class="btn-len-preset" data-len="2">2m</button>
+          <button type="button" class="btn-len-preset" data-len="3">3m</button>
+          <button type="button" class="btn-len-preset" data-len="5">5m</button>
+        `;
+      } else if (newUnit === 'ft') {
+        quickLengthChipsScroll.innerHTML = `
+          <button type="button" class="btn-len-preset" data-len="1">1ft</button>
+          <button type="button" class="btn-len-preset" data-len="2">2ft</button>
+          <button type="button" class="btn-len-preset" data-len="4">4ft</button>
+          <button type="button" class="btn-len-preset" data-len="5">5ft</button>
+          <button type="button" class="btn-len-preset" data-len="10">10ft</button>
+          <button type="button" class="btn-len-preset" data-len="20">20ft</button>
+        `;
+      } else {
+        quickLengthChipsScroll.innerHTML = `
+          <button type="button" class="btn-len-preset" data-len="1">1in</button>
+          <button type="button" class="btn-len-preset" data-len="2">2in</button>
+          <button type="button" class="btn-len-preset" data-len="4">4in</button>
+          <button type="button" class="btn-len-preset" data-len="6">6in</button>
+          <button type="button" class="btn-len-preset" data-len="8">8in</button>
+          <button type="button" class="btn-len-preset" data-len="10">10in</button>
+        `;
       }
     }
 
@@ -895,53 +989,551 @@
 
   function updateSearchLengthHint() {
     refreshDomElements();
-    if (!searchLengthHint) return;
     const rawVal = searchLengthInput ? parseFloat(searchLengthInput.value) : NaN;
+    const pieces = searchPiecesInput ? (parseInt(searchPiecesInput.value, 10) || 1) : 1;
+
     if (!isNaN(rawVal) && rawVal > 0) {
-      if (searchLengthUnit === 'ft') {
+      if (searchLengthUnit === 'm') {
+        const inEquiv = Number((rawVal * 39.3701).toFixed(2));
+        const ftEquiv = Number((inEquiv / 12).toFixed(2));
+        if (searchLengthHint) {
+          searchLengthHint.innerHTML = `📐 <strong>${rawVal} M</strong> = <strong>${inEquiv} In</strong> (${ftEquiv} Ft) per piece`;
+        }
+        const totalM = Number((rawVal * pieces).toFixed(2));
+        const totalIn = Number((inEquiv * pieces).toFixed(2));
+        if (searchTotalCutHint) {
+          searchTotalCutHint.innerHTML = `🎯 Total: <strong>${pieces} pcs</strong> × ${rawVal} M = <strong>${totalM} M</strong> (${totalIn} In)`;
+        }
+      } else if (searchLengthUnit === 'ft') {
         const inEquiv = Number((rawVal * 12).toFixed(2));
-        searchLengthHint.innerHTML = `📐 <strong>${rawVal} Ft</strong> = <strong>${inEquiv} In</strong> (Length &ge; ${inEquiv} In)`;
+        if (searchLengthHint) {
+          searchLengthHint.innerHTML = `📐 <strong>${rawVal} Ft</strong> = <strong>${inEquiv} In</strong> per piece`;
+        }
+        const totalFt = Number((rawVal * pieces).toFixed(2));
+        const totalIn = Number((inEquiv * pieces).toFixed(2));
+        if (searchTotalCutHint) {
+          searchTotalCutHint.innerHTML = `🎯 Total: <strong>${pieces} pcs</strong> × ${rawVal} Ft = <strong>${totalFt} Ft</strong> (${totalIn} In)`;
+        }
       } else {
         const ftEquiv = Number((rawVal / 12).toFixed(2));
-        searchLengthHint.innerHTML = `📐 <strong>${rawVal} In</strong> = <strong>${ftEquiv} Ft</strong> (Length &ge; ${rawVal} In)`;
+        const mEquiv = Number((rawVal / 39.3701).toFixed(2));
+        if (searchLengthHint) {
+          searchLengthHint.innerHTML = `📐 <strong>${rawVal} In</strong> = <strong>${ftEquiv} Ft</strong> (${mEquiv} M) per piece`;
+        }
+        const totalIn = Number((rawVal * pieces).toFixed(2));
+        const totalFt = Number((totalIn / 12).toFixed(2));
+        if (searchTotalCutHint) {
+          searchTotalCutHint.innerHTML = `🎯 Total: <strong>${pieces} pcs</strong> × ${rawVal} In = <strong>${totalIn} In</strong> (${totalFt} Ft)`;
+        }
       }
     } else {
-      if (searchLengthUnit === 'ft') {
-        searchLengthHint.textContent = '1 Ft = 12 In • Length ≥ required value';
-      } else {
-        searchLengthHint.textContent = 'Length ≥ required value';
+      if (searchLengthHint) {
+        searchLengthHint.textContent = searchLengthUnit === 'm'
+          ? '1 M = 39.37 In (3.28 Ft) • Cut piece length'
+          : (searchLengthUnit === 'ft' ? '1 Ft = 12 In • Cut piece length' : 'Cut piece length in inches');
+      }
+      if (searchTotalCutHint) {
+        searchTotalCutHint.textContent = `Total pieces: ${pieces}`;
       }
     }
   }
 
-  function executeSmartSearch(diameter, minLength, showNotification = true, unitOverride = null) {
+  // --- MULTI-CUT STOCK OPTIMIZER ENGINE (LINEAR CUTTING STOCK PACKING) ---
+  function calculateMultiCutPlan(diameter, pieceLenInches, piecesNeeded, unit, strategy = 'full_length_first', inputLength = null) {
+    const searchDiameter = Number(diameter);
+    const eligibleRods = rods
+      .filter(rod =>
+        Number(rod.diameterMm) === searchDiameter &&
+        getRodLength(rod) >= pieceLenInches &&
+        Number(rod.quantity) > 0
+      )
+      .map(r => ({ ...r, availableUnits: Number(r.quantity) || 0 }));
+
+    if (strategy === 'full_length_first') {
+      // Longest rods first: cut from full length stock first, remainder from another rod
+      eligibleRods.sort((a, b) => getRodLength(b) - getRodLength(a));
+    } else {
+      // Offcut remnants first: consume smaller/scrap rods first
+      eligibleRods.sort((a, b) => {
+        const isRemA = (a.sku && a.sku.includes('CUT')) || (a.notes && a.notes.includes('Cut')) || getRodLength(a) < 120;
+        const isRemB = (b.sku && b.sku.includes('CUT')) || (b.notes && b.notes.includes('Cut')) || getRodLength(b) < 120;
+        if (isRemA && !isRemB) return -1;
+        if (!isRemA && isRemB) return 1;
+        return getRodLength(a) - getRodLength(b);
+      });
+    }
+
+    let remainingPieces = piecesNeeded;
+    const steps = [];
+    let totalCutLengthInches = 0;
+    let totalOffcutSavedInches = 0;
+    let totalRodsUsed = 0;
+
+    for (const rod of eligibleRods) {
+      if (remainingPieces <= 0) break;
+      const rodLen = getRodLength(rod);
+      const maxPiecesPerRod = Math.floor(rodLen / pieceLenInches);
+      if (maxPiecesPerRod <= 0) continue;
+
+      const unitsToUse = rod.availableUnits;
+      for (let u = 0; u < unitsToUse; u++) {
+        if (remainingPieces <= 0) break;
+        const piecesFromThisRod = Math.min(remainingPieces, maxPiecesPerRod);
+        const totalCutFromRod = Number((piecesFromThisRod * pieceLenInches).toFixed(2));
+        const remainder = Number((rodLen - totalCutFromRod).toFixed(2));
+
+        steps.push({
+          stepNum: steps.length + 1,
+          rodId: rod.id,
+          rodName: rod.name,
+          rodSku: rod.sku || '',
+          diameterMm: Number(rod.diameterMm),
+          rodFullLengthInches: rodLen,
+          piecesToCut: piecesFromThisRod,
+          pieceLengthInches: pieceLenInches,
+          pieceLengthInput: inputLength,
+          unit: unit,
+          totalCutInches: totalCutFromRod,
+          remainderInches: remainder,
+          isRemnantSource: (rod.sku && rod.sku.includes('CUT')) || (rod.notes && rod.notes.includes('Cut'))
+        });
+
+        totalRodsUsed += 1;
+        totalCutLengthInches += totalCutFromRod;
+        totalOffcutSavedInches += remainder;
+        remainingPieces -= piecesFromThisRod;
+      }
+    }
+
+    const isFullyFulfilled = remainingPieces === 0;
+    const fulfilledPieces = piecesNeeded - remainingPieces;
+
+    return {
+      diameterMm: searchDiameter,
+      pieceLengthInches: pieceLenInches,
+      inputLength: inputLength,
+      piecesNeeded: piecesNeeded,
+      fulfilledPieces: fulfilledPieces,
+      shortagePieces: remainingPieces,
+      isFullyFulfilled: isFullyFulfilled,
+      totalRodsUsed: totalRodsUsed,
+      totalCutLengthInches: totalCutLengthInches,
+      totalOffcutSavedInches: totalOffcutSavedInches,
+      unit: unit,
+      strategy: strategy,
+      steps: steps
+    };
+  }
+
+  function renderMultiCutPlan(plan, unit, inputLength) {
+    if (!smartCutPlanSection || !cutPlanMetricsGrid || !cutPlanStepsList) return;
+
+    activeCutPlan = plan;
+    if (activeCutPlan) {
+      activeCutPlan.unit = unit;
+      activeCutPlan.inputLength = inputLength;
+    }
+
+    if (!plan || plan.steps.length === 0) {
+      smartCutPlanSection.classList.add('hidden');
+      return;
+    }
+
+    smartCutPlanSection.classList.remove('hidden');
+
+    // 1. Update Strategy Pills
+    if (btnStrategyFullLength && btnStrategyOffcuts) {
+      btnStrategyFullLength.classList.toggle('active', plan.strategy === 'full_length_first');
+      btnStrategyOffcuts.classList.toggle('active', plan.strategy === 'offcuts_first');
+    }
+
+    // 2. Render Plan KPI Metrics
+    const targetLengthLabel = unit === 'm'
+      ? `${formatDisplayLength(inputLength)} M (${formatDisplayLength(plan.pieceLengthInches)} In)`
+      : (unit === 'ft' ? `${formatDisplayLength(inputLength)} Ft (${formatDisplayLength(plan.pieceLengthInches)} In)` : `${formatDisplayLength(inputLength)} In`);
+    const totalCutLengthLabel = unit === 'm'
+      ? `${formatDisplayLength(plan.totalCutLengthInches / 39.3701)} M (${formatDisplayLength(plan.totalCutLengthInches)} In)`
+      : (unit === 'ft' ? `${formatDisplayLength(plan.totalCutLengthInches / 12)} Ft` : `${formatDisplayLength(plan.totalCutLengthInches)} In`);
+    const totalOffcutLabel = unit === 'm'
+      ? `${formatDisplayLength(plan.totalOffcutSavedInches / 39.3701)} M (${formatDisplayLength(plan.totalOffcutSavedInches)} In)`
+      : (unit === 'ft' ? `${formatDisplayLength(plan.totalOffcutSavedInches / 12)} Ft (${formatDisplayLength(plan.totalOffcutSavedInches)} In)` : `${formatDisplayLength(plan.totalOffcutSavedInches)} In`);
+
+    cutPlanMetricsGrid.innerHTML = `
+      <div class="cut-plan-metric-card">
+        <span class="cut-plan-metric-label">Target Order</span>
+        <div class="cut-plan-metric-val text-primary">${plan.piecesNeeded} pcs × ${targetLengthLabel}</div>
+      </div>
+      <div class="cut-plan-metric-card">
+        <span class="cut-plan-metric-label">Total Material Cut</span>
+        <div class="cut-plan-metric-val">${totalCutLengthLabel}</div>
+      </div>
+      <div class="cut-plan-metric-card">
+        <span class="cut-plan-metric-label">Rods Consumed</span>
+        <div class="cut-plan-metric-val">${plan.totalRodsUsed} ${plan.totalRodsUsed === 1 ? 'Rod' : 'Rods'}</div>
+      </div>
+      <div class="cut-plan-metric-card">
+        <span class="cut-plan-metric-label">Offcuts Saved to Stock</span>
+        <div class="cut-plan-metric-val text-success">+${totalOffcutLabel}</div>
+      </div>
+      <div class="cut-plan-metric-card">
+        <span class="cut-plan-metric-label">Stock Feasibility</span>
+        <div class="cut-plan-metric-val ${plan.isFullyFulfilled ? 'text-success' : 'text-warning'}">
+          ${plan.isFullyFulfilled ? '✅ 100% In Stock' : `⚠️ Shortage: ${plan.shortagePieces} pcs`}
+        </div>
+      </div>
+    `;
+
+    // 3. Render Step-by-Step Rod Cutting Breakdown
+    cutPlanStepsList.innerHTML = '';
+    plan.steps.forEach((step, idx) => {
+      const stepCard = document.createElement('div');
+      stepCard.className = 'cut-plan-step-card';
+
+      const fullLenLabel = unit === 'm'
+        ? `${formatDisplayLength(step.rodFullLengthInches / 39.3701)} M (${formatDisplayLength(step.rodFullLengthInches)} In)`
+        : (unit === 'ft' ? `${formatDisplayLength(step.rodFullLengthInches / 12)} Ft (${formatDisplayLength(step.rodFullLengthInches)} In)` : `${formatDisplayLength(step.rodFullLengthInches)} In (${formatDisplayLength(step.rodFullLengthInches / 12)} Ft)`);
+      const totalCutLabel = unit === 'm'
+        ? `${formatDisplayLength(step.totalCutInches / 39.3701)} M`
+        : (unit === 'ft' ? `${formatDisplayLength(step.totalCutInches / 12)} Ft` : `${formatDisplayLength(step.totalCutInches)} In`);
+      const remainderLabel = unit === 'm'
+        ? `${formatDisplayLength(step.remainderInches / 39.3701)} M (${formatDisplayLength(step.remainderInches)} In)`
+        : (unit === 'ft' ? `${formatDisplayLength(step.remainderInches / 12)} Ft (${formatDisplayLength(step.remainderInches)} In)` : `${formatDisplayLength(step.remainderInches)} In (${formatDisplayLength(step.remainderInches / 12)} Ft)`);
+
+      const isFinalStep = idx === plan.steps.length - 1 && plan.steps.length > 1;
+      const stepBadgeText = isFinalStep
+        ? `Step #${step.stepNum} (Remaining Part from Another Rod)`
+        : (step.isRemnantSource ? `Step #${step.stepNum} (Remnant Stock)` : `Step #${step.stepNum} (Full Length Stock)`);
+
+      // Generate multi-segment visual progress bar
+      let segmentsHtml = '';
+      const piecePct = (step.pieceLengthInches / step.rodFullLengthInches) * 100;
+      for (let p = 0; p < step.piecesToCut; p++) {
+        const pieceDisplay = unit === 'm' ? `${formatDisplayLength(inputLength)} M` : (unit === 'ft' ? `${formatDisplayLength(inputLength)} Ft` : `${formatDisplayLength(inputLength)} In`);
+        segmentsHtml += `
+          <div class="cut-plan-segment segment-piece" style="width: ${piecePct.toFixed(2)}%;" title="Piece #${p + 1}: ${pieceDisplay}">
+            ${piecePct >= 14 ? `Cut #${p + 1} (${pieceDisplay})` : `${pieceDisplay}`}
+          </div>
+        `;
+      }
+
+      const remPct = Math.max(0, 100 - (step.piecesToCut * piecePct));
+      if (step.remainderInches === 0) {
+        segmentsHtml += `
+          <div class="cut-plan-segment segment-offcut-exact" style="width: ${remPct.toFixed(2)}%;" title="Exact Fit: 0 Scrap">
+            Exact Fit (0 Scrap)
+          </div>
+        `;
+      } else {
+        const remDisplay = unit === 'm' ? `${formatDisplayLength(step.remainderInches / 39.3701)} M` : (unit === 'ft' ? `${formatDisplayLength(step.remainderInches / 12)} Ft` : `${formatDisplayLength(step.remainderInches)} In`);
+        segmentsHtml += `
+          <div class="cut-plan-segment segment-offcut-saved" style="width: ${remPct.toFixed(2)}%;" title="Reusable Offcut: ${remainderLabel} (Saved to Stock)">
+            ${remPct >= 14 ? `Offcut: ${remDisplay} (Stock)` : remDisplay}
+          </div>
+        `;
+      }
+
+      stepCard.innerHTML = `
+        <div class="step-card-header">
+          <div class="step-card-left">
+            <span class="step-badge">${stepBadgeText}</span>
+            <span class="step-rod-title">${escapeHtml(step.rodName)}</span>
+          </div>
+          <div class="step-rod-dims">
+            Source Length: <strong>${fullLenLabel}</strong> • Diameter: <strong>${step.diameterMm} mm</strong>
+          </div>
+        </div>
+
+        <div class="step-cuts-summary">
+          <div class="step-cut-action">
+            ✂️ Cut <strong>${step.piecesToCut} piece${step.piecesToCut > 1 ? 's' : ''}</strong> of <strong>${targetLengthLabel}</strong> (Total: <strong>${totalCutLabel}</strong> deducted)
+          </div>
+          <div>
+            ${step.remainderInches === 0
+              ? '<span class="step-offcut-badge" style="background: rgba(100, 116, 139, 0.12); color: #64748b; border-color: rgba(100, 116, 139, 0.25);">🎯 Exact Fit (0 Scrap)</span>'
+              : `<span class="step-offcut-badge">✂️ <strong>+${remainderLabel}</strong> offcut remnant will be saved to inventory</span>`
+            }
+          </div>
+        </div>
+
+        <div class="cut-plan-visual-bar">
+          ${segmentsHtml}
+        </div>
+      `;
+
+      cutPlanStepsList.appendChild(stepCard);
+    });
+
+    // Update table visibility button text
+    if (toggleMatchingTableText) {
+      toggleMatchingTableText.textContent = isMatchingTableVisible
+        ? 'Hide Individual Rods Table'
+        : 'Show Individual Rods Table';
+    }
+    if (smartResultsTableContainer) {
+      if (isMatchingTableVisible || plan.piecesNeeded === 1) {
+        smartResultsTableContainer.classList.remove('hidden');
+      } else {
+        smartResultsTableContainer.classList.add('hidden');
+      }
+    }
+  }
+
+  function openExecutePlanModal() {
+    if (!activeCutPlan || !activeCutPlan.steps || activeCutPlan.steps.length === 0) {
+      showToast('No cutting plan is currently active to execute', 'warning');
+      return;
+    }
+
+    refreshDomElements();
+    if (!executePlanModalOverlay || !executePlanSummaryDetails) return;
+
+    let detailsHtml = `
+      <div style="margin-bottom: 0.75rem; font-weight: 700; color: var(--text-main); font-size: 0.95rem;">
+        Cutting Summary: ${activeCutPlan.fulfilledPieces} pieces of ${formatDisplayLength(activeCutPlan.unit === 'ft' ? (activeCutPlan.pieceLengthInches / 12) : activeCutPlan.pieceLengthInches)} ${activeCutPlan.unit === 'ft' ? 'Ft' : 'In'} (${activeCutPlan.diameterMm} mm)
+      </div>
+    `;
+
+    activeCutPlan.steps.forEach(step => {
+      const fullLen = activeCutPlan.unit === 'ft'
+        ? `${formatDisplayLength(step.rodFullLengthInches / 12)} Ft`
+        : `${formatDisplayLength(step.rodFullLengthInches)} In`;
+      const cutLen = activeCutPlan.unit === 'ft'
+        ? `${formatDisplayLength(step.totalCutInches / 12)} Ft`
+        : `${formatDisplayLength(step.totalCutInches)} In`;
+      const remLen = activeCutPlan.unit === 'ft'
+        ? `${formatDisplayLength(step.remainderInches / 12)} Ft`
+        : `${formatDisplayLength(step.remainderInches)} In`;
+
+      detailsHtml += `
+        <div class="plan-confirm-row">
+          <div>
+            <strong>Step #${step.stepNum}: ${escapeHtml(step.rodName)}</strong> (${fullLen})<br>
+            <span class="text-primary">Cut: ${step.piecesToCut} pcs (${cutLen} total)</span>
+          </div>
+          <div style="text-align: right;">
+            ${step.remainderInches > 0
+              ? `<span class="step-offcut-badge">+${remLen} Offcut (Stock)</span>`
+              : `<span class="badge-cut-exact">Exact (0 Scrap)</span>`
+            }
+          </div>
+        </div>
+      `;
+    });
+
+    executePlanSummaryDetails.innerHTML = detailsHtml;
+    if (planReasonInput) planReasonInput.value = '';
+    if (planCreatedByInput) planCreatedByInput.value = '';
+    if (planAssignedByInput) planAssignedByInput.value = '';
+    if (planAutoAddRemnants) planAutoAddRemnants.checked = true;
+
+    executePlanModalOverlay.classList.remove('hidden');
+  }
+
+  function closeExecutePlanModal() {
+    if (executePlanModalOverlay) {
+      executePlanModalOverlay.classList.add('hidden');
+    }
+  }
+
+  function handleExecutePlanSubmit(e) {
+    e.preventDefault();
+    if (!activeCutPlan || !activeCutPlan.steps || activeCutPlan.steps.length === 0) return;
+
+    const shouldAddRemnants = planAutoAddRemnants ? planAutoAddRemnants.checked : true;
+    const reason = planReasonInput ? planReasonInput.value.trim() : '';
+    const createdBy = planCreatedByInput ? planCreatedByInput.value.trim() : '';
+    const assignedBy = planAssignedByInput ? planAssignedByInput.value.trim() : '';
+
+    const newLogIds = [];
+
+    // Process each step in the plan
+    activeCutPlan.steps.forEach((step, idx) => {
+      const rod = rods.find(r => r.id === step.rodId);
+      if (!rod) return;
+
+      const origLength = step.rodFullLengthInches;
+      const remainder = step.remainderInches;
+      const cutLen = step.pieceLengthInches;
+      const piecesCut = step.piecesToCut;
+
+      // 1. Deduct 1 source unit of this rod from stock
+      if (rod.quantity <= 1) {
+        if (remainder > 0 && shouldAddRemnants) {
+          // Check if an existing remnant matches exactly
+          const existingRem = rods.find(r =>
+            r.id !== rod.id &&
+            r.name.toLowerCase() === rod.name.toLowerCase() &&
+            Number(r.diameterMm) === Number(rod.diameterMm) &&
+            Math.abs(getRodLength(r) - remainder) < 0.05
+          );
+          if (existingRem) {
+            existingRem.quantity += 1;
+            existingRem.updatedAt = Date.now();
+            rods = rods.filter(r => r.id !== rod.id);
+          } else {
+            rod.lengthIn = remainder;
+            rod.lengthFt = remainder;
+            rod.quantity = 1;
+            rod.updatedAt = Date.now();
+            if (reason) rod.notes = rod.notes ? `${rod.notes} | Cut: ${reason}` : `Cut: ${reason}`;
+          }
+        } else {
+          rod.quantity = 0;
+          rod.updatedAt = Date.now();
+        }
+      } else {
+        rod.quantity -= 1;
+        rod.updatedAt = Date.now();
+
+        if (remainder > 0 && shouldAddRemnants) {
+          const existingRem = rods.find(r =>
+            r.name.toLowerCase() === rod.name.toLowerCase() &&
+            Number(r.diameterMm) === Number(rod.diameterMm) &&
+            Math.abs(getRodLength(r) - remainder) < 0.05
+          );
+          if (existingRem) {
+            existingRem.quantity += 1;
+            existingRem.updatedAt = Date.now();
+          } else {
+            rods.push({
+              id: 'rod-cut-' + Date.now() + '-' + idx,
+              sku: rod.sku ? `${rod.sku}-CUT` : `ROD-${Math.round(rod.diameterMm)}MM-${Math.round(remainder)}IN`,
+              name: rod.name,
+              diameterMm: Number(rod.diameterMm),
+              lengthIn: remainder,
+              lengthFt: remainder,
+              quantity: 1,
+              notes: `Cut from ${origLength} In (${piecesCut} pcs of ${cutLen} In)${reason ? ' (' + reason + ')' : ''}`,
+              createdAt: Date.now(),
+              updatedAt: Date.now()
+            });
+          }
+        }
+      }
+
+      const planUnit = activeCutPlan ? (activeCutPlan.unit || searchLengthUnit) : searchLengthUnit;
+      const isMeter = planUnit === 'm';
+      const inputLen = (activeCutPlan && activeCutPlan.inputLength !== undefined && activeCutPlan.inputLength !== null)
+        ? activeCutPlan.inputLength
+        : (lastSmartSearchQuery && lastSmartSearchQuery.unit === 'm' ? lastSmartSearchQuery.length : null);
+
+      // 2. Add Cut Log entry
+      const logEntry = {
+        id: 'log-' + Date.now() + '-' + idx,
+        timestamp: Date.now(),
+        rodName: rod.name,
+        diameterMm: Number(rod.diameterMm),
+        originalLengthIn: origLength,
+        originalLengthFt: origLength,
+        cutLengthIn: cutLen,
+        cutLengthFt: cutLen,
+        cutUnit: isMeter ? 'm' : (planUnit || 'in'),
+        cutLengthM: isMeter ? (inputLen || Number((cutLen / 39.3701).toFixed(3))) : null,
+        quantity: piecesCut,
+        remainderIn: remainder,
+        remainderFt: remainder,
+        remnantAdded: remainder > 0 && shouldAddRemnants,
+        reason: reason ? `${reason} (Multi-Cut Plan)` : 'Multi-Cut Optimization Plan',
+        createdBy: createdBy || '',
+        assignedBy: assignedBy || '',
+        assignBy: createdBy || '',
+        assignTo: assignedBy || ''
+      };
+      cutLogs.unshift(logEntry);
+      newLogIds.push(logEntry.id);
+    });
+
+    // 3. Save to localStorage & update UI
+    saveRodsToStorage();
+    saveCutLogsToStorage();
+    updateCutLogsBadge();
+    updateDashboard();
+    closeExecutePlanModal();
+
+    // 4. Atomic Unified Sync to Backend
+    window.dispatchEvent(new CustomEvent('syncBothToBackend', {
+      detail: { rods: rods, cutLogs: cutLogs }
+    }));
+
+    // Auto-select logs for combined slip printing
+    selectedCutLogIds = new Set(newLogIds);
+    showToast(`✅ Successfully executed cutting plan! Cut ${activeCutPlan.fulfilledPieces} pieces from ${activeCutPlan.totalRodsUsed} rods. Offcuts saved to stock.`, 'success');
+
+    // Refresh smart search to reflect updated stock
+    if (lastSmartSearchQuery) {
+      executeSmartSearch(
+        lastSmartSearchQuery.diameter,
+        lastSmartSearchQuery.length,
+        false,
+        lastSmartSearchQuery.unit,
+        lastSmartSearchQuery.pieces
+      );
+    }
+  }
+
+  function handlePrintPlanSlip() {
+    if (!activeCutPlan || !activeCutPlan.steps || activeCutPlan.steps.length === 0) {
+      showToast('No cutting plan is currently active', 'warning');
+      return;
+    }
+    const planUnit = activeCutPlan.unit || searchLengthUnit;
+    const isMeter = planUnit === 'm';
+    const inputLen = (activeCutPlan.inputLength !== undefined && activeCutPlan.inputLength !== null)
+      ? activeCutPlan.inputLength
+      : (lastSmartSearchQuery && lastSmartSearchQuery.unit === 'm' ? lastSmartSearchQuery.length : null);
+
+    const virtualLogs = activeCutPlan.steps.map((step, idx) => ({
+      id: 'plan-' + Date.now() + '-' + idx,
+      timestamp: Date.now(),
+      rodName: step.rodName,
+      diameterMm: step.diameterMm,
+      originalLengthIn: step.rodFullLengthInches,
+      cutLengthIn: step.pieceLengthInches,
+      cutUnit: isMeter ? 'm' : (step.unit || planUnit || 'in'),
+      cutLengthM: isMeter ? (step.pieceLengthInput || inputLen || Number((step.pieceLengthInches / 39.3701).toFixed(3))) : null,
+      quantity: step.piecesToCut,
+      remainderIn: step.remainderInches,
+      remnantAdded: step.remainderInches > 0,
+      reason: 'Multi-Cut Optimization Plan',
+      assignBy: '',
+      assignTo: ''
+    }));
+    printCutSlip(virtualLogs);
+  }
+
+  function executeSmartSearch(diameter, minLength, showNotification = true, unitOverride = null, piecesOverride = null) {
     refreshDomElements();
     const unit = unitOverride || searchLengthUnit;
     const searchDiameter = Number(diameter);
     const inputLength = Number(minLength);
+    const piecesCount = piecesOverride !== null
+      ? Number(piecesOverride)
+      : (searchPiecesInput ? (parseInt(searchPiecesInput.value, 10) || 1) : 1);
 
     if (isNaN(searchDiameter) || searchDiameter <= 0 || isNaN(inputLength) || inputLength <= 0) {
       showToast('Please enter valid positive numbers for diameter and length', 'warning');
       return;
     }
 
-    // Convert length to inches for matching inventory (rods are stored in inches)
+    // Convert piece length to inches for matching inventory (rods are stored in inches)
     const requiredLengthInches = unit === 'ft'
       ? Number((inputLength * 12).toFixed(3))
-      : inputLength;
+      : (unit === 'm' ? Number((inputLength * 39.3701).toFixed(3)) : inputLength);
 
     lastSmartSearchQuery = {
       diameter: searchDiameter,
       length: inputLength,
       unit: unit,
-      lengthInches: requiredLengthInches
+      lengthInches: requiredLengthInches,
+      pieces: piecesCount
     };
 
-    // Core Business Rule:
-    // 1. Exact diameter match
-    // 2. Length in inches >= requiredLengthInches
-    // 3. Stock quantity > 0
-    // 4. Sorted ascending by length (closest length first)
+    updateSearchLengthHint();
+
+    // 1. Calculate Multi-Cut Stock Optimizer Plan
+    const plan = calculateMultiCutPlan(searchDiameter, requiredLengthInches, piecesCount, unit, activeCutStrategy, inputLength);
+
+    // 2. Individual Matching Rods Query
     const results = rods
       .filter(rod =>
         Number(rod.diameterMm) === searchDiameter &&
@@ -951,18 +1543,26 @@
       .sort((a, b) => getRodLength(a) - getRodLength(b));
 
     const ftEquiv = Number((requiredLengthInches / 12).toFixed(2));
-    if (unit === 'ft') {
-      smartResultsCriteria.textContent = `Criteria: ${searchDiameter} mm diameter × ≥ ${inputLength} Ft (${requiredLengthInches} In) length`;
+    const mEquiv = Number((requiredLengthInches / 39.3701).toFixed(2));
+    const totalCutFt = Number(((requiredLengthInches * piecesCount) / 12).toFixed(2));
+    const totalCutM = Number(((requiredLengthInches * piecesCount) / 39.3701).toFixed(2));
+    const totalCutIn = Number((requiredLengthInches * piecesCount).toFixed(2));
+
+    if (unit === 'm') {
+      smartResultsCriteria.textContent = `Order: ${searchDiameter} mm dia × ${piecesCount} pcs of ${inputLength} M (${requiredLengthInches} In) — Total: ${totalCutM} M`;
+    } else if (unit === 'ft') {
+      smartResultsCriteria.textContent = `Order: ${searchDiameter} mm dia × ${piecesCount} pcs of ${inputLength} Ft (${requiredLengthInches} In) — Total: ${totalCutFt} Ft`;
     } else {
-      smartResultsCriteria.textContent = `Criteria: ${searchDiameter} mm diameter × ≥ ${inputLength} In (${ftEquiv} Ft) length`;
+      smartResultsCriteria.textContent = `Order: ${searchDiameter} mm dia × ${piecesCount} pcs of ${inputLength} In (${ftEquiv} Ft) — Total: ${totalCutIn} In`;
     }
 
     if (results.length === 0) {
       smartSearchResultsContainer.classList.add('hidden');
       smartSearchEmptyState.classList.remove('hidden');
-      const lengthDesc = unit === 'ft'
-        ? `${inputLength} Ft (${requiredLengthInches} In)`
-        : `${inputLength} In (${ftEquiv} Ft)`;
+      if (smartCutPlanSection) smartCutPlanSection.classList.add('hidden');
+      const lengthDesc = unit === 'm'
+        ? `${inputLength} M (${requiredLengthInches} In)`
+        : (unit === 'ft' ? `${inputLength} Ft (${requiredLengthInches} In)` : `${inputLength} In (${ftEquiv} Ft)`);
       smartSearchEmptyDesc.textContent = `No active rods found with exactly ${searchDiameter} mm diameter and at least ${lengthDesc} available in stock.`;
       if (showNotification) {
         showToast(`No available rods found for ${searchDiameter} mm (≥ ${lengthDesc})`, 'warning');
@@ -972,16 +1572,22 @@
 
     smartSearchEmptyState.classList.add('hidden');
     smartSearchResultsContainer.classList.remove('hidden');
-    smartResultsCount.textContent = `${results.length} Suitable ${results.length === 1 ? 'Option' : 'Options'}`;
+    smartResultsCount.textContent = `${results.length} Matching Stock ${results.length === 1 ? 'Size' : 'Sizes'}`;
     smartResultsTableBody.innerHTML = '';
+
+    // Render Multi-Cut Plan
+    renderMultiCutPlan(plan, unit, inputLength);
 
     results.forEach((rod, index) => {
       const tr = document.createElement('tr');
       const isBestFit = index === 0;
       const rodLenInches = getRodLength(rod);
       const rodLenFeet = Number((rodLenInches / 12).toFixed(2));
+      const rodLenM = Number((rodLenInches / 39.3701).toFixed(2));
       const extraLengthInches = Number((rodLenInches - requiredLengthInches).toFixed(2));
       const extraLengthFeet = Number((extraLengthInches / 12).toFixed(2));
+      const extraLengthM = Number((extraLengthInches / 39.3701).toFixed(2));
+      const cutsPossibleInThisRod = Math.floor(rodLenInches / requiredLengthInches);
 
       let fitBadge = '';
       if (isBestFit) {
@@ -991,7 +1597,7 @@
             <svg width="12" height="12" viewBox="0 0 24 24" fill="currentColor">
               <polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"></polygon>
             </svg>
-            Optimal Fit
+            Optimal Single Fit
           </span>
         `;
       } else {
@@ -1001,7 +1607,11 @@
       // Cut Remainder badge
       let remnantBadge = '';
       if (extraLengthInches === 0) {
-        remnantBadge = `<span class="badge-cut-exact">Exact fit (0 scrap)</span>`;
+        remnantBadge = `<span class="badge-cut-exact">Exact 1-pc fit (0 scrap)</span>`;
+      } else if (cutsPossibleInThisRod > 1) {
+        remnantBadge = `<span class="badge-cut-rem" style="background: rgba(99, 102, 241, 0.12); color: #6366f1; border-color: rgba(99, 102, 241, 0.3);">⚡ Yields <strong>${cutsPossibleInThisRod} pcs</strong></span>`;
+      } else if (unit === 'm') {
+        remnantBadge = `<span class="badge-cut-rem">✂️ <strong>${extraLengthM} M</strong> (${extraLengthInches} In) offcut</span>`;
       } else if (unit === 'ft') {
         remnantBadge = `<span class="badge-cut-rem">✂️ <strong>${extraLengthFeet} Ft</strong> (${extraLengthInches} In) offcut</span>`;
       } else {
@@ -1011,7 +1621,16 @@
       // Length display formatting (desktop and mobile)
       let lengthDisplayDesktop = '';
       let lengthDisplayMobile = '';
-      if (unit === 'ft') {
+      if (unit === 'm') {
+        lengthDisplayDesktop = `
+          <div style="font-weight: 700; font-size: 0.95rem;">${formatDisplayLength(rodLenM)} <span style="font-size: 0.75rem; color: var(--primary-600); font-weight: 600;">M</span></div>
+          <div class="text-muted font-mono" style="font-size: 0.75rem;">${formatDisplayLength(rodLenInches)} In (${rodLenFeet} Ft)</div>
+        `;
+        lengthDisplayMobile = `
+          <div style="font-weight: 700; font-size: 0.85rem;">${formatDisplayLength(rodLenM)} M <span style="font-size: 0.725rem; font-weight: normal; color: var(--text-muted);">(${formatDisplayLength(rodLenInches)} In)</span></div>
+          <div style="font-size: 0.7rem; margin-top: 0.15rem;">${remnantBadge}</div>
+        `;
+      } else if (unit === 'ft') {
         lengthDisplayDesktop = `
           <div style="font-weight: 700; font-size: 0.95rem;">${formatDisplayLength(rodLenFeet)} <span style="font-size: 0.75rem; color: var(--primary-600); font-weight: 600;">Ft</span></div>
           <div class="text-muted font-mono" style="font-size: 0.75rem;">${formatDisplayLength(rodLenInches)} In</div>
@@ -1042,7 +1661,7 @@
         <td class="smart-col-rem hide-mobile">${remnantBadge}</td>
         <td class="smart-col-action text-center">
           <div class="table-actions">
-            <button class="btn btn-primary btn-xs btn-open-cut" data-id="${rod.id}" data-cut-len="${requiredLengthInches}" title="Cut ${inputLength} ${unit === 'ft' ? 'Ft' : 'In'} (${requiredLengthInches} In) and keep the offcut">
+            <button class="btn btn-primary btn-xs btn-open-cut" data-id="${rod.id}" data-cut-len="${requiredLengthInches}" data-pcs-per-rod="${Math.min(piecesCount, cutsPossibleInThisRod)}" title="Cut from this rod and keep offcut">
               ✂️ Cut
             </button>
             <button class="desktop-only btn btn-secondary btn-xs btn-open-deduct" data-id="${rod.id}" title="Deduct whole rods">
@@ -1056,22 +1675,26 @@
 
     if (showNotification) {
       const unitLabel = unit === 'ft' ? `${inputLength} Ft` : `${inputLength} In`;
-      showToast(`Found ${results.length} suitable rod length(s) for ${searchDiameter} mm (≥ ${unitLabel})!`, 'success');
+      showToast(`Generated cutting plan for ${piecesCount} pcs of ${unitLabel} (${searchDiameter} mm)!`, 'success');
     }
   }
 
   function resetSmartSearch() {
     refreshDomElements();
-    searchDiameterInput.value = '';
-    searchLengthInput.value = '';
+    if (searchDiameterInput) searchDiameterInput.value = '';
+    if (searchLengthInput) searchLengthInput.value = '';
+    if (searchPiecesInput) searchPiecesInput.value = '1';
     setSmartSearchUnit('in', false);
     lastSmartSearchQuery = null;
-    smartSearchResultsContainer.classList.add('hidden');
-    smartSearchEmptyState.classList.add('hidden');
+    activeCutPlan = null;
+    if (smartSearchResultsContainer) smartSearchResultsContainer.classList.add('hidden');
+    if (smartSearchEmptyState) smartSearchEmptyState.classList.add('hidden');
+    if (smartCutPlanSection) smartCutPlanSection.classList.add('hidden');
+    updateSearchLengthHint();
   }
 
   // --- CUT ROD MODAL ACTIONS (SIZE DEDUCTION & OFFCUT REMNANT) ---
-  function openCutModal(id, defaultCutLength = null) {
+  function openCutModal(id, defaultCutLength = null, defaultPiecesPerRod = 1) {
     const rod = rods.find(r => r.id === id);
     if (!rod) return;
 
@@ -1093,6 +1716,9 @@
     const initialCutLen = defaultCutLength ? parseFloat(defaultCutLength) : rodLen;
     cutRequiredLengthInput.value = initialCutLen;
     cutRequiredLengthInput.max = rodLen;
+    if (cutPiecesPerRodInput) {
+      cutPiecesPerRodInput.value = defaultPiecesPerRod || 1;
+    }
     cutPiecesQtyInput.value = '1';
     cutPiecesQtyInput.max = rod.quantity;
     cutReasonInput.value = '';
@@ -1108,7 +1734,23 @@
 
   function closeCutModal() {
     cutModalOverlay.classList.add('hidden');
+    if (cutMultiRodSuggestionCard) cutMultiRodSuggestionCard.classList.add('hidden');
+    activeModalMultiPlan = null;
     cutForm.reset();
+  }
+
+  function generateMiniBarHtml(rodLen, pieceLen, piecesCount, remainder) {
+    let html = '';
+    const pcPct = (pieceLen / rodLen) * 100;
+    for (let i = 0; i < piecesCount; i++) {
+      html += `<div class="cut-plan-segment segment-piece" style="width: ${pcPct.toFixed(2)}%; font-size: 0.7rem; padding: 0 4px;" title="Piece #${i + 1}: ${pieceLen} In">${pieceLen}In</div>`;
+    }
+    const remPct = Math.max(0, 100 - (piecesCount * pcPct));
+    if (remPct > 0) {
+      const isExact = remainder === 0;
+      html += `<div class="cut-plan-segment ${isExact ? 'segment-offcut-exact' : 'segment-offcut-saved'}" style="width: ${remPct.toFixed(2)}%; font-size: 0.7rem; padding: 0 4px;" title="Remaining Offcut: ${remainder} In">${isExact ? '0' : remainder + 'In'}</div>`;
+    }
+    return html;
   }
 
   function updateCutCalculations() {
@@ -1116,101 +1758,423 @@
     if (!rod) return;
 
     const fullLen = getRodLength(rod);
-    const cutLen = parseFloat(cutRequiredLengthInput.value);
-    const qty = parseInt(cutPiecesQtyInput.value, 10) || 1;
+    const cutPieceLen = parseFloat(cutRequiredLengthInput.value);
+    const piecesNeeded = cutPiecesPerRodInput ? (parseInt(cutPiecesPerRodInput.value, 10) || 1) : 1;
+    const rodsQty = parseInt(cutPiecesQtyInput.value, 10) || 1;
 
     calcOrigLength.textContent = `${fullLen.toFixed(1)} In (${(fullLen / 12).toFixed(2)} Ft)`;
 
-    if (isNaN(cutLen) || cutLen <= 0) {
+    if (isNaN(cutPieceLen) || cutPieceLen <= 0) {
       calcCutLength.textContent = '- 0.0 In';
       calcRemainLength.textContent = '—';
       calcRemainNote.className = 'cut-calc-note warning';
-      calcRemainNote.textContent = 'Please enter a valid positive cut length in inches.';
+      calcRemainNote.textContent = 'Please enter a valid positive cut piece length in inches.';
+      if (cutMultiRodSuggestionCard) cutMultiRodSuggestionCard.classList.add('hidden');
+      activeModalMultiPlan = null;
       btnConfirmCut.disabled = true;
       return;
     }
 
-    calcCutLength.textContent = `- ${cutLen.toFixed(1)} In (${(cutLen / 12).toFixed(2)} Ft)`;
-
-    if (cutLen > fullLen) {
+    if (cutPieceLen > fullLen) {
+      calcCutLength.textContent = '- 0.0 In';
       calcRemainLength.textContent = 'Invalid!';
       calcRemainNote.className = 'cut-calc-note error';
-      calcRemainNote.innerHTML = `⚠️ <strong>Cannot Cut!</strong> Required cut (${cutLen} In / ${(cutLen / 12).toFixed(2)} Ft) exceeds full rod length (${fullLen} In / ${(fullLen / 12).toFixed(2)} Ft).`;
+      calcRemainNote.innerHTML = `⚠️ <strong>Piece Too Long!</strong> Cut piece (${cutPieceLen} In) exceeds rod full length (${fullLen} In).`;
+      if (cutMultiRodSuggestionCard) cutMultiRodSuggestionCard.classList.add('hidden');
+      activeModalMultiPlan = null;
       btnConfirmCut.disabled = true;
       return;
     }
 
-    btnConfirmCut.disabled = false;
-    const remainder = Number((fullLen - cutLen).toFixed(2));
-    const remainderFt = Number((remainder / 12).toFixed(2));
-    calcRemainLength.textContent = `${remainder} In (${remainderFt} Ft)`;
+    const maxPiecesFromThisRod = Math.floor(fullLen / cutPieceLen);
+    const maxPiecesTotalFromThisStock = maxPiecesFromThisRod * rodsQty;
 
-    // Interactive Cut Proportion Bar
-    const barWrap = document.getElementById('cutVisualBarWrap');
-    const barCutSegment = document.getElementById('barCutSegment');
-    const barRemainSegment = document.getElementById('barRemainSegment');
-    if (barWrap && barCutSegment && barRemainSegment) {
-      barWrap.style.display = 'block';
-      const cutPct = Math.min(100, Math.max(0, (cutLen / fullLen) * 100));
-      const remPct = Math.max(0, 100 - cutPct);
-      barCutSegment.style.width = `${cutPct.toFixed(1)}%`;
-      barCutSegment.textContent = cutPct >= 18 ? `Cut ${cutPct.toFixed(0)}%` : '';
-      barCutSegment.title = `Cut length: ${cutLen.toFixed(1)} In (${(cutLen / 12).toFixed(2)} Ft)`;
-      barRemainSegment.style.width = `${remPct.toFixed(1)}%`;
-      barRemainSegment.textContent = remPct >= 18 ? `Offcut ${remPct.toFixed(0)}%` : '';
-      barRemainSegment.title = `Offcut remainder: ${remainder.toFixed(1)} In (${remainderFt} Ft)`;
+    if (cutPiecesPerRodHint) {
+      if (maxPiecesFromThisRod > 0) {
+        cutPiecesPerRodHint.textContent = piecesNeeded > maxPiecesTotalFromThisStock
+          ? `Fits ${maxPiecesTotalFromThisStock} pcs (Needs +${piecesNeeded - maxPiecesTotalFromThisStock} from another rod)`
+          : `Max ${maxPiecesFromThisRod} pcs fit in 1 rod (${maxPiecesTotalFromThisStock} in ${rodsQty} rods)`;
+      } else {
+        cutPiecesPerRodHint.textContent = 'Cannot fit 1 piece';
+      }
     }
 
-    if (remainder === 0) {
-      calcRemainNote.className = 'cut-calc-note';
-      calcRemainNote.innerHTML = `🎯 <strong>Exact Fit!</strong> Full rod length consumed with <strong>0 scrap</strong>. Deducting <strong>${qty}</strong> whole rod(s).`;
+    // CASE 1: All requested pieces fit in the present rod(s)
+    if (piecesNeeded <= maxPiecesTotalFromThisStock) {
+      if (cutMultiRodSuggestionCard) cutMultiRodSuggestionCard.classList.add('hidden');
+      activeModalMultiPlan = null;
+
+      const totalCutPerRod = Number((piecesNeeded * cutPieceLen).toFixed(2));
+      const totalCutPerRodFt = Number((totalCutPerRod / 12).toFixed(2));
+      calcCutLength.textContent = `- ${totalCutPerRod.toFixed(1)} In (${piecesNeeded} pcs × ${cutPieceLen.toFixed(1)} In / ${totalCutPerRodFt} Ft)`;
+
+      btnConfirmCut.disabled = false;
+      btnConfirmCut.textContent = '✂️ Confirm Cut & Update Inventory';
+
+      const remainder = Number((fullLen - totalCutPerRod).toFixed(2));
+      const remainderFt = Number((remainder / 12).toFixed(2));
+      calcRemainLength.textContent = `${remainder} In (${remainderFt} Ft)`;
+
+      // Interactive Cut Single-Rod Proportion Bar
+      const barWrap = document.getElementById('cutVisualBarWrap');
+      const multiBar = document.getElementById('cutVisualMultiBar');
+      if (barWrap && multiBar) {
+        barWrap.style.display = 'block';
+        multiBar.innerHTML = '';
+
+        const pcPct = (cutPieceLen / fullLen) * 100;
+        for (let i = 0; i < piecesNeeded; i++) {
+          const seg = document.createElement('div');
+          seg.className = 'cut-plan-segment segment-piece';
+          seg.style.width = `${pcPct.toFixed(2)}%`;
+          seg.textContent = pcPct >= 14 ? `Cut #${i + 1} (${cutPieceLen.toFixed(1)}In)` : `${cutPieceLen}In`;
+          seg.title = `Piece #${i + 1}: ${cutPieceLen.toFixed(1)} In`;
+          multiBar.appendChild(seg);
+        }
+
+        const remPct = Math.max(0, 100 - (piecesNeeded * pcPct));
+        if (remPct > 0) {
+          const remSeg = document.createElement('div');
+          remSeg.className = remainder === 0 ? 'cut-plan-segment segment-offcut-exact' : 'cut-plan-segment segment-offcut-saved';
+          remSeg.style.width = `${remPct.toFixed(2)}%`;
+          remSeg.textContent = remPct >= 14
+            ? (remainder === 0 ? 'Exact Fit (0 Scrap)' : `Offcut (${remainder.toFixed(1)}In)`)
+            : `${remainder}In`;
+          remSeg.title = `Remaining Offcut: ${remainder.toFixed(1)} In (${remainderFt} Ft)`;
+          multiBar.appendChild(remSeg);
+        }
+      }
+
+      const totalPiecesProduced = piecesNeeded * rodsQty;
+      if (remainder === 0) {
+        calcRemainNote.className = 'cut-calc-note';
+        calcRemainNote.innerHTML = `🎯 <strong>Exact Fit!</strong> Rod fully consumed with <strong>0 scrap</strong>. Deducting <strong>${rodsQty}</strong> whole rod(s) to produce <strong>${totalPiecesProduced} piece(s)</strong> of ${cutPieceLen} In!`;
+      } else {
+        calcRemainNote.className = 'cut-calc-note';
+        calcRemainNote.innerHTML = `✂️ Produces <strong>${totalPiecesProduced} piece(s)</strong> of ${cutPieceLen} In (${piecesNeeded} pcs/rod). <strong>${rodsQty} unit(s)</strong> of <strong>${rod.diameterMm} mm × ${remainder} In (${remainderFt} Ft)</strong> offcut remnant will be added to your inventory!`;
+      }
+      return;
+    }
+
+    // CASE 2: Requested cuts EXCEED present rod capacity!
+    // Trigger Multi-Rod Cut Suggestion Engine!
+    if (cutMultiRodSuggestionCard) cutMultiRodSuggestionCard.classList.remove('hidden');
+
+    const piecesFromThisRod = maxPiecesTotalFromThisStock;
+    const remainingPieces = piecesNeeded - piecesFromThisRod;
+    const totalCutThisRod = Number((piecesFromThisRod * cutPieceLen).toFixed(2));
+    const remainderThisRod = Number((fullLen - totalCutThisRod).toFixed(2));
+
+    calcCutLength.textContent = `- ${totalCutThisRod.toFixed(1)} In (${piecesFromThisRod} pcs from this rod)`;
+    calcRemainLength.textContent = `${remainderThisRod} In (${(remainderThisRod / 12).toFixed(2)} Ft)`;
+    calcRemainNote.className = 'cut-calc-note warning';
+    calcRemainNote.innerHTML = `⚠️ <strong>Present Rod Limit:</strong> Max <strong>${piecesFromThisRod} pcs</strong> fit in this rod. The remaining <strong>${remainingPieces} pc(s)</strong> (${(remainingPieces * cutPieceLen).toFixed(1)} In) will be cut from the suggested rod below.`;
+
+    // Render Rod 1 Bar
+    const barWrap = document.getElementById('cutVisualBarWrap');
+    const multiBar = document.getElementById('cutVisualMultiBar');
+    if (barWrap && multiBar) {
+      barWrap.style.display = 'block';
+      multiBar.innerHTML = '';
+      const pcPct = (cutPieceLen / fullLen) * 100;
+      for (let i = 0; i < piecesFromThisRod; i++) {
+        const seg = document.createElement('div');
+        seg.className = 'cut-plan-segment segment-piece';
+        seg.style.width = `${pcPct.toFixed(2)}%`;
+        seg.textContent = pcPct >= 14 ? `Cut #${i + 1} (${cutPieceLen.toFixed(1)}In)` : `${cutPieceLen}In`;
+        seg.title = `Piece #${i + 1}: ${cutPieceLen.toFixed(1)} In`;
+        multiBar.appendChild(seg);
+      }
+      const remPct = Math.max(0, 100 - (piecesFromThisRod * pcPct));
+      if (remPct > 0) {
+        const remSeg = document.createElement('div');
+        remSeg.className = remainderThisRod === 0 ? 'cut-plan-segment segment-offcut-exact' : 'cut-plan-segment segment-offcut-saved';
+        remSeg.style.width = `${remPct.toFixed(2)}%`;
+        remSeg.textContent = remPct >= 14
+          ? (remainderThisRod === 0 ? 'Exact Fit (0 Scrap)' : `Offcut (${remainderThisRod.toFixed(1)}In)`)
+          : `${remainderThisRod}In`;
+        remSeg.title = `Remaining Offcut: ${remainderThisRod.toFixed(1)} In`;
+        multiBar.appendChild(remSeg);
+      }
+    }
+
+    // Find candidate additional rods with SAME diameter in stock
+    const candidateRods = rods.filter(r => {
+      if (Number(r.diameterMm) !== Number(rod.diameterMm)) return false;
+      if (getRodLength(r) < cutPieceLen) return false;
+      const availUnits = r.id === rod.id ? (r.quantity - rodsQty) : r.quantity;
+      return availUnits > 0;
+    }).sort((a, b) => {
+      const lenA = getRodLength(a);
+      const lenB = getRodLength(b);
+      const neededLen = remainingPieces * cutPieceLen;
+      const aFits = lenA >= neededLen;
+      const bFits = lenB >= neededLen;
+      if (aFits && !bFits) return -1;
+      if (!aFits && bFits) return 1;
+      return lenB - lenA;
+    });
+
+    if (cutSuggestionCapacityText) {
+      cutSuggestionCapacityText.textContent = `Present rod capacity: ${piecesFromThisRod} pcs`;
+    }
+    if (cutSuggestionDesc) {
+      cutSuggestionDesc.innerHTML = `You requested <strong>${piecesNeeded} pcs</strong> (${(piecesNeeded * cutPieceLen).toFixed(1)} In), but this rod only fits <strong>${piecesFromThisRod} pcs</strong>. System suggests cutting <strong>${piecesFromThisRod} pcs</strong> from this rod, then cutting the remaining <strong>${remainingPieces} pc(s)</strong> from another rod in stock:`;
+    }
+
+    if (candidateRods.length === 0) {
+      // No more stock of this diameter
+      if (cutSuggestedRodContainer) cutSuggestedRodContainer.classList.add('hidden');
+      if (cutNoStockWarning) cutNoStockWarning.classList.remove('hidden');
+      btnConfirmCut.disabled = true;
+      btnConfirmCut.textContent = '⚠️ Stock Shortage for Remaining Cuts';
+      activeModalMultiPlan = null;
+      return;
+    }
+
+    // Additional stock exists!
+    if (cutSuggestedRodContainer) cutSuggestedRodContainer.classList.remove('hidden');
+    if (cutNoStockWarning) cutNoStockWarning.classList.add('hidden');
+
+    if (cutSuggestedRodSelect) {
+      const currentSelectedVal = cutSuggestedRodSelect.value;
+      cutSuggestedRodSelect.innerHTML = '';
+      candidateRods.forEach(cRod => {
+        const opt = document.createElement('option');
+        opt.value = cRod.id;
+        const cLen = getRodLength(cRod);
+        const availUnits = cRod.id === rod.id ? (cRod.quantity - rodsQty) : cRod.quantity;
+        const isSame = cRod.id === rod.id;
+        opt.textContent = isSame
+          ? `Unit #${rodsQty + 1} of this same rod — Length: ${cLen} In (${availUnits} more in stock)`
+          : `${cRod.name} — Length: ${cLen} In (${(cLen / 12).toFixed(2)} Ft) • ${availUnits} in stock`;
+        cutSuggestedRodSelect.appendChild(opt);
+      });
+      if (currentSelectedVal && candidateRods.some(r => r.id === currentSelectedVal)) {
+        cutSuggestedRodSelect.value = currentSelectedVal;
+      }
+    }
+
+    const selectedSecondRodId = cutSuggestedRodSelect ? cutSuggestedRodSelect.value : candidateRods[0].id;
+    const secondRod = candidateRods.find(r => r.id === selectedSecondRodId) || candidateRods[0];
+    const secondRodLen = getRodLength(secondRod);
+    const maxPiecesFromSecondRod = Math.floor(secondRodLen / cutPieceLen);
+
+    const piecesFromSecondRod = Math.min(remainingPieces, maxPiecesFromSecondRod);
+    const cutFromSecondRod = Number((piecesFromSecondRod * cutPieceLen).toFixed(2));
+    const remainderFromSecondRod = Number((secondRodLen - cutFromSecondRod).toFixed(2));
+
+    const steps = [
+      {
+        stepNum: 1,
+        rodId: rod.id,
+        rodName: rod.name,
+        diameterMm: Number(rod.diameterMm),
+        sourceLength: fullLen,
+        piecesToCut: piecesFromThisRod,
+        totalCut: totalCutThisRod,
+        remainder: remainderThisRod,
+        isPresentRod: true
+      },
+      {
+        stepNum: 2,
+        rodId: secondRod.id,
+        rodName: secondRod.id === rod.id ? `${rod.name} (Unit #${rodsQty + 1})` : secondRod.name,
+        diameterMm: Number(secondRod.diameterMm),
+        sourceLength: secondRodLen,
+        piecesToCut: piecesFromSecondRod,
+        totalCut: cutFromSecondRod,
+        remainder: remainderFromSecondRod,
+        isPresentRod: false
+      }
+    ];
+
+    const unfulfilledPieces = remainingPieces - piecesFromSecondRod;
+
+    activeModalMultiPlan = {
+      diameterMm: Number(rod.diameterMm),
+      cutPieceLen: cutPieceLen,
+      piecesNeeded: piecesNeeded,
+      steps: steps,
+      unfulfilledPieces: unfulfilledPieces
+    };
+
+    if (cutSuggestedStepsPreview) {
+      cutSuggestedStepsPreview.innerHTML = `
+        <div class="suggested-step-mini-card">
+          <div class="suggested-step-header">
+            <span class="suggested-step-title">Step #1: ${escapeHtml(rod.name)} (Present Rod)</span>
+            <span class="suggested-step-badge">Cut ${piecesFromThisRod} pcs (${totalCutThisRod} In)</span>
+          </div>
+          <div class="suggested-step-details">
+            Full Length: <strong>${fullLen} In</strong> &bull; Cut: <strong>${piecesFromThisRod} pcs × ${cutPieceLen} In</strong> &bull;
+            Offcut: <strong>+${remainderThisRod} In</strong> ${(remainderThisRod > 0 ? '(Saved to Stock)' : '(0 Scrap)')}
+          </div>
+          <div class="cut-plan-visual-bar" style="height: 18px;">
+            ${generateMiniBarHtml(fullLen, cutPieceLen, piecesFromThisRod, remainderThisRod)}
+          </div>
+        </div>
+
+        <div class="suggested-step-mini-card">
+          <div class="suggested-step-header">
+            <span class="suggested-step-title">Step #2: ${escapeHtml(secondRod.id === rod.id ? `${rod.name} (Next Unit in Stock)` : secondRod.name)}</span>
+            <span class="suggested-step-badge" style="background: var(--success-bg); color: var(--success-text);">
+              Cut ${piecesFromSecondRod} pcs (${cutFromSecondRod} In)
+            </span>
+          </div>
+          <div class="suggested-step-details">
+            Source Length: <strong>${secondRodLen} In</strong> &bull; Cut: <strong>${piecesFromSecondRod} pcs × ${cutPieceLen} In</strong> &bull;
+            Offcut: <strong>+${remainderFromSecondRod} In</strong> ${(remainderFromSecondRod > 0 ? '(Saved to Stock)' : '(0 Scrap)')}
+          </div>
+          <div class="cut-plan-visual-bar" style="height: 18px;">
+            ${generateMiniBarHtml(secondRodLen, cutPieceLen, piecesFromSecondRod, remainderFromSecondRod)}
+          </div>
+        </div>
+      `;
+    }
+
+    if (unfulfilledPieces > 0) {
+      btnConfirmCut.disabled = true;
+      btnConfirmCut.textContent = `⚠️ Stock Shortage: Need ${unfulfilledPieces} more piece(s)`;
     } else {
-      calcRemainNote.className = 'cut-calc-note';
-      calcRemainNote.innerHTML = `✂️ <strong>${qty} unit(s)</strong> of <strong>${rod.diameterMm} mm × ${remainder} In (${remainderFt} Ft)</strong> offcut remnant rod will be added to your inventory!`;
+      btnConfirmCut.disabled = false;
+      btnConfirmCut.textContent = `✂️ Cut Both Rods (${piecesNeeded} pcs Total) & Update Stock`;
     }
   }
 
   function handleCutSubmit(e) {
     e.preventDefault();
 
+    // A. MULTI-ROD CUT EXECUTION (WHEN SUGGESTION IS ACTIVE)
+    if (activeModalMultiPlan && activeModalMultiPlan.steps && activeModalMultiPlan.steps.length > 1) {
+      const plan = activeModalMultiPlan;
+      const shouldAddRemnant = cutAutoAddRemnant.checked;
+      const reason = cutReasonInput.value.trim();
+      const createdBy = cutCreatedByInput ? cutCreatedByInput.value.trim() : '';
+      const assignedBy = cutAssignedByInput ? cutAssignedByInput.value.trim() : '';
+
+      for (const step of plan.steps) {
+        const targetRod = rods.find(r => r.id === step.rodId);
+        if (!targetRod) continue;
+
+        // Deduct 1 unit
+        targetRod.quantity -= 1;
+        targetRod.updatedAt = Date.now();
+
+        // Handle offcut remnant
+        if (step.remainder > 0 && shouldAddRemnant) {
+          const existingRemnant = rods.find(r =>
+            r.id !== targetRod.id &&
+            r.name.toLowerCase() === targetRod.name.toLowerCase() &&
+            Number(r.diameterMm) === Number(targetRod.diameterMm) &&
+            Math.abs(getRodLength(r) - step.remainder) < 0.05
+          );
+
+          if (existingRemnant) {
+            existingRemnant.quantity += 1;
+            existingRemnant.updatedAt = Date.now();
+          } else {
+            rods.push({
+              id: 'rod-cut-' + Date.now() + '-' + step.stepNum,
+              sku: targetRod.sku ? `${targetRod.sku}-CUT` : `ROD-${Math.round(targetRod.diameterMm)}MM-${Math.round(step.remainder)}IN`,
+              name: targetRod.name,
+              diameterMm: Number(targetRod.diameterMm),
+              lengthIn: step.remainder,
+              lengthFt: step.remainder,
+              quantity: 1,
+              notes: `Offcut from ${step.sourceLength} In (${step.piecesToCut} pcs of ${plan.cutPieceLen} In)${reason ? ' (' + reason + ')' : ''}`,
+              createdAt: Date.now(),
+              updatedAt: Date.now()
+            });
+          }
+        }
+
+        // Add Cut Log
+        cutLogs.unshift({
+          id: 'log-' + Date.now() + '-' + step.stepNum,
+          timestamp: Date.now(),
+          rodName: targetRod.name,
+          diameterMm: Number(targetRod.diameterMm),
+          originalLengthIn: step.sourceLength,
+          originalLengthFt: step.sourceLength,
+          cutLengthIn: plan.cutPieceLen,
+          cutLengthFt: plan.cutPieceLen,
+          quantity: step.piecesToCut,
+          remainderIn: step.remainder,
+          remainderFt: step.remainder,
+          remnantAdded: step.remainder > 0 && shouldAddRemnant,
+          reason: reason || `Multi-Rod Cut (${step.stepNum}/${plan.steps.length})`,
+          createdBy: createdBy || '',
+          assignedBy: assignedBy || '',
+          assignBy: createdBy || '',
+          assignTo: assignedBy || ''
+        });
+      }
+
+      // Clean up rods with quantity <= 0
+      rods = rods.filter(r => r.quantity > 0);
+
+      localStorage.setItem(STORAGE_KEY, JSON.stringify(rods));
+      localStorage.setItem(CUT_LOGS_STORAGE_KEY, JSON.stringify(cutLogs));
+      updateCutLogsBadge();
+      updateDashboard();
+      closeCutModal();
+
+      // Backend sync
+      window.dispatchEvent(new CustomEvent('syncBothToBackend', {
+        detail: {
+          rods: rods,
+          cutLogs: cutLogs,
+          summary: `Multi-Rod Cut: ${plan.piecesNeeded} pcs of ${plan.cutPieceLen}In (${plan.diameterMm}mm)`
+        }
+      }));
+
+      showToast(`✂️ Successfully cut ${plan.piecesNeeded} pieces across ${plan.steps.length} rods! Offcuts saved.`, 'success');
+      return;
+    }
+
+    // B. STANDARD SINGLE-ROD EXECUTION
     const id = cutRodId.value;
     const rod = rods.find(r => r.id === id);
     if (!rod) return;
 
-    const cutLen = parseFloat(cutRequiredLengthInput.value);
-    const piecesQty = parseInt(cutPiecesQtyInput.value, 10);
+    const cutPieceLen = parseFloat(cutRequiredLengthInput.value);
+    const piecesPerRod = cutPiecesPerRodInput ? (parseInt(cutPiecesPerRodInput.value, 10) || 1) : 1;
+    const rodsQty = parseInt(cutPiecesQtyInput.value, 10);
     const shouldAddRemnant = cutAutoAddRemnant.checked;
     const reason = cutReasonInput.value.trim();
     const createdBy = cutCreatedByInput ? cutCreatedByInput.value.trim() : '';
     const assignedBy = cutAssignedByInput ? cutAssignedByInput.value.trim() : '';
 
-    if (isNaN(cutLen) || cutLen <= 0) {
-      showToast('Please enter a valid cut length in inches', 'warning');
+    if (isNaN(cutPieceLen) || cutPieceLen <= 0) {
+      showToast('Please enter a valid cut piece length in inches', 'warning');
       return;
     }
 
     const sourceLen = getRodLength(rod);
-    if (cutLen > sourceLen) {
-      showToast(`Cut length (${cutLen} In) cannot exceed available rod length (${sourceLen} In)`, 'danger');
+    const totalCutPerRod = Number((piecesPerRod * cutPieceLen).toFixed(2));
+    if (totalCutPerRod > sourceLen) {
+      showToast(`Total cuts per rod (${piecesPerRod} pcs × ${cutPieceLen} In = ${totalCutPerRod} In) exceeds rod length (${sourceLen} In)`, 'danger');
       return;
     }
 
-    if (isNaN(piecesQty) || piecesQty <= 0) {
+    if (isNaN(rodsQty) || rodsQty <= 0) {
       showToast('Please specify at least 1 rod to cut', 'warning');
       return;
     }
 
-    if (piecesQty > rod.quantity) {
-      showToast(`Cannot cut ${piecesQty} rods. Only ${rod.quantity} available in stock!`, 'danger');
+    if (rodsQty > rod.quantity) {
+      showToast(`Cannot cut ${rodsQty} rods. Only ${rod.quantity} available in stock!`, 'danger');
       return;
     }
 
     const origLength = sourceLen;
-    const remainder = Number((origLength - cutLen).toFixed(2));
+    const remainder = Number((origLength - totalCutPerRod).toFixed(2));
+    const totalPiecesProduced = piecesPerRod * rodsQty;
     let remnantMsg = '';
 
     // 1. MODIFY PREVIOUS ROD DATA:
-    if (piecesQty === rod.quantity) {
+    if (rodsQty === rod.quantity) {
       // All units of this rod entry were cut
       if (remainder > 0 && shouldAddRemnant) {
         // Look for an existing rod with the same name, diameter, and remainder length (excluding this rod)
@@ -1218,12 +2182,12 @@
           r.id !== rod.id &&
           r.name.toLowerCase() === rod.name.toLowerCase() &&
           Number(r.diameterMm) === Number(rod.diameterMm) &&
-          getRodLength(r) === remainder
+          Math.abs(getRodLength(r) - remainder) < 0.05
         );
 
         if (existingRemnant) {
           // Merge into the existing rod of that length
-          existingRemnant.quantity += piecesQty;
+          existingRemnant.quantity += rodsQty;
           existingRemnant.updatedAt = Date.now();
           rods = rods.filter(r => r.id !== rod.id);
           remnantMsg = ` Merged into existing ${rod.diameterMm}mm × ${remainder}In stock (Total: <strong>${existingRemnant.quantity} units</strong>)!`;
@@ -1244,19 +2208,19 @@
         remnantMsg = ` Stock fully consumed!`;
       }
     } else {
-      // Some units of this rod entry were cut (piecesQty < rod.quantity)
-      rod.quantity -= piecesQty;
+      // Some units of this rod entry were cut
+      rod.quantity -= rodsQty;
       rod.updatedAt = Date.now();
 
       if (remainder > 0 && shouldAddRemnant) {
         const existingRemnant = rods.find(r =>
           r.name.toLowerCase() === rod.name.toLowerCase() &&
           Number(r.diameterMm) === Number(rod.diameterMm) &&
-          getRodLength(r) === remainder
+          Math.abs(getRodLength(r) - remainder) < 0.05
         );
 
         if (existingRemnant) {
-          existingRemnant.quantity += piecesQty;
+          existingRemnant.quantity += rodsQty;
           existingRemnant.updatedAt = Date.now();
           remnantMsg = ` Added to existing ${rod.diameterMm}mm × ${remainder}In stock (Total: <strong>${existingRemnant.quantity} units</strong>)!`;
         } else {
@@ -1267,13 +2231,13 @@
             diameterMm: Number(rod.diameterMm),
             lengthIn: remainder,
             lengthFt: remainder,
-            quantity: piecesQty,
-            notes: `Cut from ${origLength} In${reason ? ' (' + reason + ')' : ''}`,
+            quantity: rodsQty,
+            notes: `Cut from ${origLength} In (${piecesPerRod} pcs of ${cutPieceLen} In)${reason ? ' (' + reason + ')' : ''}`,
             createdAt: Date.now(),
             updatedAt: Date.now()
           };
           rods.push(newOffcutRod);
-          remnantMsg = ` Created entry for <strong>${piecesQty} unit(s)</strong> of ${rod.diameterMm}mm × ${remainder}In offcut!`;
+          remnantMsg = ` Created entry for <strong>${rodsQty} unit(s)</strong> of ${rod.diameterMm}mm × ${remainder}In offcut!`;
         }
       }
     }
@@ -1286,13 +2250,13 @@
       diameterMm: Number(rod.diameterMm),
       originalLengthIn: origLength,
       originalLengthFt: origLength,
-      cutLengthIn: cutLen,
-      cutLengthFt: cutLen,
-      quantity: piecesQty,
+      cutLengthIn: cutPieceLen,
+      cutLengthFt: cutPieceLen,
+      quantity: totalPiecesProduced,
       remainderIn: remainder,
       remainderFt: remainder,
       remnantAdded: remainder > 0 && shouldAddRemnant,
-      reason: reason || 'Job Cut',
+      reason: reason || (piecesPerRod > 1 ? `Multi-Cut (${piecesPerRod} pcs/rod)` : 'Job Cut'),
       createdBy: createdBy || '',
       assignedBy: assignedBy || '',
       assignBy: createdBy || '',
@@ -1313,9 +2277,8 @@
     }));
 
     showToast(
-      `✂️ <strong>Cut Successful!</strong> Processed cut of ${cutLen} In from ${origLength} In rod.${remnantMsg} Click 🖨️ in Cut Logs to reprint the slip.`,
-      'success',
-      5500
+      `Cut <strong>${totalPiecesProduced} piece(s)</strong> of <strong>${cutPieceLen} In</strong> from ${rod.name} (${rod.diameterMm}mm)!${remnantMsg}`,
+      'success'
     );
 
     // 5. Auto-print invoice slip
@@ -1412,8 +2375,27 @@
     let slipContentHtml = '';
     if (!isMulti) {
       const log = logs[0];
+      const origLen = getLogOrigLength(log);
+      const origLenFt = origLen / 12;
       const cutLenNum = getLogCutLength(log);
-      const cutLenFormatted = (Number.isInteger(cutLenNum) ? cutLenNum : parseFloat(cutLenNum.toFixed(2))) + 'in';
+
+      const isMeterLog = log.cutUnit === 'm' || log.unit === 'm' || (log.cutLengthM !== undefined && log.cutLengthM !== null) || (String(log.id || '').startsWith('plan-') && (searchLengthUnit === 'm' || (activeCutPlan && activeCutPlan.unit === 'm')));
+
+      let cutLenFormatted = '';
+      if (isMeterLog) {
+        const mVal = (log.cutLengthM !== undefined && log.cutLengthM !== null && !isNaN(log.cutLengthM))
+          ? Number(log.cutLengthM)
+          : (activeCutPlan && activeCutPlan.unit === 'm' && activeCutPlan.inputLength !== undefined && activeCutPlan.inputLength !== null
+              ? Number(activeCutPlan.inputLength)
+              : (lastSmartSearchQuery && lastSmartSearchQuery.unit === 'm' && lastSmartSearchQuery.length
+                  ? Number(lastSmartSearchQuery.length)
+                  : Number((cutLenNum / 39.3701).toFixed(3))));
+        const formattedM = Number.isInteger(mVal) ? mVal : parseFloat(mVal.toFixed(3));
+        cutLenFormatted = `${formattedM} meter`;
+      } else {
+        cutLenFormatted = (Number.isInteger(cutLenNum) ? cutLenNum : parseFloat(cutLenNum.toFixed(2))) + 'in';
+      }
+
       const diaFormatted = String(log.diameterMm || '').toLowerCase().endsWith('mm')
         ? String(log.diameterMm)
         : (log.diameterMm + 'mm');
@@ -1423,6 +2405,9 @@
 
       slipContentHtml = `
         <div class="slip-rod-title">${escapeForHtml(log.rodName)}</div>
+        ${origLen > 0 ? `
+        <div class="slip-rod-source-length">Source Rod Length: ${formatDisplayLength(origLen)} in (${formatDisplayLength(origLenFt)} ft)</div>
+        ` : ''}
 
         <div class="slip-data-row">
           <span class="slip-data-label">Assign By :</span>
@@ -1440,7 +2425,7 @@
         </div>
 
         <div class="slip-data-row">
-          <span class="slip-data-label">Length :</span>
+          <span class="slip-data-label">Cut Piece Length :</span>
           <span class="slip-data-value">${escapeForHtml(cutLenFormatted)}</span>
         </div>
 
@@ -1481,14 +2466,29 @@
               <th style="width: 14px; text-align: left;">#</th>
               <th style="text-align: left;">Rod</th>
               <th style="text-align: center; width: 44px;">Size</th>
-              <th style="text-align: right; width: 44px;">Cut</th>
+              <th style="text-align: right; min-width: 44px; white-space: nowrap;">Cut</th>
               <th style="text-align: right; width: 30px;">Qty</th>
             </tr>
           </thead>
           <tbody>
             ${logs.map((log, idx) => {
+              const origLenN = getLogOrigLength(log);
               const cutLenN = getLogCutLength(log);
-              const cutFmt = (Number.isInteger(cutLenN) ? cutLenN : parseFloat(cutLenN.toFixed(2))) + 'in';
+              const isMeterItem = log.cutUnit === 'm' || log.unit === 'm' || (log.cutLengthM !== undefined && log.cutLengthM !== null) || (String(log.id || '').startsWith('plan-') && (searchLengthUnit === 'm' || (activeCutPlan && activeCutPlan.unit === 'm')));
+              let cutFmt = '';
+              if (isMeterItem) {
+                const mVal = (log.cutLengthM !== undefined && log.cutLengthM !== null && !isNaN(log.cutLengthM))
+                  ? Number(log.cutLengthM)
+                  : (activeCutPlan && activeCutPlan.unit === 'm' && activeCutPlan.inputLength !== undefined && activeCutPlan.inputLength !== null
+                      ? Number(activeCutPlan.inputLength)
+                      : (lastSmartSearchQuery && lastSmartSearchQuery.unit === 'm' && lastSmartSearchQuery.length
+                          ? Number(lastSmartSearchQuery.length)
+                          : Number((cutLenN / 39.3701).toFixed(3))));
+                const formattedM = Number.isInteger(mVal) ? mVal : parseFloat(mVal.toFixed(3));
+                cutFmt = `${formattedM} meter`;
+              } else {
+                cutFmt = (Number.isInteger(cutLenN) ? cutLenN : parseFloat(cutLenN.toFixed(2))) + 'in';
+              }
               const diaFmt = String(log.diameterMm || '').toLowerCase().endsWith('mm') ? String(log.diameterMm) : (log.diameterMm + 'mm');
               const q = parseInt(log.quantity, 10) || 1;
               const rem = getLogRemainder(log);
@@ -1497,7 +2497,8 @@
                 <td style="font-weight: 700; vertical-align: top; padding: 4px 2px;">${idx + 1}.</td>
                 <td style="padding: 4px 2px;">
                   <div style="font-weight: 800; font-size: 0.72rem; line-height: 1.2;">${escapeForHtml(log.rodName)}</div>
-                  ${rem > 0 ? `<div style="font-size: 0.61rem; color: #475569; margin-top: 1px;">Offcut: +${formatDisplayLength(rem)}in</div>` : ''}
+                  ${origLenN > 0 ? `<div style="font-size: 0.63rem; font-weight: normal; color: #334155; margin-top: 1px;">Source: ${formatDisplayLength(origLenN)}in (${formatDisplayLength(origLenN / 12)}ft)</div>` : ''}
+                  ${rem > 0 ? `<div style="font-size: 0.61rem; font-weight: normal; color: #475569; margin-top: 1px;">Offcut: +${formatDisplayLength(rem)}in</div>` : ''}
                 </td>
                 <td style="text-align: center; font-weight: 800; font-size: 0.72rem; vertical-align: top; padding: 4px 2px; white-space: nowrap;">${escapeForHtml(diaFmt)}</td>
                 <td style="text-align: right; font-weight: 800; font-size: 0.72rem; vertical-align: top; padding: 4px 2px; white-space: nowrap;">${escapeForHtml(cutFmt)}</td>
@@ -1731,8 +2732,15 @@
       font-size: 0.8rem;
       font-weight: 900;
       color: #000000;
-      margin-bottom: 7px;
+      margin-bottom: 2px;
       line-height: 1.25;
+    }
+    .slip-rod-source-length {
+      font-size: 0.7rem;
+      font-weight: normal;
+      color: #334155;
+      margin-bottom: 7px;
+      line-height: 1.3;
     }
     .slip-data-row {
       display: flex;
@@ -2931,6 +3939,37 @@
         return;
       }
 
+      if (target.classList.contains('btn-len-preset')) {
+        const len = target.dataset.len;
+        refreshDomElements();
+        if (searchLengthInput) {
+          searchLengthInput.value = len;
+          searchLengthInput.focus();
+        }
+        document.querySelectorAll('.btn-len-preset').forEach(b => b.classList.remove('active'));
+        target.classList.add('active');
+        updateSearchLengthHint();
+        if (searchDiameterInput && parseFloat(searchDiameterInput.value) > 0) {
+          executeSmartSearch(searchDiameterInput.value, len, false, searchLengthUnit, searchPiecesInput ? searchPiecesInput.value : 1);
+        }
+        return;
+      }
+
+      if (target.classList.contains('btn-pcs-preset')) {
+        const pcs = target.dataset.pcs;
+        refreshDomElements();
+        if (searchPiecesInput) {
+          searchPiecesInput.value = pcs;
+        }
+        document.querySelectorAll('.btn-pcs-preset').forEach(b => b.classList.remove('active'));
+        target.classList.add('active');
+        updateSearchLengthHint();
+        if (searchDiameterInput && parseFloat(searchDiameterInput.value) > 0 && searchLengthInput && parseFloat(searchLengthInput.value) > 0) {
+          executeSmartSearch(searchDiameterInput.value, searchLengthInput.value, false, searchLengthUnit, pcs);
+        }
+        return;
+      }
+
       if (target.classList.contains('btn-quick-inc')) {
         const id = target.dataset.id;
         quickAdjustQuantity(id, 1);
@@ -2940,7 +3979,8 @@
       } else if (target.classList.contains('btn-open-cut')) {
         const id = target.dataset.id;
         const defaultCutLen = target.dataset.cutLen;
-        openCutModal(id, defaultCutLen);
+        const defaultPcsPerRod = target.dataset.pcsPerRod ? parseInt(target.dataset.pcsPerRod, 10) : 1;
+        openCutModal(id, defaultCutLen, defaultPcsPerRod);
       } else if (target.classList.contains('btn-open-deduct')) {
         const id = target.dataset.id;
         openDeductModal(id);
@@ -2995,6 +4035,52 @@
         setSmartSearchUnit('in');
       } else if (target.id === 'unitPillFt' || target.closest('#unitPillFt')) {
         setSmartSearchUnit('ft');
+      } else if (target.id === 'unitPillM' || target.closest('#unitPillM')) {
+        setSmartSearchUnit('m');
+      } else if (target.id === 'btnSearchPiecesDec') {
+        refreshDomElements();
+        const current = parseInt(searchPiecesInput ? searchPiecesInput.value : '1', 10) || 1;
+        if (current > 1 && searchPiecesInput) {
+          searchPiecesInput.value = current - 1;
+          updateSearchLengthHint();
+          if (searchDiameterInput && parseFloat(searchDiameterInput.value) > 0 && searchLengthInput && parseFloat(searchLengthInput.value) > 0) {
+            executeSmartSearch(searchDiameterInput.value, searchLengthInput.value, false, searchLengthUnit, current - 1);
+          }
+        }
+      } else if (target.id === 'btnSearchPiecesInc') {
+        refreshDomElements();
+        const current = parseInt(searchPiecesInput ? searchPiecesInput.value : '1', 10) || 1;
+        if (searchPiecesInput) {
+          searchPiecesInput.value = current + 1;
+          updateSearchLengthHint();
+          if (searchDiameterInput && parseFloat(searchDiameterInput.value) > 0 && searchLengthInput && parseFloat(searchLengthInput.value) > 0) {
+            executeSmartSearch(searchDiameterInput.value, searchLengthInput.value, false, searchLengthUnit, current + 1);
+          }
+        }
+      } else if (target.id === 'btnStrategyFullLength' || target.closest('#btnStrategyFullLength')) {
+        activeCutStrategy = 'full_length_first';
+        if (lastSmartSearchQuery) {
+          executeSmartSearch(lastSmartSearchQuery.diameter, lastSmartSearchQuery.length, false, lastSmartSearchQuery.unit, lastSmartSearchQuery.pieces);
+        }
+      } else if (target.id === 'btnStrategyOffcuts' || target.closest('#btnStrategyOffcuts')) {
+        activeCutStrategy = 'offcuts_first';
+        if (lastSmartSearchQuery) {
+          executeSmartSearch(lastSmartSearchQuery.diameter, lastSmartSearchQuery.length, false, lastSmartSearchQuery.unit, lastSmartSearchQuery.pieces);
+        }
+      } else if (target.id === 'btnExecuteCutPlan' || target.closest('#btnExecuteCutPlan')) {
+        openExecutePlanModal();
+      } else if (target.id === 'btnPrintPlanSlip' || target.closest('#btnPrintPlanSlip')) {
+        handlePrintPlanSlip();
+      } else if (target.id === 'btnToggleAllMatchingTable' || target.closest('#btnToggleAllMatchingTable')) {
+        isMatchingTableVisible = !isMatchingTableVisible;
+        if (smartResultsTableContainer) {
+          smartResultsTableContainer.classList.toggle('hidden', !isMatchingTableVisible);
+        }
+        if (toggleMatchingTableText) {
+          toggleMatchingTableText.textContent = isMatchingTableVisible ? 'Hide Individual Rods Table' : 'Show Individual Rods Table';
+        }
+      } else if (target.id === 'btnCloseExecutePlanModal' || target.id === 'btnCancelExecutePlanModal') {
+        closeExecutePlanModal();
       } else if (target.id === 'btnInstallPwa' || target.id === 'mobNavInstall' || target.id === 'btnTriggerInstallPrompt') {
         openInstallModal();
       } else if (target.id === 'btnCloseInstallModal' || target.id === 'btnCloseInstallModalBtn') {
@@ -3012,6 +4098,27 @@
         closeConfirmModal();
       } else if (target.id === 'btnExportCsv') {
         exportInventoryCsv();
+      } else if (target.id === 'btnCutPiecesPerRodDown') {
+        refreshDomElements();
+        const current = parseInt(cutPiecesPerRodInput ? cutPiecesPerRodInput.value : '1', 10) || 1;
+        if (current > 1 && cutPiecesPerRodInput) {
+          cutPiecesPerRodInput.value = current - 1;
+          updateCutCalculations();
+        }
+      } else if (target.id === 'btnCutPiecesPerRodUp') {
+        refreshDomElements();
+        const current = parseInt(cutPiecesPerRodInput ? cutPiecesPerRodInput.value : '1', 10) || 1;
+        if (cutPiecesPerRodInput) {
+          cutPiecesPerRodInput.value = current + 1;
+          updateCutCalculations();
+        }
+      } else if (target.id === 'btnCutAddNewRodShortcut') {
+        const dia = cutRodDiameter ? cutRodDiameter.textContent.trim() : '';
+        closeCutModal();
+        openAddModal();
+        if (formDiameterMm && dia) {
+          formDiameterMm.value = dia;
+        }
       } else if (target.id === 'btnCutStepDown') {
         refreshDomElements();
         const current = parseInt(cutPiecesQtyInput ? cutPiecesQtyInput.value : '1', 10) || 1;
@@ -3109,6 +4216,8 @@
         handleCutSubmit(e);
       } else if (e.target.id === 'deductForm') {
         handleDeductSubmit(e);
+      } else if (e.target.id === 'executePlanForm') {
+        handleExecutePlanSubmit(e);
       } else if (e.target.id === 'smartSearchForm') {
         e.preventDefault();
         refreshDomElements();
@@ -3116,7 +4225,8 @@
           searchDiameterInput ? searchDiameterInput.value : '',
           searchLengthInput ? searchLengthInput.value : '',
           true,
-          searchLengthUnit
+          searchLengthUnit,
+          searchPiecesInput ? searchPiecesInput.value : 1
         );
       }
     });
@@ -3126,14 +4236,15 @@
     // Delegated input / change on document
     document.addEventListener('input', (e) => {
       if (!e.target) return;
-      if (e.target.id === 'searchLengthInput' || e.target.id === 'searchDiameterInput') {
+      if (e.target.id === 'searchLengthInput' || e.target.id === 'searchDiameterInput' || e.target.id === 'searchPiecesInput') {
         updateSearchLengthHint();
         const dia = searchDiameterInput ? parseFloat(searchDiameterInput.value) : NaN;
         const len = searchLengthInput ? parseFloat(searchLengthInput.value) : NaN;
+        const pcs = searchPiecesInput ? parseInt(searchPiecesInput.value, 10) : 1;
         if (!isNaN(dia) && dia > 0 && !isNaN(len) && len > 0) {
           if (smartSearchDebounceTimer) clearTimeout(smartSearchDebounceTimer);
           smartSearchDebounceTimer = setTimeout(() => {
-            executeSmartSearch(dia, len, false, searchLengthUnit);
+            executeSmartSearch(dia, len, false, searchLengthUnit, pcs);
           }, 250);
         }
       } else if (e.target.id === 'filterKeyword') {
@@ -3148,7 +4259,7 @@
         renderInventoryTable();
       } else if (e.target.id === 'filterCutLogsInput') {
         renderCutLogsTable();
-      } else if (e.target.id === 'cutRequiredLengthInput' || e.target.id === 'cutPiecesQtyInput') {
+      } else if (e.target.id === 'cutRequiredLengthInput' || e.target.id === 'cutPiecesQtyInput' || e.target.id === 'cutPiecesPerRodInput') {
         updateCutCalculations();
       } else if (e.target.id === 'deductQuantityInput') {
         refreshDomElements();
@@ -3193,6 +4304,8 @@
         updateSelectedCutLogsUI();
       } else if (e.target.id === 'csvFileInput') {
         handleCsvImport(e);
+      } else if (e.target.id === 'cutSuggestedRodSelect') {
+        updateCutCalculations();
       }
     });
 

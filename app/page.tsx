@@ -689,10 +689,12 @@ export default function Home() {
           <form id="smartSearchForm" className="smart-search-form" autoComplete="off">
             <div className="search-inputs-grid">
               <div className="input-field-group">
-                <label htmlFor="searchDiameterInput" className="field-label">
-                  <span>Required Diameter</span>
-                  <span className="field-unit">(mm)</span>
-                </label>
+                <div className="field-label-row">
+                  <label htmlFor="searchDiameterInput" className="field-label">
+                    <span>Required Diameter</span>
+                    <span className="field-unit">(mm)</span>
+                  </label>
+                </div>
                 <div className="input-with-icon">
                   <input type="number" id="searchDiameterInput" className="input-control" placeholder="e.g. 12" step="0.1" min="0.1" required />
                   <span className="input-addon">mm</span>
@@ -714,7 +716,7 @@ export default function Home() {
               <div className="input-field-group">
                 <div className="field-label-row">
                   <label htmlFor="searchLengthInput" className="field-label">
-                    <span>Minimum Required Length</span>
+                    <span>Required Length</span>
                     <span className="field-unit" id="searchLengthUnitBadge">(In)</span>
                   </label>
                   <div className="unit-selector-pills" role="radiogroup" aria-label="Length Unit Selector">
@@ -736,6 +738,15 @@ export default function Home() {
                     >
                       Ft
                     </button>
+                    <button
+                      type="button"
+                      className="unit-pill"
+                      id="unitPillM"
+                      data-unit="m"
+                      title="Set unit to Meters"
+                    >
+                      M
+                    </button>
                   </div>
                 </div>
                 <div className="input-with-icon input-with-unit-select">
@@ -743,7 +754,7 @@ export default function Home() {
                     type="number"
                     id="searchLengthInput"
                     className="input-control"
-                    placeholder="e.g. 6.0"
+                    placeholder="e.g. 4.0"
                     step="any"
                     min="0.01"
                     required
@@ -755,26 +766,74 @@ export default function Home() {
                   >
                     <option value="in">In</option>
                     <option value="ft">Ft</option>
+                    <option value="m">M</option>
                   </select>
                 </div>
-                <div className="field-hint" id="searchLengthHint">Length &ge; required value</div>
+                <div className="quick-dia-chips-row">
+                  <span className="chips-mini-label">Quick:</span>
+                  <div className="chips-mini-scroll" id="quickLengthChipsScroll">
+                    <button type="button" className="btn-len-preset" data-len="1">1</button>
+                    <button type="button" className="btn-len-preset" data-len="2">2</button>
+                    <button type="button" className="btn-len-preset" data-len="4">4</button>
+                    <button type="button" className="btn-len-preset" data-len="6">6</button>
+                    <button type="button" className="btn-len-preset" data-len="8">8</button>
+                    <button type="button" className="btn-len-preset" data-len="10">10</button>
+                  </div>
+                </div>
+                <div className="field-hint" id="searchLengthHint">Cut piece length</div>
               </div>
 
-              <div className="search-action-group">
-                <button type="submit" className="btn btn-primary btn-search" id="btnRunSmartSearch">
-                  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2">
-                    <circle cx="11" cy="11" r="8"></circle>
-                    <line x1="21" y1="21" x2="16.65" y2="16.65"></line>
-                  </svg>
-                  Find Matching Rods
-                </button>
-                <button type="button" className="btn btn-outline" id="btnResetSmartSearch">
-                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                    <path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"></path>
-                    <path d="M3 3v5h5"></path>
-                  </svg>
-                  Reset
-                </button>
+              <div className="input-field-group input-field-pieces">
+                <div className="field-label-row">
+                  <label htmlFor="searchPiecesInput" className="field-label">
+                    <span>Pieces Required</span>
+                    <span className="field-unit">(Qty)</span>
+                  </label>
+                </div>
+                <div className="input-with-icon stepper-input-search">
+                  <button type="button" className="btn-step-mini" id="btnSearchPiecesDec" aria-label="Decrease Pieces">-</button>
+                  <input
+                    type="number"
+                    id="searchPiecesInput"
+                    className="input-control font-mono"
+                    placeholder="1"
+                    defaultValue="1"
+                    min="1"
+                    step="1"
+                    required
+                  />
+                  <button type="button" className="btn-step-mini" id="btnSearchPiecesInc" aria-label="Increase Pieces">+</button>
+                </div>
+                <div className="quick-dia-chips-row">
+                  <span className="chips-mini-label">Quick:</span>
+                  <div className="chips-mini-scroll">
+                    <button type="button" className="btn-pcs-preset active" data-pcs="1">1 pc</button>
+                    <button type="button" className="btn-pcs-preset" data-pcs="2">2 pcs</button>
+                    <button type="button" className="btn-pcs-preset" data-pcs="5">5 pcs</button>
+                    <button type="button" className="btn-pcs-preset" data-pcs="10">10 pcs</button>
+                  </div>
+                </div>
+                <div className="field-hint" id="searchTotalCutHint">Total cut: 1 pc</div>
+              </div>
+
+              <div className="input-field-group input-field-actions">
+                <div className="field-label-row field-label-empty" aria-hidden="true">&nbsp;</div>
+                <div className="search-action-group">
+                  <button type="submit" className="btn btn-primary btn-search" id="btnRunSmartSearch">
+                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2">
+                      <circle cx="11" cy="11" r="8"></circle>
+                      <line x1="21" y1="21" x2="16.65" y2="16.65"></line>
+                    </svg>
+                    Find Cuts &amp; Plan
+                  </button>
+                  <button type="button" className="btn btn-outline" id="btnResetSmartSearch">
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                      <path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"></path>
+                      <path d="M3 3v5h5"></path>
+                    </svg>
+                    Reset
+                  </button>
+                </div>
               </div>
             </div>
           </form>
@@ -783,13 +842,71 @@ export default function Home() {
           <div id="smartSearchResultsContainer" className="smart-results-container hidden">
             <div className="results-header-bar">
               <div className="results-header-info">
-                <h3 className="results-heading" id="smartResultsHeading">Matching Rods</h3>
+                <h3 className="results-heading" id="smartResultsHeading">Matching Rods &amp; Cut Plan</h3>
                 <span className="badge badge-pill badge-primary" id="smartResultsCount">0 Found</span>
               </div>
               <div className="results-criteria" id="smartResultsCriteria"></div>
             </div>
 
-            {/*  Smart Search Results Table  */}
+            {/*  Interactive Smart Multi-Cut Optimization Plan  */}
+            <div id="smartCutPlanSection" className="cut-plan-section hidden">
+              <div className="cut-plan-card">
+                <div className="cut-plan-header">
+                  <div className="cut-plan-header-title">
+                    <div className="badge-icon badge-scissors-icon-sm">
+                      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
+                        <circle cx="6" cy="6" r="3"></circle>
+                        <circle cx="6" cy="18" r="3"></circle>
+                        <line x1="20" y1="4" x2="8.12" y2="15.88"></line>
+                        <line x1="14.47" y1="14.48" x2="20" y2="20"></line>
+                        <line x1="8.12" y1="8.12" x2="12" y2="12"></line>
+                      </svg>
+                    </div>
+                    <div>
+                      <h4 className="cut-plan-title">Optimized Multi-Cut Plan</h4>
+                      <p className="cut-plan-subtitle">Calculated for minimum waste across available stock</p>
+                    </div>
+                  </div>
+                  <div className="cut-plan-strategy-pills" role="radiogroup" aria-label="Cutting Strategy">
+                    <button type="button" className="strategy-pill active" id="btnStrategyFullLength" data-strategy="full_length_first" title="Cut from full length stock first, remainder from another rod">
+                      ⚡ Full Length First
+                    </button>
+                    <button type="button" className="strategy-pill" id="btnStrategyOffcuts" data-strategy="offcuts_first" title="Consume offcut remnants first to clear scrap stock">
+                      ♻️ Use Offcuts First
+                    </button>
+                  </div>
+                </div>
+
+                {/*  Plan KPI Metrics  */}
+                <div className="cut-plan-metrics-grid" id="cutPlanMetricsGrid">
+                  {/*  Dynamically populated  */}
+                </div>
+
+                {/*  Step-by-Step Rod Cutting Visual Breakdown  */}
+                <div className="cut-plan-steps" id="cutPlanStepsList">
+                  {/*  Dynamically populated  */}
+                </div>
+
+                {/*  Plan Action Footer  */}
+                <div className="cut-plan-footer">
+                  <div className="cut-plan-footer-left">
+                    <button type="button" className="btn btn-sm btn-outline" id="btnToggleAllMatchingTable">
+                      📋 <span id="toggleMatchingTableText">Show All Matching Rods Table</span>
+                    </button>
+                  </div>
+                  <div className="cut-plan-footer-right">
+                    <button type="button" className="btn btn-secondary btn-sm" id="btnPrintPlanSlip">
+                      🖨️ Print Cut Slip
+                    </button>
+                    <button type="button" className="btn btn-primary" id="btnExecuteCutPlan">
+                      ✂️ Execute This Cutting Plan
+                    </button>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            {/*  Smart Search Results Table (Individual Rod Options)  */}
             <div className="table-responsive" id="smartResultsTableContainer">
               <table className="data-table" id="smartResultsTable">
                 <thead>
@@ -1146,23 +1263,33 @@ export default function Home() {
             </div>
 
             <div className="form-row">
-              <div className="form-group col-6">
-                <label htmlFor="cutRequiredLengthInput" className="field-label">Required Cut Length <span className="required">*</span></label>
+              <div className="form-group col-4">
+                <label htmlFor="cutRequiredLengthInput" className="field-label">Cut Piece Length <span className="required">*</span></label>
                 <div className="input-with-icon">
-                  <input type="number" id="cutRequiredLengthInput" className="input-control" placeholder="5.0" step="0.1" min="0.1" required />
+                  <input type="number" id="cutRequiredLengthInput" className="input-control font-mono" placeholder="5.0" step="0.1" min="0.1" required />
                   <span className="input-addon">In</span>
                 </div>
-                <div className="field-hint">Piece length you are cutting out</div>
+                <div className="field-hint">Length per individual piece</div>
               </div>
 
-              <div className="form-group col-6">
-                <label htmlFor="cutPiecesQtyInput" className="field-label">Number of Rods to Cut <span className="required">*</span></label>
+              <div className="form-group col-4">
+                <label htmlFor="cutPiecesPerRodInput" className="field-label">Pieces / Cuts Needed <span className="required">*</span></label>
+                <div className="stepper-input">
+                  <button type="button" className="btn-step" id="btnCutPiecesPerRodDown">-</button>
+                  <input type="number" id="cutPiecesPerRodInput" className="input-control stepper-val" defaultValue="1" min="1" step="1" required />
+                  <button type="button" className="btn-step" id="btnCutPiecesPerRodUp">+</button>
+                </div>
+                <div className="field-hint" id="cutPiecesPerRodHint">Total pieces needed</div>
+              </div>
+
+              <div className="form-group col-4">
+                <label htmlFor="cutPiecesQtyInput" className="field-label">Rods to Cut <span className="required">*</span></label>
                 <div className="stepper-input">
                   <button type="button" className="btn-step" id="btnCutStepDown">-</button>
-                  <input type="number" id="cutPiecesQtyInput" className="input-control stepper-val" value="1" min="1" step="1" required />
+                  <input type="number" id="cutPiecesQtyInput" className="input-control stepper-val" defaultValue="1" min="1" step="1" required />
                   <button type="button" className="btn-step" id="btnCutStepUp">+</button>
                 </div>
-                <div className="field-hint">Quantity of source rods to consume</div>
+                <div className="field-hint">Quantity of source rods</div>
               </div>
             </div>
 
@@ -1173,7 +1300,7 @@ export default function Home() {
                 <strong className="font-mono" id="calcOrigLength">0.0 In</strong>
               </div>
               <div className="cut-calc-row">
-                <span>Cut Length (Deducted):</span>
+                <span>Total Cut (Deducted):</span>
                 <strong className="font-mono text-danger" id="calcCutLength">- 0.0 In</strong>
               </div>
               <div className="cut-calc-divider"></div>
@@ -1182,7 +1309,7 @@ export default function Home() {
                 <strong className="font-mono text-success" id="calcRemainLength">0.0 In</strong>
               </div>
               <div className="cut-visual-bar-wrap" id="cutVisualBarWrap" style={{ display: 'none' }}>
-                <div className="cut-visual-bar">
+                <div className="cut-visual-bar" id="cutVisualMultiBar">
                   <div className="cut-bar-segment segment-cut" id="barCutSegment">Cut</div>
                   <div className="cut-bar-segment segment-remain" id="barRemainSegment">Offcut</div>
                 </div>
@@ -1192,9 +1319,51 @@ export default function Home() {
               </div>
             </div>
 
+            {/* Multi-Rod Cut Suggestion Card (Active when cuts exceed single rod length) */}
+            <div className="cut-multi-rod-suggestion-card hidden" id="cutMultiRodSuggestionCard">
+              <div className="suggestion-card-header">
+                <div className="suggestion-badge">
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                    <circle cx="12" cy="12" r="10"></circle>
+                    <line x1="12" y1="8" x2="12" y2="12"></line>
+                    <line x1="12" y1="16" x2="12.01" y2="16"></line>
+                  </svg>
+                  <span>Multi-Rod Suggestion</span>
+                </div>
+                <span className="suggestion-title-text" id="cutSuggestionCapacityText">Max pcs exceeded</span>
+              </div>
+
+              <p className="suggestion-desc" id="cutSuggestionDesc">
+                This rod cannot fit all requested pieces. System suggests cutting from this rod and cutting the remaining pieces from another rod in stock.
+              </p>
+
+              <div id="cutSuggestedRodContainer" className="suggested-rod-container">
+                <div className="form-group" style={{ marginBottom: '0.65rem' }}>
+                  <label htmlFor="cutSuggestedRodSelect" className="field-label" style={{ fontSize: '0.8rem' }}>
+                    Select / Confirm Additional Rod from Stock:
+                  </label>
+                  <select id="cutSuggestedRodSelect" className="input-control font-mono select-compact"></select>
+                </div>
+
+                <div className="suggested-steps-preview" id="cutSuggestedStepsPreview">
+                  {/* Populated dynamically with Rod 1 & Rod 2 breakdown and segmented bars */}
+                </div>
+              </div>
+
+              <div id="cutNoStockWarning" className="suggestion-no-stock hidden">
+                <div className="text-warning-bold">⚠️ No additional matching rods found in stock for this diameter!</div>
+                <p style={{ fontSize: '0.8rem', margin: '0.35rem 0' }}>
+                  To cut the remaining pieces, please add a new rod to stock or reduce the pieces required.
+                </p>
+                <button type="button" className="btn btn-secondary btn-sm" id="btnCutAddNewRodShortcut">
+                  + Add New Rod to Stock
+                </button>
+              </div>
+            </div>
+
             <div className="form-group">
               <label className="checkbox-label">
-                <input type="checkbox" id="cutAutoAddRemnant" checked />
+                <input type="checkbox" id="cutAutoAddRemnant" defaultChecked />
                 <span>Automatically add the remaining offcut piece(s) back into stock inventory</span>
               </label>
             </div>
@@ -1223,6 +1392,70 @@ export default function Home() {
               <button type="button" className="btn btn-secondary" id="btnCancelCutModal">Cancel</button>
               <button type="submit" className="btn btn-primary" id="btnConfirmCut">
                 ✂️ Confirm Cut &amp; Update Inventory
+              </button>
+            </div>
+          </form>
+        </div>
+      </div>
+
+      {/*  MODAL: CONFIRM & EXECUTE MULTI-CUT OPTIMIZATION PLAN  */}
+      <div className="modal-overlay hidden" id="executePlanModalOverlay" role="dialog" aria-modal="true" aria-labelledby="executePlanModalTitle">
+        <div className="modal-card modal-card-lg">
+          <div className="modal-header">
+            <div className="modal-title-group">
+              <div className="modal-icon-badge badge-scissors-icon">
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                  <circle cx="6" cy="6" r="3"></circle>
+                  <circle cx="6" cy="18" r="3"></circle>
+                  <line x1="20" y1="4" x2="8.12" y2="15.88"></line>
+                  <line x1="14.47" y1="14.48" x2="20" y2="20"></line>
+                  <line x1="8.12" y1="8.12" x2="12" y2="12"></line>
+                </svg>
+              </div>
+              <div>
+                <h3 className="modal-title" id="executePlanModalTitle">Execute Multi-Rod Cutting Plan</h3>
+                <p className="modal-subtitle">Review inventory deductions and offcut remnant additions before applying</p>
+              </div>
+            </div>
+            <button type="button" className="modal-close-btn" id="btnCloseExecutePlanModal" aria-label="Close dialog">&times;</button>
+          </div>
+
+          <form id="executePlanForm" className="modal-form" autoComplete="off">
+            <div className="plan-confirm-card" id="executePlanSummaryDetails">
+              {/*  Populated dynamically via JS  */}
+            </div>
+
+            <div className="form-group">
+              <label className="checkbox-label">
+                <input type="checkbox" id="planAutoAddRemnants" defaultChecked />
+                <span>Automatically add all generated offcut remnant pieces back into stock inventory</span>
+              </label>
+            </div>
+
+            <div className="form-group">
+              <label htmlFor="planReasonInput" className="field-label">Job / Work Order / Project Reference <span className="optional">(Optional)</span></label>
+              <input type="text" id="planReasonInput" className="input-control" placeholder="e.g. Work Order #2041, Frame Assembly Job" />
+            </div>
+
+            <div className="form-row">
+              <div className="form-group col-6">
+                <label htmlFor="planCreatedByInput" className="field-label">
+                  👤 Job Created By <span className="optional">(Optional)</span>
+                </label>
+                <input type="text" id="planCreatedByInput" className="input-control" placeholder="e.g. Ahmed, Supervisor" />
+              </div>
+              <div className="form-group col-6">
+                <label htmlFor="planAssignedByInput" className="field-label">
+                  🏷️ Job Assigned By <span className="optional">(Optional)</span>
+                </label>
+                <input type="text" id="planAssignedByInput" className="input-control" placeholder="e.g. Manager Raza" />
+              </div>
+            </div>
+
+            <div className="modal-footer">
+              <button type="button" className="btn btn-secondary" id="btnCancelExecutePlanModal">Cancel</button>
+              <button type="submit" className="btn btn-primary" id="btnConfirmExecutePlan">
+                ⚡ Confirm &amp; Apply Cuts to Stock
               </button>
             </div>
           </form>
