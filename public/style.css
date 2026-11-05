@@ -447,53 +447,64 @@ h6 {
   -webkit-backdrop-filter: var(--glass-blur-lg);
   border: 1px solid var(--border-subtle);
   position: sticky;
-  top: 1.25rem;
+  top: 0.65rem;
   z-index: 40;
-  box-shadow: 0 12px 32px -4px rgba(0, 0, 0, 0.08), inset 0 1px 1px rgba(255, 255, 255, 0.4);
-  max-width: 1320px;
-  margin: 1.25rem auto 1.75rem auto;
+  box-shadow: 0 8px 24px -4px rgba(0, 0, 0, 0.08), inset 0 1px 1px rgba(255, 255, 255, 0.4);
+  max-width: 1440px;
+  margin: 0.65rem auto 1.25rem auto;
   border-radius: 9999px;
-  width: calc(100% - 3rem);
+  width: calc(100% - 1.5rem);
+  box-sizing: border-box;
 }
 
 .nav-container {
-  padding: 0.75rem 1.25rem 0.75rem 1.5rem;
+  padding: 0.35rem 0.75rem;
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: 1rem;
+  gap: 0.5rem;
+  width: 100%;
+  box-sizing: border-box;
 }
 
 .brand-group {
   display: flex;
   align-items: center;
-  gap: 0.875rem;
+  gap: 0.5rem;
+  flex-shrink: 0;
 }
 
 .brand-logo {
-  width: 42px;
-  height: 42px;
+  width: 32px;
+  height: 32px;
   background: linear-gradient(135deg, #0077ed 0%, #0051ba 100%);
   color: white;
   border-radius: var(--radius-md);
   display: flex;
   align-items: center;
   justify-content: center;
-  box-shadow: 0 4px 14px rgba(0, 113, 227, 0.35), inset 0 1px 0 rgba(255, 255, 255, 0.35);
+  box-shadow: 0 2px 8px rgba(0, 113, 227, 0.35), inset 0 1px 0 rgba(255, 255, 255, 0.35);
   border: 1px solid rgba(255, 255, 255, 0.25);
   transition: transform var(--transition-fast), box-shadow var(--transition-fast);
+  flex-shrink: 0;
+}
+
+.brand-logo svg {
+  width: 16px;
+  height: 16px;
 }
 
 .brand-logo:hover {
   transform: scale(1.04);
-  box-shadow: 0 6px 18px rgba(0, 113, 227, 0.45);
+  box-shadow: 0 4px 14px rgba(0, 113, 227, 0.45);
 }
 
 .brand-title {
-  font-size: 1.35rem;
+  font-size: 1.125rem;
   line-height: 1.15;
   font-weight: 800;
-  letter-spacing: -0.03em;
+  letter-spacing: -0.02em;
+  white-space: nowrap;
 }
 
 .brand-accent {
@@ -501,7 +512,7 @@ h6 {
 }
 
 .brand-subtitle {
-  font-size: 0.775rem;
+  font-size: 0.7rem;
   color: var(--text-muted);
   font-weight: 500;
   letter-spacing: -0.01em;
@@ -510,23 +521,34 @@ h6 {
 .nav-actions {
   display: flex;
   align-items: center;
-  gap: 0.625rem;
+  gap: 0.3rem;
+  flex-shrink: 1;
+  flex-wrap: nowrap;
 }
 
 .btn-nav-pill {
   border-radius: 9999px !important;
   display: inline-flex;
   align-items: center;
-  gap: 0.45rem;
+  gap: 0.28rem;
   font-weight: 600;
-  padding: 0.45rem 0.95rem;
-  font-size: 0.825rem;
+  padding: 0.28rem 0.58rem;
+  font-size: 0.75rem;
+  white-space: nowrap;
+  flex-shrink: 0;
   transition: all var(--transition-fast);
+}
+
+.btn-nav-pill svg {
+  width: 13px !important;
+  height: 13px !important;
+  flex-shrink: 0;
 }
 
 .btn-nav-text {
   font-weight: 600;
   white-space: nowrap;
+  font-size: 0.75rem;
 }
 
 .file-input-label {
@@ -763,9 +785,8 @@ h6 {
   align-items: center;
   justify-content: space-between;
   min-height: 28px;
-  height: 28px;
   margin-bottom: 0.35rem;
-  white-space: nowrap;
+  gap: 0.4rem;
 }
 
 .field-label {
@@ -1733,7 +1754,8 @@ h6 {
   justify-content: center;
   padding: 1rem;
   z-index: 100;
-  animation: fadeIn 180ms ease-out;
+  animation: fadeIn 180ms cubic-bezier(0.16, 1, 0.3, 1) forwards;
+  will-change: opacity;
 }
 
 .modal-card {
@@ -1746,7 +1768,12 @@ h6 {
   max-width: 580px;
   overflow: hidden;
   border: 1px solid var(--border-subtle);
-  animation: scaleUp 220ms cubic-bezier(0.16, 1, 0.3, 1);
+  animation: scaleUp 220ms cubic-bezier(0.16, 1, 0.3, 1) forwards;
+  transform-origin: center center;
+  will-change: transform, opacity;
+  backface-visibility: hidden;
+  -webkit-backface-visibility: hidden;
+  transform: translateZ(0);
 }
 
 .modal-card-sm {
@@ -2080,12 +2107,12 @@ h6 {
 @keyframes scaleUp {
   from {
     opacity: 0;
-    transform: scale(0.96);
+    transform: scale(0.96) translateZ(0);
   }
 
   to {
     opacity: 1;
-    transform: scale(1);
+    transform: scale(1) translateZ(0);
   }
 }
 
@@ -2556,6 +2583,103 @@ h6 {
   background: var(--bg-surface);
   backdrop-filter: blur(12px);
   -webkit-backdrop-filter: blur(12px);
+}
+
+/* Cut Logs Date Filter Bar */
+.cut-logs-date-bar {
+  padding: 0.5rem 1.5rem 0.65rem 1.5rem;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+  flex-wrap: wrap;
+  border-bottom: 1px solid var(--border-subtle);
+  background: var(--bg-surface-subtle);
+}
+
+.cut-logs-date-bar-left {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  flex-wrap: wrap;
+}
+
+.cut-logs-date-bar-right {
+  display: flex;
+  align-items: center;
+  margin-left: auto;
+}
+
+.cut-logs-date-label {
+  font-size: 0.78rem;
+  font-weight: 700;
+  color: var(--text-secondary);
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.cut-logs-date-group {
+  display: inline-flex;
+  align-items: center;
+  background: var(--bg-surface);
+  border: 1px solid var(--border-subtle);
+  border-radius: 9999px;
+  padding: 2px 3px;
+  gap: 2px;
+}
+
+.date-pill-btn {
+  display: inline-flex;
+  align-items: center;
+  padding: 3px 10px;
+  font-size: 0.75rem;
+  font-weight: 600;
+  border: none;
+  background: transparent;
+  color: var(--text-secondary);
+  border-radius: 9999px;
+  cursor: pointer;
+  transition: all 0.15s ease;
+  white-space: nowrap;
+}
+
+.date-pill-btn:hover {
+  color: var(--text-main);
+  background: rgba(0, 0, 0, 0.05);
+}
+
+[data-theme="dark"] .date-pill-btn:hover {
+  background: rgba(255, 255, 255, 0.08);
+}
+
+.date-pill-btn.active {
+  background: #7c3aed;
+  color: #ffffff !important;
+  box-shadow: 0 1px 3px rgba(124, 58, 237, 0.35);
+}
+
+.cut-logs-custom-date-box {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.cut-logs-date-picker {
+  font-size: 0.75rem;
+  padding: 2px 7px;
+  height: 28px;
+  border-radius: 6px;
+  border: 1px solid var(--border-medium);
+  background: var(--bg-surface);
+  color: var(--text-main);
+  cursor: pointer;
+}
+
+.cut-logs-date-info {
+  font-size: 0.75rem;
+  color: var(--text-muted);
+  font-weight: 500;
 }
 
 .cut-logs-cards-container {
@@ -3469,11 +3593,16 @@ h6 {
     border-top: 1px solid var(--border-subtle) !important;
   }
 
+  /* Inventory Card View on Mobile (Chrome Rod) */
   .inventory-card-view .table-actions {
-    display: flex !important;
+    display: grid !important;
+    grid-template-columns: 1fr 1fr !important;
+    gap: 0.5rem !important;
     width: 100% !important;
-    justify-content: stretch !important;
-    gap: 0.35rem !important;
+  }
+
+  .inventory-card-view .desktop-only.stepper-mini {
+    display: none !important;
   }
 
   .inventory-card-view .desktop-only {
@@ -3485,10 +3614,15 @@ h6 {
   }
 
   .inventory-card-view .table-actions .btn {
-    flex: 1;
-    font-size: 0.75rem;
-    height: 32px;
-    padding: 0 0.35rem;
+    width: 100% !important;
+    height: 38px !important;
+    font-size: 0.825rem !important;
+    font-weight: 600 !important;
+    padding: 0 0.5rem !important;
+    display: inline-flex !important;
+    align-items: center !important;
+    justify-content: center !important;
+    border-radius: var(--radius-md) !important;
   }
 
   .form-row {
@@ -3506,51 +3640,288 @@ h6 {
   }
 }
 
-/* Mobile Bottom Sheet Modals on small phones (iPhone SE, 12, 13, 14, 15, Android) */
+/* Mobile Bottom Sheet Modals & Responsive Cards (<= 640px) */
 @media (max-width: 640px) {
   .kpi-grid {
     grid-template-columns: 1fr;
   }
 
   .modal-overlay {
-    align-items: flex-end;
-    padding: 0;
+    align-items: flex-end !important;
+    padding: 0 !important;
   }
 
+  /* Responsive bottom sheet for all modals (Add/Edit Rod, Add/Edit Rail, Action Sheet, Deduct, Cut, Admin) */
   .modal-card {
-    max-width: 100%;
-    width: 100%;
-    border-radius: 28px 28px 0 0;
-    max-height: 88vh;
-    overflow-y: auto;
-    background: var(--bg-surface-elevated);
-    backdrop-filter: var(--glass-blur-lg);
-    -webkit-backdrop-filter: var(--glass-blur-lg);
-    border: 1px solid var(--border-subtle);
-    border-bottom: none;
-    box-shadow: var(--shadow-xl);
-    animation: slideUpModal 280ms cubic-bezier(0.16, 1, 0.3, 1);
-    padding-bottom: max(env(safe-area-inset-bottom), 1rem);
+    max-width: 100% !important;
+    width: 100% !important;
+    border-radius: 24px 24px 0 0 !important;
+    max-height: 90vh !important;
+    max-height: 90dvh !important;
+    display: flex !important;
+    flex-direction: column !important;
+    overflow: hidden !important;
+    background: var(--bg-surface-elevated) !important;
+    backdrop-filter: var(--glass-blur-lg) !important;
+    -webkit-backdrop-filter: var(--glass-blur-lg) !important;
+    border: 1px solid var(--border-subtle) !important;
+    border-bottom: none !important;
+    box-shadow: 0 -10px 40px rgba(0, 0, 0, 0.25) !important;
+    animation: slideUpModal 280ms cubic-bezier(0.16, 1, 0.3, 1) forwards !important;
+    transform-origin: bottom center !important;
+    will-change: transform !important;
+    padding: 0 !important;
+    margin: 0 !important;
+  }
+
+  .modal-card[style*="padding"] {
+    padding: 0 !important;
+  }
+
+  .modal-card-sm,
+  .modal-card-xs,
+  .modal-card-lg {
+    max-width: 100% !important;
+    width: 100% !important;
   }
 
   .modal-header {
-    position: sticky;
-    top: 0;
-    background: var(--bg-surface-subtle);
-    backdrop-filter: blur(14px);
-    -webkit-backdrop-filter: blur(14px);
-    z-index: 10;
-    border-bottom: 1px solid var(--border-subtle);
+    flex-shrink: 0 !important;
+    position: relative !important;
+    padding: 1.1rem 1.25rem !important;
+    background: var(--bg-surface-subtle) !important;
+    backdrop-filter: blur(14px) !important;
+    -webkit-backdrop-filter: blur(14px) !important;
+    z-index: 10 !important;
+    border-bottom: 1px solid var(--border-subtle) !important;
   }
 
-  .modal-footer {
-    position: sticky;
-    bottom: 0;
-    background: var(--bg-surface-subtle);
-    backdrop-filter: blur(14px);
-    -webkit-backdrop-filter: blur(14px);
-    z-index: 10;
-    border-top: 1px solid var(--border-subtle);
+  .modal-form {
+    flex: 1 1 auto !important;
+    overflow-y: auto !important;
+    -webkit-overflow-scrolling: touch !important;
+    padding: 1.25rem 1.25rem 0.5rem 1.25rem !important;
+    display: flex !important;
+    flex-direction: column !important;
+    min-height: 0 !important;
+  }
+
+  .modal-body,
+  .action-sheet-body {
+    flex: 1 1 auto !important;
+    overflow-y: auto !important;
+    -webkit-overflow-scrolling: touch !important;
+    min-height: 0 !important;
+    padding: 1.25rem 1.25rem max(env(safe-area-inset-bottom), 1.25rem) 1.25rem !important;
+  }
+
+  /* Form footer inside scrollable form (e.g. grStockForm, rodForm, deductForm, cutForm, admin form) */
+  .modal-form > .modal-footer {
+    flex-shrink: 0 !important;
+    position: sticky !important;
+    bottom: 0 !important;
+    margin-top: auto !important;
+    margin-left: -1.25rem !important;
+    margin-right: -1.25rem !important;
+    margin-bottom: 0 !important;
+    padding: 0.85rem 1.25rem max(env(safe-area-inset-bottom), 0.85rem) 1.25rem !important;
+    width: calc(100% + 2.5rem) !important;
+    display: flex !important;
+    gap: 0.65rem !important;
+    justify-content: stretch !important;
+    background: var(--bg-surface-subtle) !important;
+    backdrop-filter: blur(14px) !important;
+    -webkit-backdrop-filter: blur(14px) !important;
+    border-top: 1px solid var(--border-subtle) !important;
+    z-index: 10 !important;
+  }
+
+  /* Direct modal footer */
+  .modal-card > .modal-footer {
+    flex-shrink: 0 !important;
+    padding: 0.85rem 1.25rem max(env(safe-area-inset-bottom), 0.85rem) 1.25rem !important;
+    width: 100% !important;
+    display: flex !important;
+    gap: 0.65rem !important;
+    justify-content: stretch !important;
+    background: var(--bg-surface-subtle) !important;
+    backdrop-filter: blur(14px) !important;
+    -webkit-backdrop-filter: blur(14px) !important;
+    border-top: 1px solid var(--border-subtle) !important;
+  }
+
+  .modal-footer .btn {
+    flex: 1 1 50% !important;
+    min-height: 44px !important;
+    font-size: 0.925rem !important;
+    font-weight: 600 !important;
+    display: inline-flex !important;
+    align-items: center !important;
+    justify-content: center !important;
+    text-align: center !important;
+    border-radius: var(--radius-md) !important;
+  }
+
+  /* Guided Rail Stock Mobile Card Transformation */
+  #grStockInventoryCard .table-responsive {
+    overflow-x: visible !important;
+    border: none !important;
+    background: transparent !important;
+  }
+
+  #grStockTable {
+    display: block !important;
+    width: 100% !important;
+    border: none !important;
+    background: transparent !important;
+  }
+
+  #grStockTable thead {
+    display: none !important;
+  }
+
+  #grStockTable tbody {
+    display: flex !important;
+    flex-direction: column !important;
+    gap: 0.75rem !important;
+    width: 100% !important;
+  }
+
+  #grStockTable tbody tr.gr-stock-row {
+    display: flex !important;
+    flex-direction: column !important;
+    background: var(--bg-surface) !important;
+    backdrop-filter: var(--glass-blur) !important;
+    -webkit-backdrop-filter: var(--glass-blur) !important;
+    border: 1px solid var(--border-subtle) !important;
+    border-radius: var(--radius-xl) !important;
+    padding: 0.95rem !important;
+    margin-bottom: 0 !important;
+    box-shadow: var(--shadow-sm) !important;
+    gap: 0.65rem !important;
+    width: 100% !important;
+    box-sizing: border-box !important;
+  }
+
+  #grStockTable td {
+    display: block !important;
+    padding: 0 !important;
+    border: none !important;
+    width: 100% !important;
+    overflow: visible !important;
+    text-overflow: clip !important;
+  }
+
+  #grStockTable .gr-col-model {
+    display: flex !important;
+    align-items: center !important;
+    justify-content: space-between !important;
+    border-bottom: 1px solid var(--border-subtle) !important;
+    padding-bottom: 0.5rem !important;
+  }
+
+  #grStockTable .gr-col-pitch {
+    display: flex !important;
+    align-items: center !important;
+    justify-content: space-between !important;
+    font-size: 0.85rem !important;
+    background: var(--bg-surface-subtle) !important;
+    padding: 0.45rem 0.75rem !important;
+    border-radius: var(--radius-md) !important;
+    border: 1px solid var(--border-subtle) !important;
+  }
+
+  #grStockTable .gr-mobile-spec-label {
+    display: inline !important;
+    font-size: 0.75rem !important;
+    font-weight: 600 !important;
+    color: var(--text-muted) !important;
+    text-transform: uppercase !important;
+  }
+
+  #grStockTable .gr-col-length {
+    display: flex !important;
+    align-items: center !important;
+    justify-content: space-between !important;
+    background: var(--bg-surface-subtle) !important;
+    padding: 0.45rem 0.75rem !important;
+    border-radius: var(--radius-md) !important;
+    border: 1px solid var(--border-subtle) !important;
+  }
+
+  #grStockTable .gr-col-length::before {
+    content: "STOCK LENGTH";
+    font-size: 0.75rem;
+    font-weight: 600;
+    color: var(--text-muted);
+  }
+
+  #grStockTable .gr-col-length .gr-len-mm {
+    display: inline !important;
+    margin-left: 0.35rem !important;
+  }
+
+  #grStockTable .gr-col-qty {
+    display: flex !important;
+    align-items: center !important;
+    justify-content: space-between !important;
+    background: var(--bg-surface-subtle) !important;
+    padding: 0.45rem 0.75rem !important;
+    border-radius: var(--radius-md) !important;
+    border: 1px solid var(--border-subtle) !important;
+  }
+
+  #grStockTable .gr-col-qty::before {
+    content: "QUANTITY";
+    font-size: 0.75rem;
+    font-weight: 600;
+    color: var(--text-muted);
+  }
+
+  #grStockTable .gr-stock-qty-stepper {
+    display: flex !important;
+    align-items: center !important;
+    gap: 0.4rem !important;
+  }
+
+  #grStockTable .btn-gr-qty-dec,
+  #grStockTable .btn-gr-qty-inc {
+    width: 30px !important;
+    height: 30px !important;
+    font-size: 0.95rem !important;
+    border-radius: var(--radius-sm) !important;
+    display: inline-flex !important;
+    align-items: center !important;
+    justify-content: center !important;
+  }
+
+  #grStockTable .gr-col-notes {
+    font-size: 0.8rem !important;
+    color: var(--text-secondary) !important;
+    padding: 0.15rem 0.25rem !important;
+  }
+
+  #grStockTable .gr-col-actions {
+    border-top: 1px solid var(--border-subtle) !important;
+    padding-top: 0.65rem !important;
+  }
+
+  #grStockTable .gr-stock-actions {
+    display: grid !important;
+    grid-template-columns: 1.5fr 1fr 1fr !important;
+    gap: 0.5rem !important;
+    width: 100% !important;
+  }
+
+  #grStockTable .gr-stock-actions .btn {
+    width: 100% !important;
+    min-height: 40px !important;
+    font-size: 0.85rem !important;
+    font-weight: 600 !important;
+    display: inline-flex !important;
+    align-items: center !important;
+    justify-content: center !important;
+    border-radius: var(--radius-md) !important;
   }
 
   .toast-container {
@@ -3823,10 +4194,19 @@ nextjs-portal,
   background: #ffffff !important;
 }
 
+#cutLogsModalOverlay .cut-logs-date-bar {
+  background: #f8fafc !important;
+}
+
 [data-theme="dark"] #cutLogsModalOverlay .modal-header,
 [data-theme="dark"] #cutLogsModalOverlay .cut-logs-modal-footer,
 [data-theme="dark"] #cutLogsModalOverlay .cut-logs-toolbar {
   background: #0b1120 !important;
+}
+
+[data-theme="dark"] #cutLogsModalOverlay .cut-logs-date-bar {
+  background: #0f172a !important;
+  border-bottom-color: #1e293b !important;
 }
 
 /* Horizontal scroll & readable columns for Cut Logs Table */
@@ -3901,6 +4281,23 @@ nextjs-portal,
     flex-direction: column !important;
     gap: 0.6rem !important;
     border-bottom: 1px solid var(--border-medium) !important;
+  }
+
+  #cutLogsModalOverlay .cut-logs-date-bar {
+    padding: 0.5rem 1rem !important;
+    flex-direction: column !important;
+    align-items: stretch !important;
+    gap: 0.5rem !important;
+  }
+
+  #cutLogsModalOverlay .cut-logs-date-bar-left {
+    width: 100% !important;
+    justify-content: flex-start !important;
+  }
+
+  #cutLogsModalOverlay .cut-logs-date-bar-right {
+    width: 100% !important;
+    justify-content: flex-end !important;
   }
 
   #cutLogsModalOverlay .search-input-wrapper {
@@ -4005,11 +4402,24 @@ nextjs-portal,
    SMART MULTI-CUT STOCK OPTIMIZER & CUTTING PLAN STYLING
    ========================================================================== */
 
-/* Search Inputs Grid Enhancement */
-@media (min-width: 900px) {
+/* Search Inputs Grid Responsive Layout */
+@media (min-width: 1080px) {
   .search-inputs-grid {
-    grid-template-columns: minmax(180px, 1.15fr) minmax(210px, 1.25fr) minmax(175px, 1fr) auto !important;
+    grid-template-columns: minmax(190px, 1fr) minmax(280px, 1.45fr) minmax(170px, 0.9fr) auto !important;
     align-items: start !important;
+  }
+}
+
+@media (min-width: 769px) and (max-width: 1079px) {
+  .search-inputs-grid {
+    grid-template-columns: 1fr 1fr !important;
+    gap: 1.15rem 1.25rem !important;
+  }
+  .input-field-actions {
+    grid-column: span 2;
+  }
+  .search-action-group {
+    justify-content: flex-end;
   }
 }
 
@@ -4533,3 +4943,863 @@ nextjs-portal,
   text-align: center;
   color: var(--warning-text);
 }
+
+
+/* ==========================================================================
+   Guided Rail Module — HGR Rail Search & Cutting Validation UI
+   ========================================================================== */
+
+/* ── Section Shell ─────────────────────────────────────────────────────────── */
+.guided-rail-card {
+  position: relative;
+}
+
+/* ── Category Nav Tab (inside section header) ──────────────────────────────── */
+.gr-category-tabs {
+  display: flex;
+  gap: 0.5rem;
+  flex-wrap: wrap;
+  margin-bottom: 1.25rem;
+}
+
+.gr-tab-btn {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  padding: 0.4rem 0.9rem;
+  border: 1px solid var(--border-medium);
+  border-radius: var(--radius-full);
+  background: var(--bg-surface-subtle);
+  color: var(--text-secondary);
+  font-size: 0.82rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all var(--transition-fast);
+  white-space: nowrap;
+}
+.gr-tab-btn:hover {
+  background: var(--primary-50);
+  border-color: var(--primary-200);
+  color: var(--primary-500);
+}
+.gr-tab-btn.active {
+  background: var(--primary-500);
+  border-color: var(--primary-500);
+  color: #fff;
+  box-shadow: 0 4px 12px rgba(0,113,227,0.28);
+}
+
+/* ── Two-panel layout ──────────────────────────────────────────────────────── */
+.gr-layout {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 1.5rem;
+  align-items: start;
+}
+
+@media (max-width: 860px) {
+  .gr-layout {
+    grid-template-columns: 1fr;
+  }
+}
+
+/* ── Search Panel ──────────────────────────────────────────────────────────── */
+.gr-search-panel {
+  background: var(--bg-surface-subtle);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-lg);
+  padding: 1.25rem 1.5rem;
+}
+
+.gr-panel-title {
+  font-size: 0.95rem;
+  font-weight: 700;
+  color: var(--text-main);
+  margin: 0 0 1rem 0;
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.gr-spec-fields {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 0.75rem;
+  margin-bottom: 1rem;
+}
+
+.gr-spec-field {
+  display: flex;
+  flex-direction: column;
+  gap: 0.3rem;
+}
+
+.gr-spec-label {
+  font-size: 0.75rem;
+  font-weight: 600;
+  color: var(--text-muted);
+  letter-spacing: 0.03em;
+  text-transform: uppercase;
+}
+
+.gr-spec-value {
+  background: var(--bg-surface-elevated);
+  border: 1px solid var(--border-medium);
+  border-radius: var(--radius-sm);
+  padding: 0.5rem 0.75rem;
+  font-size: 0.9rem;
+  font-family: var(--font-mono);
+  color: var(--text-main);
+  min-height: 36px;
+}
+
+/* ── Validation Result Box ─────────────────────────────────────────────────── */
+.gr-validation-result {
+  margin-top: 1rem;
+  border-radius: var(--radius-md);
+  padding: 0.9rem 1rem;
+  font-size: 0.875rem;
+  line-height: 1.5;
+  animation: grFadeIn 0.25s ease;
+}
+.gr-validation-result.hidden {
+  display: none;
+}
+
+@keyframes grFadeIn {
+  from { opacity: 0; transform: translateY(4px); }
+  to   { opacity: 1; transform: translateY(0);   }
+}
+
+.gr-valid {
+  background: var(--success-bg);
+  border: 1px solid var(--success-border);
+  color: var(--success-text);
+}
+.gr-invalid {
+  background: var(--danger-bg);
+  border: 1px solid var(--danger-border);
+  color: var(--danger-text);
+}
+.gr-warning {
+  background: var(--warning-bg);
+  border: 1px solid var(--warning-border);
+  color: var(--warning-text);
+}
+.gr-loading {
+  background: var(--info-bg);
+  border: 1px solid rgba(0,113,227,0.2);
+  color: var(--info-text);
+}
+
+.gr-result-header {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.65rem;
+}
+
+.gr-result-icon {
+  flex-shrink: 0;
+  margin-top: 1px;
+}
+
+.gr-result-message {
+  flex: 1;
+  font-weight: 500;
+}
+
+.gr-spin {
+  animation: rodsync-spin 0.9s linear infinite;
+}
+
+/* ── Validation detail rows ────────────────────────────────────────────────── */
+.gr-validation-details {
+  margin-top: 0.75rem;
+  border-top: 1px solid currentColor;
+  border-opacity: 0.2;
+  padding-top: 0.65rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.3rem;
+  opacity: 0.85;
+}
+
+.gr-detail-row {
+  display: flex;
+  justify-content: space-between;
+  font-size: 0.8rem;
+}
+
+.gr-detail-label {
+  color: inherit;
+  opacity: 0.75;
+}
+
+.gr-detail-val {
+  font-weight: 700;
+}
+
+/* ── Reference Table Panel ─────────────────────────────────────────────────── */
+.gr-ref-panel {
+  background: var(--bg-surface-subtle);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-lg);
+  padding: 1.25rem 1.5rem;
+}
+
+.gr-ref-search {
+  margin-bottom: 0.75rem;
+}
+
+.gr-spec-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.82rem;
+}
+
+.gr-spec-table th {
+  background: var(--bg-surface-elevated);
+  color: var(--text-muted);
+  font-weight: 700;
+  font-size: 0.72rem;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  padding: 0.5rem 0.6rem;
+  border-bottom: 1px solid var(--border-medium);
+  text-align: center;
+}
+
+.gr-spec-table th:first-child { text-align: left; }
+
+.gr-spec-table td {
+  padding: 0.55rem 0.6rem;
+  border-bottom: 1px solid var(--border-subtle);
+  color: var(--text-secondary);
+  vertical-align: middle;
+}
+
+.gr-spec-table td:first-child {
+  text-align: left;
+}
+
+.gr-spec-table tbody tr:last-child td {
+  border-bottom: none;
+}
+
+.gr-spec-table tbody tr:hover {
+  background: var(--primary-50);
+}
+
+/* Admin link pill */
+.gr-admin-link {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  font-size: 0.78rem;
+  font-weight: 600;
+  color: var(--primary-500);
+  text-decoration: none;
+  padding: 0.3rem 0.7rem;
+  border-radius: var(--radius-full);
+  border: 1px solid var(--primary-200);
+  background: var(--primary-50);
+  transition: all var(--transition-fast);
+}
+.gr-admin-link:hover {
+  background: var(--primary-100);
+  border-color: var(--primary-500);
+}
+
+/* Selected Model Specification Pill */
+.gr-spec-summary-pill {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  margin-top: 0.5rem;
+  padding: 0.4rem 0.75rem;
+  border-radius: var(--radius-md);
+  background: rgba(124, 58, 237, 0.08);
+  border: 1px solid rgba(124, 58, 237, 0.25);
+  font-size: 0.8125rem;
+  color: var(--text-main);
+}
+
+[data-theme="dark"] .gr-spec-summary-pill {
+  background: rgba(124, 58, 237, 0.18);
+  border-color: rgba(167, 139, 250, 0.35);
+}
+
+.gr-spec-badge-tag {
+  display: inline-flex;
+  align-items: center;
+  padding: 0.15rem 0.55rem;
+  border-radius: var(--radius-full);
+  background: #7c3aed;
+  color: #ffffff;
+  font-weight: 700;
+  font-size: 0.75rem;
+  letter-spacing: 0.03em;
+  flex-shrink: 0;
+}
+
+.gr-spec-detail {
+  color: var(--text-secondary);
+  font-size: 0.8rem;
+  line-height: 1.35;
+}
+
+.gr-spec-table tr.selected-row {
+  background: rgba(124, 58, 237, 0.12) !important;
+  font-weight: 600;
+}
+
+/* Guided Rail Stock Inventory Card */
+.gr-stock-card {
+  position: relative;
+  width: 100%;
+}
+
+.gr-stock-card .data-table th {
+  background: rgba(124, 58, 237, 0.05);
+  font-size: 0.75rem;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+[data-theme="dark"] .gr-stock-card .data-table th {
+  background: rgba(124, 58, 237, 0.14);
+}
+
+.gr-stock-card .data-table td {
+  padding: 0.65rem 0.75rem;
+  font-size: 0.85rem;
+  vertical-align: middle;
+}
+
+/* Baseline Guided Rail Stock Table Elements (Desktop & Base) */
+.gr-stock-model-wrap {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.gr-stock-sku {
+  font-size: 0.75rem;
+  color: var(--text-muted);
+}
+
+.gr-mobile-spec-label {
+  display: none;
+}
+
+.gr-len-in {
+  font-weight: 700;
+  color: #7c3aed;
+  font-size: 0.95rem;
+}
+
+.gr-len-mm {
+  font-size: 0.75rem;
+  color: var(--text-muted);
+  display: block;
+}
+
+.gr-stock-qty-stepper {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  justify-content: flex-end;
+}
+
+.btn-gr-qty-dec,
+.btn-gr-qty-inc {
+  padding: 0 6px !important;
+  height: 22px !important;
+  font-weight: 700 !important;
+}
+
+.gr-stock-qty-display {
+  font-weight: 700;
+  min-width: 24px;
+  text-align: center;
+}
+
+.gr-stock-notes-text {
+  font-size: 0.8rem;
+  color: var(--text-secondary);
+}
+
+.gr-stock-actions {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  justify-content: center;
+}
+
+.btn-gr-action-cut {
+  background: #7c3aed !important;
+  border-color: #7c3aed !important;
+  font-size: 0.72rem !important;
+  padding: 0.2rem 0.55rem !important;
+  border-radius: 9999px !important;
+}
+
+.btn-gr-action-edit {
+  font-size: 0.72rem !important;
+  padding: 0.2rem 0.45rem !important;
+  border-radius: 9999px !important;
+}
+
+.btn-gr-action-delete {
+  font-size: 0.72rem !important;
+  padding: 0.2rem 0.45rem !important;
+  color: #ef4444 !important;
+  border-color: rgba(239, 68, 68, 0.3) !important;
+  border-radius: 9999px !important;
+}
+
+/* Quick Stock Length Preset Buttons in Add Guided Rail Stock Modal */
+#grStockQuickLengthChips {
+  display: flex;
+  align-items: center;
+  gap: 0.3rem;
+  overflow-x: auto;
+  scrollbar-width: none;
+}
+
+#grStockQuickLengthChips::-webkit-scrollbar {
+  display: none;
+}
+
+#grStockQuickLengthChips .btn-len-preset {
+  padding: 2px 7px !important;
+  font-size: 0.72rem !important;
+  font-weight: 600 !important;
+  min-width: unset !important;
+  max-width: fit-content !important;
+  white-space: nowrap !important;
+  border-radius: var(--radius-full) !important;
+  line-height: 1.25 !important;
+}
+
+/* ════════════════════════════════════════════════════════════════
+   PRODUCT CATEGORY SEGMENTED TOGGLE (CHROME ROD vs GUIDED RAIL)
+   ════════════════════════════════════════════════════════════════ */
+.system-switcher-wrap {
+  display: inline-flex;
+  align-items: center;
+  background: var(--bg-surface-soft, rgba(0, 0, 0, 0.05));
+  border: 1px solid var(--border-color, rgba(0, 0, 0, 0.1));
+  border-radius: 9999px;
+  padding: 2px;
+  gap: 2px;
+  box-shadow: inset 0 1px 2px rgba(0, 0, 0, 0.04);
+  flex-shrink: 0;
+}
+
+[data-theme="dark"] .system-switcher-wrap {
+  background: rgba(255, 255, 255, 0.06);
+  border-color: rgba(255, 255, 255, 0.12);
+}
+
+.system-switcher-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.28rem;
+  padding: 0.26rem 0.55rem;
+  border-radius: 9999px;
+  border: none;
+  background: transparent;
+  color: var(--text-secondary, #64748b);
+  font-size: 0.75rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+  white-space: nowrap;
+  user-select: none;
+  flex-shrink: 0;
+}
+
+.system-switcher-btn:hover:not(.active) {
+  color: var(--text-main, #1e293b);
+  background: rgba(0, 0, 0, 0.04);
+}
+
+[data-theme="dark"] .system-switcher-btn:hover:not(.active) {
+  color: #f1f5f9;
+  background: rgba(255, 255, 255, 0.05);
+}
+
+.system-switcher-btn.active.system-switcher-chrome {
+  background: var(--bg-surface, #ffffff);
+  color: #0284c7;
+  font-weight: 700;
+  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.12), 0 0 0 1px rgba(2, 132, 199, 0.15);
+}
+
+[data-theme="dark"] .system-switcher-btn.active.system-switcher-chrome {
+  background: rgba(2, 132, 199, 0.22);
+  color: #38bdf8;
+  border: 1px solid rgba(56, 189, 248, 0.35);
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.3);
+}
+
+.system-switcher-btn.active.system-switcher-rail {
+  background: linear-gradient(135deg, #7c3aed, #6d28d9);
+  color: #ffffff;
+  font-weight: 700;
+  box-shadow: 0 2px 6px rgba(124, 58, 237, 0.35);
+}
+
+[data-theme="dark"] .system-switcher-btn.active.system-switcher-rail {
+  background: linear-gradient(135deg, #8b5cf6, #7c3aed);
+  color: #ffffff;
+  box-shadow: 0 2px 8px rgba(139, 92, 246, 0.4);
+}
+
+/* Guided Rail Unit Selector Pills */
+.gr-unit-selector-pills {
+  flex-shrink: 0 !important;
+  display: inline-flex !important;
+  align-items: center !important;
+  background: var(--bg-surface-soft, rgba(0, 0, 0, 0.05)) !important;
+  border: 1px solid var(--border-medium, rgba(0, 0, 0, 0.12)) !important;
+  border-radius: 9999px !important;
+  padding: 2px !important;
+  gap: 2px !important;
+}
+
+.gr-unit-selector-pills .unit-pill {
+  padding: 2px 7px !important;
+  font-size: 0.72rem !important;
+  font-weight: 700 !important;
+  line-height: 1.2 !important;
+  border-radius: 9999px !important;
+  border: none !important;
+  cursor: pointer !important;
+}
+
+.gr-unit-selector-pills .unit-pill.active {
+  background: linear-gradient(135deg, #7c3aed, #6d28d9) !important;
+  color: #ffffff !important;
+  box-shadow: 0 1px 4px rgba(124, 58, 237, 0.4) !important;
+}
+
+[data-theme="dark"] .gr-unit-selector-pills .unit-pill.active {
+  background: linear-gradient(135deg, #8b5cf6, #7c3aed) !important;
+  color: #ffffff !important;
+  box-shadow: 0 2px 6px rgba(139, 92, 246, 0.45) !important;
+}
+
+/* ════════════════════════════════════════════════════════════════
+   GUIDED RAIL CUT ACTION BUTTONS & MODAL SMOOTH TRANSITIONS
+   ════════════════════════════════════════════════════════════════ */
+.btn-gr-open-cut-modal,
+#btnGrCutAction {
+  background: linear-gradient(135deg, #7c3aed, #6d28d9) !important;
+  border: 1px solid #6d28d9 !important;
+  color: #ffffff !important;
+  border-radius: var(--radius-md) !important;
+  font-weight: 600 !important;
+  padding: 0.45rem 1rem !important;
+  min-height: 38px !important;
+  display: inline-flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+  gap: 0.45rem !important;
+  box-shadow: 0 4px 12px rgba(124, 58, 237, 0.3) !important;
+  cursor: pointer !important;
+  flex-shrink: 0 !important;
+  white-space: nowrap !important;
+  user-select: none !important;
+  -webkit-user-select: none !important;
+  touch-action: manipulation !important;
+  transform: translateZ(0);
+  transition: transform 0.16s cubic-bezier(0.16, 1, 0.3, 1), box-shadow 0.16s ease, filter 0.16s ease !important;
+  will-change: transform, box-shadow;
+}
+
+.btn-gr-open-cut-modal:hover,
+#btnGrCutAction:hover {
+  background: linear-gradient(135deg, #8b5cf6, #7c3aed) !important;
+  box-shadow: 0 6px 18px rgba(124, 58, 237, 0.45) !important;
+  transform: translateY(-1px) translateZ(0) !important;
+}
+
+.btn-gr-open-cut-modal:active,
+#btnGrCutAction:active {
+  transform: scale(0.97) translateZ(0) !important;
+  box-shadow: 0 2px 6px rgba(124, 58, 237, 0.4) !important;
+  filter: brightness(0.95) !important;
+  transition-duration: 0.06s !important;
+}
+
+#grCutModalOverlay .modal-card {
+  will-change: transform, opacity;
+  transform-origin: center center;
+  backface-visibility: hidden;
+  -webkit-backface-visibility: hidden;
+}
+
+/* Apply Recommended Minimum Length Button */
+.btn-gr-apply-rec {
+  background: linear-gradient(135deg, #10b981, #059669) !important;
+  border: 1px solid #059669 !important;
+  color: #ffffff !important;
+  font-weight: 700 !important;
+  font-size: 0.8rem !important;
+  padding: 0.45rem 1rem !important;
+  border-radius: var(--radius-md) !important;
+  display: inline-flex !important;
+  align-items: center !important;
+  gap: 0.45rem !important;
+  box-shadow: 0 2px 8px rgba(16, 185, 129, 0.3) !important;
+  cursor: pointer !important;
+  user-select: none !important;
+  -webkit-user-select: none !important;
+  transition: all 0.16s ease !important;
+}
+
+.btn-gr-apply-rec:hover {
+  background: linear-gradient(135deg, #34d399, #10b981) !important;
+  box-shadow: 0 4px 12px rgba(16, 185, 129, 0.4) !important;
+  transform: translateY(-1px) !important;
+}
+
+.btn-gr-apply-rec:active {
+  transform: scale(0.97) !important;
+}
+
+.btn-gr-apply-rec:disabled {
+  opacity: 0.7 !important;
+  cursor: not-allowed !important;
+  transform: none !important;
+}
+
+/* Guided Rail Search Validator Grid & Label Protection */
+.gr-search-panel .search-inputs-grid {
+  grid-template-columns: minmax(170px, 1.1fr) minmax(240px, 1.4fr) minmax(160px, 1fr) auto !important;
+}
+
+.gr-length-label-row {
+  display: flex !important;
+  align-items: center !important;
+  justify-content: space-between !important;
+  gap: 0.4rem !important;
+  min-width: 0 !important;
+}
+
+.gr-length-label-row .field-label {
+  white-space: nowrap !important;
+  min-width: 0 !important;
+  flex: 1 1 auto !important;
+}
+
+.gr-label-short {
+  display: none !important;
+}
+
+@media (max-width: 1320px) {
+  .gr-label-full {
+    display: none !important;
+  }
+  .gr-label-short {
+    display: inline !important;
+  }
+}
+
+@media (max-width: 1100px) {
+  .gr-search-panel .search-inputs-grid {
+    grid-template-columns: 1fr 1fr !important;
+  }
+}
+
+@media (max-width: 680px) {
+  .gr-search-panel .search-inputs-grid {
+    grid-template-columns: 1fr !important;
+  }
+}
+
+/* Print Slip Buttons Styling */
+#btnGrPrintActionSlip {
+  background: var(--bg-surface-elevated, #ffffff) !important;
+  border: 1px solid var(--border-medium, #cbd5e1) !important;
+  color: var(--text-main, #334155) !important;
+  font-weight: 600 !important;
+  border-radius: var(--radius-md) !important;
+  padding: 0.45rem 0.9rem !important;
+  min-height: 38px !important;
+  display: inline-flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+  gap: 0.4rem !important;
+  cursor: pointer !important;
+  transition: all 0.16s ease !important;
+  white-space: nowrap !important;
+}
+
+#btnGrPrintActionSlip:hover {
+  background: var(--bg-surface-hover, #f8fafc) !important;
+  border-color: #7c3aed !important;
+  color: #7c3aed !important;
+  box-shadow: 0 2px 8px rgba(124, 58, 237, 0.15) !important;
+  transform: translateY(-1px) !important;
+}
+
+#btnGrPrintActionSlip:active {
+  transform: scale(0.97) !important;
+}
+
+[data-theme="dark"] #btnGrPrintActionSlip {
+  background: rgba(255, 255, 255, 0.06) !important;
+  border-color: rgba(255, 255, 255, 0.18) !important;
+  color: #e2e8f0 !important;
+}
+
+[data-theme="dark"] #btnGrPrintActionSlip:hover {
+  background: rgba(139, 92, 246, 0.15) !important;
+  border-color: #8b5cf6 !important;
+  color: #c4b5fd !important;
+}
+
+/* ════════════════════════════════════════════════════════════════
+   GUIDED RAIL ACTIVE THEME: UNIFIED PURPLE ACCENT FOR ALL BUTTONS
+   ════════════════════════════════════════════════════════════════ */
+
+/* Navbar Buttons when Guided Rail is active */
+[data-system-mode="guided-rail"] .navbar .btn-nav-pill,
+[data-system-mode="guided-rail"] .navbar a.btn-nav-pill {
+  border-color: rgba(124, 58, 237, 0.35) !important;
+  color: #7c3aed !important;
+}
+
+[data-system-mode="guided-rail"] .navbar .btn-nav-pill:hover,
+[data-system-mode="guided-rail"] .navbar a.btn-nav-pill:hover {
+  background: rgba(124, 58, 237, 0.12) !important;
+  border-color: #7c3aed !important;
+  color: #6d28d9 !important;
+}
+
+[data-system-mode="guided-rail"][data-theme="dark"] .navbar .btn-nav-pill,
+[data-system-mode="guided-rail"][data-theme="dark"] .navbar a.btn-nav-pill {
+  border-color: rgba(167, 139, 250, 0.35) !important;
+  color: #c4b5fd !important;
+}
+
+[data-system-mode="guided-rail"][data-theme="dark"] .navbar .btn-nav-pill:hover,
+[data-system-mode="guided-rail"][data-theme="dark"] .navbar a.btn-nav-pill:hover {
+  background: rgba(139, 92, 246, 0.22) !important;
+  border-color: #a78bfa !important;
+  color: #ffffff !important;
+}
+
+/* Primary Action Buttons in Guided Rail mode (Navbar + Page) */
+[data-system-mode="guided-rail"] .btn-primary,
+[data-system-mode="guided-rail"] .btn-add-main,
+[data-system-mode="guided-rail"] #btnOpenAddRailModal,
+[data-system-mode="guided-rail"] #btnGrValidate,
+[data-system-mode="guided-rail"] #btnGrCutAction,
+[data-system-mode="guided-rail"] #btnOpenAddRailFromSection,
+[data-system-mode="guided-rail"] #btnOpenAddRailFromTable,
+[data-system-mode="guided-rail"] #btnSaveGrStock,
+[data-system-mode="guided-rail"] #btnConfirmGrCut,
+[data-system-mode="guided-rail"] #btnGrPrintActionSlip,
+[data-system-mode="guided-rail"] #btnGrPrintValidSlip,
+[data-system-mode="guided-rail"] .btn-gr-print-slip {
+  background: linear-gradient(135deg, #7c3aed, #6d28d9) !important;
+  border-color: #6d28d9 !important;
+  color: #ffffff !important;
+  box-shadow: 0 4px 14px rgba(124, 58, 237, 0.35) !important;
+}
+
+[data-system-mode="guided-rail"] .btn-primary:hover,
+[data-system-mode="guided-rail"] .btn-add-main:hover,
+[data-system-mode="guided-rail"] #btnOpenAddRailModal:hover,
+[data-system-mode="guided-rail"] #btnGrValidate:hover,
+[data-system-mode="guided-rail"] #btnGrCutAction:hover,
+[data-system-mode="guided-rail"] #btnOpenAddRailFromSection:hover,
+[data-system-mode="guided-rail"] #btnOpenAddRailFromTable:hover,
+[data-system-mode="guided-rail"] #btnSaveGrStock:hover,
+[data-system-mode="guided-rail"] #btnConfirmGrCut:hover {
+  background: linear-gradient(135deg, #6d28d9, #5b21b6) !important;
+  border-color: #5b21b6 !important;
+  box-shadow: 0 6px 18px rgba(124, 58, 237, 0.45) !important;
+  transform: translateY(-1px) !important;
+}
+
+/* Brand Logo & Accent in Guided Rail mode */
+[data-system-mode="guided-rail"] .brand-logo {
+  background: linear-gradient(135deg, #7c3aed 0%, #6d28d9 100%) !important;
+  box-shadow: 0 3px 12px rgba(124, 58, 237, 0.4) !important;
+}
+
+[data-system-mode="guided-rail"] .brand-accent {
+  color: #8b5cf6 !important;
+}
+
+/* Unit Selector Pills (mm / In / Ft) */
+[data-system-mode="guided-rail"] .unit-pill.active,
+[data-system-mode="guided-rail"] .gr-unit-selector-pills .unit-pill.active {
+  background: linear-gradient(135deg, #7c3aed, #6d28d9) !important;
+  color: #ffffff !important;
+  box-shadow: 0 2px 6px rgba(124, 58, 237, 0.35) !important;
+}
+
+/* Quick Chips & Presets */
+[data-system-mode="guided-rail"] .btn-dia-preset.active,
+[data-system-mode="guided-rail"] .btn-len-preset.active,
+[data-system-mode="guided-rail"] .btn-pcs-preset.active {
+  background: rgba(124, 58, 237, 0.15) !important;
+  color: #7c3aed !important;
+  border-color: #7c3aed !important;
+}
+
+[data-system-mode="guided-rail"] .btn-dia-preset:hover,
+[data-system-mode="guided-rail"] .btn-len-preset:hover,
+[data-system-mode="guided-rail"] .btn-pcs-preset:hover {
+  border-color: rgba(124, 58, 237, 0.5) !important;
+  color: #7c3aed !important;
+}
+
+/* Reset Button */
+[data-system-mode="guided-rail"] #grResetBtn:hover {
+  border-color: #7c3aed !important;
+  color: #7c3aed !important;
+  background: rgba(124, 58, 237, 0.08) !important;
+}
+
+/* Stepper +/- Buttons */
+[data-system-mode="guided-rail"] .btn-step-mini:hover {
+  background: rgba(124, 58, 237, 0.12) !important;
+  border-color: #7c3aed !important;
+  color: #7c3aed !important;
+}
+
+/* Cut Logs & Total Badges */
+[data-system-mode="guided-rail"] #cutLogsBadge,
+[data-system-mode="guided-rail"] #grCutLogsBadge,
+[data-system-mode="guided-rail"] #grTotalStockBarsBadge {
+  background: #7c3aed !important;
+  color: #ffffff !important;
+}
+
+/* Header Logout Button */
+.btn-logout-nav {
+  transition: all var(--transition-fast) !important;
+}
+
+.btn-logout-nav:hover {
+  border-color: rgba(239, 68, 68, 0.45) !important;
+  color: #ef4444 !important;
+  background: rgba(239, 68, 68, 0.08) !important;
+}
+
+[data-theme="dark"] .btn-logout-nav:hover {
+  border-color: rgba(248, 113, 113, 0.45) !important;
+  color: #fca5a5 !important;
+  background: rgba(239, 68, 68, 0.16) !important;
+}
+
+
+
+

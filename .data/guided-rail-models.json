@@ -1,0 +1,90 @@
+[
+  {
+    "modelName": "HGR15",
+    "railWidthMm": 15,
+    "railHeightMm": 15,
+    "pitchMm": 60,
+    "minCuttingLengthMm": 60,
+    "active": true,
+    "id": "mw1prwsn4zpmz",
+    "createdAt": "2026-11-04T06:06:43.655Z",
+    "updatedAt": "2026-11-04T06:06:43.655Z"
+  },
+  {
+    "modelName": "HGR20",
+    "railWidthMm": 20,
+    "railHeightMm": 17.5,
+    "pitchMm": 60,
+    "minCuttingLengthMm": 60,
+    "active": true,
+    "id": "mw1prwsnyjonh",
+    "createdAt": "2026-11-04T06:06:43.655Z",
+    "updatedAt": "2026-11-04T06:06:43.655Z"
+  },
+  {
+    "modelName": "HGR25",
+    "railWidthMm": 23,
+    "railHeightMm": 22,
+    "pitchMm": 60,
+    "minCuttingLengthMm": 60,
+    "active": true,
+    "id": "mw1prwsnkszj2",
+    "createdAt": "2026-11-04T06:06:43.655Z",
+    "updatedAt": "2026-11-04T06:06:43.655Z"
+  },
+  {
+    "modelName": "HGR30",
+    "railWidthMm": 28,
+    "railHeightMm": 26,
+    "pitchMm": 80,
+    "minCuttingLengthMm": 80,
+    "active": true,
+    "id": "mw1prwsn9uzpq",
+    "createdAt": "2026-11-04T06:06:43.655Z",
+    "updatedAt": "2026-11-04T06:06:43.655Z"
+  },
+  {
+    "modelName": "HGR35",
+    "railWidthMm": 34,
+    "railHeightMm": 29,
+    "pitchMm": 80,
+    "minCuttingLengthMm": 80,
+    "active": true,
+    "id": "mw1prwsnbrdx6",
+    "createdAt": "2026-11-04T06:06:43.655Z",
+    "updatedAt": "2026-11-04T06:06:43.655Z"
+  },
+  {
+    "modelName": "HGR45",
+    "railWidthMm": 45,
+    "railHeightMm": 38,
+    "pitchMm": 105,
+    "minCuttingLengthMm": 105,
+    "active": true,
+    "id": "mw1prwsnyr5d0",
+    "createdAt": "2026-11-04T06:06:43.655Z",
+    "updatedAt": "2026-11-04T06:06:43.655Z"
+  },
+  {
+    "modelName": "HGR55",
+    "railWidthMm": 53,
+    "railHeightMm": 44,
+    "pitchMm": 120,
+    "minCuttingLengthMm": 120,
+    "active": true,
+    "id": "mw1prwsngwblr",
+    "createdAt": "2026-11-04T06:06:43.655Z",
+    "updatedAt": "2026-11-04T06:06:43.655Z"
+  },
+  {
+    "modelName": "HGR65",
+    "railWidthMm": 63,
+    "railHeightMm": 53,
+    "pitchMm": 150,
+    "minCuttingLengthMm": 150,
+    "active": true,
+    "id": "mw1prwsnfhvvn",
+    "createdAt": "2026-11-04T06:06:43.655Z",
+    "updatedAt": "2026-11-04T06:06:43.655Z"
+  }
+]

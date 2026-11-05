@@ -1,165 +1,407 @@
+
 /* eslint-disable */
 /**
- * RodSync - Google Sheets Apps Script Integration
+ * RodSync - Google Sheets & Excel Multi-Sheet Sync
+ * Connected Sheet: https://docs.google.com/spreadsheets/d/1_rDLZvfHCD4Tzmzk7XHBqK2qHtxOjSP32wOLUOABkMQ/edit
  *
- * HOW TO USE:
- * 1. Open your Google Sheet (https://sheets.google.com).
+ * WORKBOOK STRUCTURE:
+ * - Sheet 1: Master Raw Catalog (PRESERVED - Never modified or cleared)
+ * - Sheet 2: Sheet 2 - Chrome Rod Stock (Rods Inventory)
+ * - Sheet 3: Sheet 3 - Guided Rail Stock (Linear Rail Inventory)
+ * - Sheet 4: Sheet 4 - Chrome Rod Cut Logs
+ * - Sheet 5: Sheet 5 - Guided Rail Cut Logs
+ *
+ * HOW TO CONNECT THIS SPREADSHEET:
+ * 1. Open this spreadsheet: https://docs.google.com/spreadsheets/d/1_rDLZvfHCD4Tzmzk7XHBqK2qHtxOjSP32wOLUOABkMQ/edit
  * 2. In the top menu, click: Extensions > Apps Script.
  * 3. Delete any code in the editor and paste THIS entire script.
  * 4. Click the "Save" icon (or Ctrl+S).
  * 5. In the top right, click: Deploy > New deployment.
  * 6. Click the gear icon (Select type) > Choose "Web app".
  * 7. Set:
- *    - Description: "RodSync Web App Sync"
+ *    - Description: "RodSync Multi-Sheet Sync"
  *    - Execute as: "Me"
  *    - Who has access: "Anyone"
- * 8. Click "Deploy" (grant permissions if prompted).
+ * 8. Click "Deploy" (grant permissions when prompted).
  * 9. Copy the "Web app URL" (starts with https://script.google.com/macros/s/...)
- * 10. Paste it into RodSync under .env.local (GOOGLE_SCRIPT_URL="...")
+ * 10. Paste it into RodSync under .env (GOOGLE_SCRIPT_URL="...")
  *     or in the RodSync Google Sheets settings dialog.
  */
 
-function doGet(e) {
+var TARGET_SPREADSHEET_ID = "1_rDLZvfHCD4Tzmzk7XHBqK2qHtxOjSP32wOLUOABkMQ";
+
+function getSpreadsheet(e, postData) {
+  var id = (postData && postData.spreadsheetId) || (e && e.parameter && e.parameter.spreadsheetId) || TARGET_SPREADSHEET_ID;
+  if (id) {
     try {
-        var ss = SpreadsheetApp.getActiveSpreadsheet();
-        var rodsSheet = ss.getSheetByName("Rods Inventory");
-        var logsSheet = ss.getSheetByName("Cut Logs");
-
-        var rods = [];
-        if (rodsSheet && rodsSheet.getLastRow() > 1) {
-            var rodsData = rodsSheet.getDataRange().getValues();
-            for (var i = 1; i < rodsData.length; i++) {
-                var row = rodsData[i];
-                if (!row[0] && !row[2]) continue;
-                rods.push({
-                    id: String(row[0] || ''),
-                    sku: String(row[1] || ''),
-                    name: String(row[2] || ''),
-                    diameterMm: Number(row[3]) || 0,
-                    lengthIn: Number(row[4]) || 0,
-                    lengthFt: Number(row[4]) || 0,
-                    quantity: Number(row[5]) || 0,
-                    notes: String(row[6] || ''),
-                    updatedAt: row[7] || ''
-                });
-            }
-        }
-
-        var cutLogs = [];
-        if (logsSheet && logsSheet.getLastRow() > 1) {
-            var logsData = logsSheet.getDataRange().getValues();
-            for (var j = 1; j < logsData.length; j++) {
-                var lRow = logsData[j];
-                if (!lRow[0] && !lRow[2]) continue;
-                cutLogs.push({
-                    id: String(lRow[0] || ''),
-                    timestamp: lRow[1] || '',
-                    rodName: String(lRow[2] || ''),
-                    diameterMm: Number(lRow[3]) || 0,
-                    originalLengthIn: Number(lRow[4]) || 0,
-                    originalLengthFt: Number(lRow[4]) || 0,
-                    cutLengthIn: Number(lRow[5]) || 0,
-                    cutLengthFt: Number(lRow[5]) || 0,
-                    quantity: Number(lRow[6]) || 0,
-                    remainderIn: Number(lRow[7]) || 0,
-                    remainderFt: Number(lRow[7]) || 0,
-                    remnantAdded: lRow[8] === 'Yes' || lRow[8] === true,
-                    reason: String(lRow[9] || '')
-                });
-            }
-        }
-
-        return ContentService.createTextOutput(JSON.stringify({
-            success: true,
-            configured: true,
-            rods: rods,
-            cutLogs: cutLogs
-        })).setMimeType(ContentService.MimeType.JSON);
+      var byId = SpreadsheetApp.openById(id);
+      if (byId) return byId;
     } catch (err) {
-        return ContentService.createTextOutput(JSON.stringify({
-            success: false,
-            message: err.toString()
-        })).setMimeType(ContentService.MimeType.JSON);
+      console.warn("Could not open by id " + id + ", falling back to active spreadsheet: " + err);
     }
+  }
+  return SpreadsheetApp.getActiveSpreadsheet();
+}
+
+function getOrCreateTargetSheet(ss, preferredName, aliases) {
+  // 1. Try to find by preferred name
+  var s = ss.getSheetByName(preferredName);
+  if (s) return s;
+
+  // 2. Try by aliases
+  if (aliases && aliases.length > 0) {
+    for (var i = 0; i < aliases.length; i++) {
+      var byAlias = ss.getSheetByName(aliases[i]);
+      if (byAlias) {
+        try { byAlias.setName(preferredName); } catch (e) { }
+        return byAlias;
+      }
+    }
+  }
+
+  // 3. Insert fresh sheet with preferredName
+  return ss.insertSheet(preferredName);
+}
+
+function doGet(e) {
+  try {
+    var ss = getSpreadsheet(e, null);
+
+    // Sheet 2: Chrome Rod Stock
+    var sheet2 = getOrCreateTargetSheet(ss, "Chrome rod inventory", ["Sheet 2 - Chrome Rod Stock", "Sheet 2", "Sheet2", "Chrome Rod Stock", "Chrome rod inventory", "Rods Inventory"]);
+    // Sheet 3: Guided Rail Stock
+    var sheet3 = getOrCreateTargetSheet(ss, "Guided rail inventory", ["Sheet 3 - Guided Rail Stock", "Sheet 3", "Sheet3", "Guided Rail Stock", "Guided rail inventory", "Rail Stock"]);
+    // Sheet 4: Cut Log of Chrome Rod
+    var sheet4 = getOrCreateTargetSheet(ss, "Chrome rod cutting logs", ["Sheet 4 - Chrome Rod Cut Logs", "Sheet 4", "Sheet4", "Chrome rod cutting logs", "Chrome Rod Cut Logs", "Cut Logs"]);
+    // Sheet 5: Cut Log of Guided Rail
+    var sheet5 = getOrCreateTargetSheet(ss, "Guided rail cutting logs", ["Sheet 5 - Guided Rail Cut Logs", "Sheet 5", "Sheet5", "Guided rail cutting logs", "Guided Rail Cut Logs", "Rail Cut Logs"]);
+
+    // 1. Read Chrome Rod Stock (Chrome rod inventory)
+    var rods = [];
+    if (sheet2 && sheet2.getLastRow() > 1) {
+      var data2 = sheet2.getDataRange().getValues();
+      var header2 = data2[0] || [];
+      var is4Col = header2.length <= 5 || String(header2[1] || '').toLowerCase().indexOf('dia') !== -1;
+      for (var i = 1; i < data2.length; i++) {
+        var r = data2[i];
+        if (is4Col) {
+          var name = String(r[0] || 'Chrome Rod').trim();
+          var dia = Number(r[1]) || 0;
+          var len = Number(r[2]) || 0;
+          var qty = Number(r[3]) || 0;
+          if (dia > 0 && len > 0 && qty > 0) {
+            rods.push({
+              id: 'rod-' + Math.round(dia) + '-' + len + '-' + i,
+              sku: 'ROD-' + Math.round(dia) + 'MM-' + len + 'IN-STOCK',
+              name: name,
+              diameterMm: dia,
+              lengthIn: len,
+              lengthFt: len,
+              quantity: qty,
+              notes: '',
+              updatedAt: new Date().toISOString()
+            });
+          }
+        } else {
+          var rName = String(r[2] || 'Chrome Rod').trim();
+          var rDia = Number(r[3]) || 0;
+          var rLen = Number(r[4]) || 0;
+          var rQty = Number(r[5]) || 0;
+          if (rDia > 0 && rLen > 0 && rQty > 0) {
+            rods.push({
+              id: String(r[0] || ('rod-' + Math.round(rDia) + '-' + rLen + '-' + i)),
+              sku: String(r[1] || ('ROD-' + Math.round(rDia) + 'MM-' + rLen + 'IN-STOCK')),
+              name: rName,
+              diameterMm: rDia,
+              lengthIn: rLen,
+              lengthFt: rLen,
+              quantity: rQty,
+              notes: String(r[6] || ''),
+              updatedAt: r[7] || new Date().toISOString()
+            });
+          }
+        }
+      }
+    }
+
+    // Fallback: If Sheet 2 is empty, check if Sheet 1 has original stock
+    if (rods.length === 0) {
+      var sheet1 = ss.getSheetByName("Sheet1") || ss.getSheetByName("Sheet 1") || ss.getSheets()[0];
+      if (sheet1 && sheet1.getLastRow() > 1) {
+        var data1 = sheet1.getDataRange().getValues();
+        for (var si = 1; si < data1.length; si++) {
+          var sRow = data1[si];
+          var sName = String(sRow[0] || 'Chrome Rod').trim();
+          var sDia = Number(sRow[1]) || 0;
+          var sLen = Number(sRow[2]) || 0;
+          var sQty = Number(sRow[3]) || 0;
+          if (sDia > 0 && sLen > 0 && sQty > 0) {
+            rods.push({
+              id: 'rod-' + Math.round(sDia) + '-' + sLen + '-' + si,
+              sku: 'ROD-' + Math.round(sDia) + 'MM-' + sLen + 'IN-STOCK',
+              name: sName,
+              diameterMm: sDia,
+              lengthIn: sLen,
+              lengthFt: sLen,
+              quantity: sQty,
+              notes: '',
+              updatedAt: new Date().toISOString()
+            });
+          }
+        }
+      }
+    }
+
+    // 2. Read Guided Rail Stock (Sheet 3)
+    var railStock = [];
+    if (sheet3 && sheet3.getLastRow() > 1) {
+      var data3 = sheet3.getDataRange().getValues();
+      for (var j = 1; j < data3.length; j++) {
+        var g = data3[j];
+        if (!g[0] && !g[1]) continue;
+        railStock.push({
+          id: String(g[0] || ''),
+          modelName: String(g[1] || ''),
+          sku: String(g[2] || ''),
+          railWidthMm: Number(g[3]) || 0,
+          railHeightMm: Number(g[4]) || 0,
+          pitchMm: Number(g[5]) || 0,
+          lengthMm: Number(g[6]) || 0,
+          quantity: Number(g[7]) || 0,
+          notes: String(g[8] || ''),
+          updatedAt: g[9] || ''
+        });
+      }
+    }
+
+    // 3. Read Chrome Rod Cut Logs (Sheet 4)
+    var rodCutLogs = [];
+    if (sheet4 && sheet4.getLastRow() > 1) {
+      var data4 = sheet4.getDataRange().getValues();
+      for (var k = 1; k < data4.length; k++) {
+        var l = data4[k];
+        if (!l[0] && !l[2]) continue;
+        rodCutLogs.push({
+          id: String(l[0] || ''),
+          timestamp: l[1] || '',
+          isRail: false,
+          rodName: String(l[2] || ''),
+          diameterMm: Number(l[3]) || 0,
+          originalLengthIn: Number(l[4]) || 0,
+          originalLengthFt: Number(l[4]) || 0,
+          cutLengthIn: Number(l[5]) || 0,
+          cutLengthFt: Number(l[5]) || 0,
+          quantity: Number(l[6]) || 0,
+          remainderIn: Number(l[7]) || 0,
+          remainderFt: Number(l[7]) || 0,
+          remnantAdded: l[8] === 'Yes' || l[8] === true,
+          reason: String(l[9] || ''),
+          assignBy: String(l[10] || ''),
+          assignTo: String(l[11] || '')
+        });
+      }
+    }
+
+    // 4. Read Guided Rail Cut Logs (Sheet 5)
+    var railCutLogs = [];
+    if (sheet5 && sheet5.getLastRow() > 1) {
+      var data5 = sheet5.getDataRange().getValues();
+      for (var m = 1; m < data5.length; m++) {
+        var q = data5[m];
+        if (!q[0] && !q[2]) continue;
+        railCutLogs.push({
+          id: String(q[0] || ''),
+          timestamp: q[1] || '',
+          isRail: true,
+          modelName: String(q[2] || ''),
+          rodName: String(q[2] ? ('Guided Rail ' + q[2]) : ''),
+          pitchMm: Number(q[3]) || 0,
+          diameterMm: Number(q[3]) || 0,
+          originalLengthMm: Number(q[4]) || 0,
+          originalLengthIn: Number((Number(q[4] || 0) / 25.4).toFixed(2)),
+          cutLengthMm: Number(q[5]) || 0,
+          cutLengthIn: Number((Number(q[5] || 0) / 25.4).toFixed(2)),
+          quantity: Number(q[6]) || 0,
+          remainderMm: Number(q[7]) || 0,
+          remainderIn: Number((Number(q[7] || 0) / 25.4).toFixed(2)),
+          holesCount: Number(q[8]) || 0,
+          endMarginMm: Number(q[9]) || 0,
+          remnantAdded: q[10] === 'Yes' || q[10] === true,
+          reason: String(q[11] || ''),
+          assignBy: String(q[12] || ''),
+          assignTo: String(q[13] || '')
+        });
+      }
+    }
+
+    var cutLogs = [].concat(rodCutLogs, railCutLogs);
+
+    return ContentService.createTextOutput(JSON.stringify({
+      success: true,
+      configured: true,
+      spreadsheetId: ss.getId(),
+      rods: rods,
+      railStock: railStock,
+      rodCutLogs: rodCutLogs,
+      railCutLogs: railCutLogs,
+      cutLogs: cutLogs
+    })).setMimeType(ContentService.MimeType.JSON);
+  } catch (err) {
+    return ContentService.createTextOutput(JSON.stringify({
+      success: false,
+      message: err.toString()
+    })).setMimeType(ContentService.MimeType.JSON);
+  }
 }
 
 function doPost(e) {
-    try {
-        var contents = e.postData ? e.postData.contents : '';
-        if (!contents) {
-            throw new Error("No payload data received");
-        }
-        var postData = JSON.parse(contents);
-        var ss = SpreadsheetApp.getActiveSpreadsheet();
+  try {
+    var contents = e.postData ? e.postData.contents : '';
+    if (!contents) throw new Error("No payload data received");
+    var postData = JSON.parse(contents);
+    var ss = getSpreadsheet(e, postData);
 
-        // 1. Sync Rods Inventory
-        if (postData.rods && Array.isArray(postData.rods)) {
-            var rodsSheet = ss.getSheetByName("Rods Inventory");
-            if (!rodsSheet) {
-                rodsSheet = ss.insertSheet("Rods Inventory");
-            }
-            rodsSheet.clear();
-            rodsSheet.appendRow(['id', 'sku', 'name', 'diameterMm', 'lengthIn', 'quantity', 'notes', 'updatedAt']);
-            if (postData.rods.length > 0) {
-                var rows = postData.rods.map(function (r) {
-                    var len = (r.lengthIn !== undefined && r.lengthIn !== null) ? r.lengthIn : (r.lengthFt || 0);
-                    return [
-                        r.id || '',
-                        r.sku || '',
-                        r.name || '',
-                        r.diameterMm || 0,
-                        len,
-                        r.quantity || 0,
-                        r.notes || '',
-                        r.updatedAt ? new Date(r.updatedAt).toISOString() : new Date().toISOString()
-                    ];
-                });
-                rodsSheet.getRange(2, 1, rows.length, 8).setValues(rows);
-            }
-            rodsSheet.getRange(1, 1, 1, 8).setFontWeight("bold").setBackground("#e2e8f0");
-            rodsSheet.setFrozenRows(1);
-        }
+    // Sheet 1 is preserved untouched!
 
-        // 2. Sync Cut Logs
-        if (postData.cutLogs && Array.isArray(postData.cutLogs)) {
-            var logsSheet = ss.getSheetByName("Cut Logs");
-            if (!logsSheet) {
-                logsSheet = ss.insertSheet("Cut Logs");
-            }
-            logsSheet.clear();
-            logsSheet.appendRow(['id', 'timestamp', 'rodName', 'diameterMm', 'originalLengthIn', 'cutLengthIn', 'quantity', 'remainderIn', 'remnantAdded', 'reason']);
-            if (postData.cutLogs.length > 0) {
-                var logRows = postData.cutLogs.map(function (l) {
-                    var origLen = (l.originalLengthIn !== undefined && l.originalLengthIn !== null) ? l.originalLengthIn : (l.originalLengthFt || 0);
-                    var cutLen = (l.cutLengthIn !== undefined && l.cutLengthIn !== null) ? l.cutLengthIn : (l.cutLengthFt || 0);
-                    var remLen = (l.remainderIn !== undefined && l.remainderIn !== null) ? l.remainderIn : (l.remainderFt || 0);
-                    return [
-                        l.id || '',
-                        l.timestamp ? new Date(l.timestamp).toISOString() : '',
-                        l.rodName || '',
-                        l.diameterMm || 0,
-                        origLen,
-                        cutLen,
-                        l.quantity || 0,
-                        remLen,
-                        (l.remnantAdded === true || l.remnantAdded === 'Yes') ? 'Yes' : 'No',
-                        l.reason || ''
-                    ];
-                });
-                logsSheet.getRange(2, 1, logRows.length, 10).setValues(logRows);
-            }
-            logsSheet.getRange(1, 1, 1, 10).setFontWeight("bold").setBackground("#e2e8f0");
-            logsSheet.setFrozenRows(1);
-        }
+    // Sheet 2: Chrome Rod Stock
+    var sheet2 = getOrCreateTargetSheet(ss, "Chrome rod inventory", ["Sheet 2 - Chrome Rod Stock", "Sheet 2", "Sheet2", "Chrome Rod Stock", "Chrome rod inventory", "Rods Inventory"]);
+    // Sheet 3: Guided Rail Stock
+    var sheet3 = getOrCreateTargetSheet(ss, "Guided rail inventory", ["Sheet 3 - Guided Rail Stock", "Sheet 3", "Sheet3", "Guided Rail Stock", "Guided rail inventory", "Rail Stock"]);
+    // Sheet 4: Cut Log of Chrome Rod
+    var sheet4 = getOrCreateTargetSheet(ss, "Chrome rod cutting logs", ["Sheet 4 - Chrome Rod Cut Logs", "Sheet 4", "Sheet4", "Chrome rod cutting logs", "Chrome Rod Cut Logs", "Cut Logs"]);
+    // Sheet 5: Cut Log of Guided Rail
+    var sheet5 = getOrCreateTargetSheet(ss, "Guided rail cutting logs", ["Sheet 5 - Guided Rail Cut Logs", "Sheet 5", "Sheet5", "Guided rail cutting logs", "Guided Rail Cut Logs", "Rail Cut Logs"]);
 
-        return ContentService.createTextOutput(JSON.stringify({
-            success: true,
-            message: "Google Sheets sync successful"
-        })).setMimeType(ContentService.MimeType.JSON);
-    } catch (err) {
-        return ContentService.createTextOutput(JSON.stringify({
-            success: false,
-            message: err.toString()
-        })).setMimeType(ContentService.MimeType.JSON);
+    function formatHeader(sheet, numCols, color) {
+      sheet.getRange(1, 1, 1, numCols).setFontWeight("bold").setBackground(color || "#e2e8f0").setFontColor("#0f172a");
+      sheet.setFrozenRows(1);
     }
+
+    // 1. Sync Chrome Rod Stock (Chrome rod inventory: 4 columns matching user format)
+    var rodsList = postData.rods;
+    if (rodsList && Array.isArray(rodsList) && rodsList.length > 0) {
+      rodsList = rodsList.filter(function (r) { return Number(r.diameterMm) !== 300; });
+      sheet2.clear();
+      sheet2.appendRow(['Rod Name', 'Dia (mm)', 'Length (in)', 'Quantity']);
+      var rows2 = rodsList.map(function (r) {
+        var len = (r.lengthIn !== undefined && r.lengthIn !== null) ? r.lengthIn : (r.lengthFt || 0);
+        return [
+          r.name || 'Chrome Rod',
+          r.diameterMm || 0,
+          len,
+          r.quantity || 0
+        ];
+      });
+      sheet2.getRange(2, 1, rows2.length, 4).setValues(rows2);
+      formatHeader(sheet2, 4, "#dbeafe");
+    }
+
+    // 2. Sync Guided Rail Stock (Guided rail inventory)
+    var railList = postData.railStock;
+    if (railList && Array.isArray(railList) && railList.length > 0) {
+      sheet3.clear();
+      sheet3.appendRow(['ID', 'Model Name', 'SKU', 'Rail Width (mm)', 'Rail Height (mm)', 'Pitch / PCC (mm)', 'Length (mm)', 'Quantity', 'Storage Rack / Notes', 'Last Updated']);
+      var rows3 = railList.map(function (g) {
+        return [
+          g.id || '',
+          g.modelName || '',
+          g.sku || '',
+          g.railWidthMm || 0,
+          g.railHeightMm || 0,
+          g.pitchMm || 0,
+          g.lengthMm || 0,
+          g.quantity || 0,
+          g.notes || '',
+          g.updatedAt ? new Date(g.updatedAt).toISOString() : new Date().toISOString()
+        ];
+      });
+      sheet3.getRange(2, 1, rows3.length, 10).setValues(rows3);
+      formatHeader(sheet3, 10, "#ede9fe");
+    }
+
+    // Extract rod cuts vs rail cuts
+    var allLogs = postData.cutLogs || [];
+    var rodCuts = postData.rodCutLogs || [];
+    var railCuts = postData.railCutLogs || [];
+
+    if (allLogs.length > 0 && rodCuts.length === 0 && railCuts.length === 0) {
+      for (var n = 0; n < allLogs.length; n++) {
+        var item = allLogs[n];
+        var isRail = (item.isRail === true) || Boolean(item.modelName) || (String(item.id || '').indexOf('gr-cut-') === 0) || (String(item.rodName || '').toLowerCase().indexOf('guided rail') !== -1);
+        if (isRail) {
+          railCuts.push(item);
+        } else {
+          rodCuts.push(item);
+        }
+      }
+    }
+
+    // 3. Sync Chrome Rod Cut Logs (Chrome rod cutting logs)
+    if (rodCuts && Array.isArray(rodCuts) && rodCuts.length > 0) {
+      rodCuts = rodCuts.filter(function (l) { return Number(l.diameterMm) !== 300; });
+      sheet4.clear();
+      sheet4.appendRow(['ID', 'Date & Time', 'Rod Name', 'Diameter (mm)', 'Original Length (In)', 'Cut Length (In)', 'Quantity', 'Remnant Offcut (In)', 'Remnant Added', 'Job / Reason', 'Assign By', 'Assign To']);
+      var rows4 = rodCuts.map(function (l) {
+        var origLen = (l.originalLengthIn !== undefined && l.originalLengthIn !== null) ? l.originalLengthIn : (l.originalLengthFt || 0);
+        var cutLen = (l.cutLengthIn !== undefined && l.cutLengthIn !== null) ? l.cutLengthIn : (l.cutLengthFt || 0);
+        var remLen = (l.remainderIn !== undefined && l.remainderIn !== null) ? l.remainderIn : (l.remainderFt || 0);
+        return [
+          l.id || '',
+          l.timestamp ? new Date(l.timestamp).toLocaleString() : '',
+          l.rodName || 'Chrome Rod',
+          l.diameterMm || 0,
+          origLen,
+          cutLen,
+          l.quantity || 0,
+          remLen,
+          (l.remnantAdded === true || l.remnantAdded === 'Yes') ? 'Yes' : 'No',
+          l.reason || '',
+          l.assignBy || l.createdBy || '',
+          l.assignTo || l.assignedBy || ''
+        ];
+      });
+      sheet4.getRange(2, 1, rows4.length, 12).setValues(rows4);
+      formatHeader(sheet4, 12, "#fee2e2");
+    }
+
+    // 4. Sync Guided Rail Cut Logs (Guided rail cutting logs)
+    if (railCuts && Array.isArray(railCuts) && railCuts.length > 0) {
+      sheet5.clear();
+      sheet5.appendRow(['ID', 'Date & Time', 'Rail Model', 'Pitch / PCC (mm)', 'Original Length (mm)', 'Cut Length (mm)', 'Quantity', 'Remnant Offcut (mm)', 'Holes Count', 'End Margin (mm)', 'Remnant Added', 'Order / Job Notes', 'Assign By', 'Assign To']);
+      var rows5 = railCuts.map(function (q) {
+        var origMm = q.originalLengthMm || (q.originalLengthIn ? Math.round(q.originalLengthIn * 25.4) : 0);
+        var cutMm = q.cutLengthMm || (q.cutLengthIn ? Math.round(q.cutLengthIn * 25.4) : 0);
+        var remMm = q.remainderMm !== undefined ? q.remainderMm : (q.remainderIn ? Math.round(q.remainderIn * 25.4) : 0);
+        return [
+          q.id || '',
+          q.timestamp ? new Date(q.timestamp).toLocaleString() : '',
+          q.modelName || q.rodName || '',
+          q.pitchMm || q.diameterMm || 0,
+          origMm,
+          cutMm,
+          q.quantity || 0,
+          remMm,
+          q.holesCount || 0,
+          q.endMarginMm || 0,
+          (q.remnantAdded === true || q.remnantAdded === 'Yes') ? 'Yes' : 'No',
+          q.reason || '',
+          q.assignBy || q.createdBy || '',
+          q.assignTo || q.assignedBy || ''
+        ];
+      });
+      sheet5.getRange(2, 1, rows5.length, 14).setValues(rows5);
+      formatHeader(sheet5, 14, "#fef3c7");
+    }
+
+    return ContentService.createTextOutput(JSON.stringify({
+      success: true,
+      spreadsheetId: ss.getId(),
+      message: "Successfully updated Sheet 2 (Chrome Rods), Sheet 3 (Guided Rails), Sheet 4 (Rod Cut Logs), Sheet 5 (Rail Cut Logs)"
+    })).setMimeType(ContentService.MimeType.JSON);
+  } catch (err) {
+    return ContentService.createTextOutput(JSON.stringify({
+      success: false,
+      message: err.toString()
+    })).setMimeType(ContentService.MimeType.JSON);
+  }
 }

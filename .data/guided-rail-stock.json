@@ -1,0 +1,62 @@
+[
+  {
+    "id": "grs-hgr15-2000",
+    "modelName": "HGR15",
+    "sku": "RAIL-HGR15-2000MM",
+    "railWidthMm": 15,
+    "railHeightMm": 15,
+    "pitchMm": 60,
+    "lengthMm": 2000,
+    "quantity": 9,
+    "notes": "Rack R-1 • Standard Industrial",
+    "updatedAt": "2026-11-05T10:56:20.115Z"
+  },
+  {
+    "id": "grs-mw3cr9cy3d1x",
+    "modelName": "HGR15",
+    "sku": "RAIL-HGR15-600MM-PQNC",
+    "railWidthMm": 15,
+    "railHeightMm": 15,
+    "pitchMm": 60,
+    "lengthMm": 600,
+    "quantity": 1,
+    "notes": "test",
+    "updatedAt": "2026-11-05T10:56:20.115Z"
+  },
+  {
+    "id": "grs-hgr20-3000",
+    "modelName": "HGR20",
+    "sku": "RAIL-HGR20-3000MM",
+    "railWidthMm": 20,
+    "railHeightMm": 17.5,
+    "pitchMm": 60,
+    "lengthMm": 3000,
+    "quantity": 15,
+    "notes": "Rack R-2 • Heavy Duty Assembly",
+    "updatedAt": "2026-11-05T10:56:20.115Z"
+  },
+  {
+    "id": "grs-hgr25-3000",
+    "modelName": "HGR25",
+    "sku": "RAIL-HGR25-3000MM",
+    "railWidthMm": 23,
+    "railHeightMm": 22,
+    "pitchMm": 60,
+    "lengthMm": 3000,
+    "quantity": 8,
+    "notes": "Rack R-3 • Precision Guide",
+    "updatedAt": "2026-11-05T10:56:20.115Z"
+  },
+  {
+    "id": "grs-hgr30-4000",
+    "modelName": "HGR30",
+    "sku": "RAIL-HGR30-4000MM",
+    "railWidthMm": 28,
+    "railHeightMm": 26,
+    "pitchMm": 80,
+    "lengthMm": 4000,
+    "quantity": 5,
+    "notes": "Rack R-4 • High Rigidity",
+    "updatedAt": "2026-11-05T10:56:20.115Z"
+  }
+]

@@ -159,6 +159,14 @@
   let cutLogsTableBody, cutLogsEmptyState, filterCutLogsInput, btnExportCutLogsCsv, btnClearCutLogs;
   let cutLogsCountText, cutLogsContentArea, cutLogsTableWrapper, cutLogsCardsContainer;
   let btnCutLogsCards, btnCutLogsTable;
+  let cutLogsDateFilter = 'all'; // 'all' | 'today' | 'tomorrow' | 'yesterday' | 'custom'
+  let cutLogsCustomDate = '';    // 'YYYY-MM-DD'
+  let filterCutLogsDateInput, btnClearDateFilter, cutLogsDateFilterInfo;
+  let editCutLogModalOverlay, btnCloseEditCutLogModal, btnCancelEditCutLog, editCutLogForm;
+  let editCutLogId, editLogDateTime, editLogRodName, editLogDiameter, editLogQuantity;
+  let editLogOriginalLen, editLogOrigLenHint, editLogCutLen, editLogCutLenHint;
+  let editLogRemainder, editLogRemainderHint, editLogRemnantAdded;
+  let editLogAssignBy, editLogAssignByLabel, editLogAssignTo, editLogReason, btnDeleteCutLogSingle;
   let selectedCutLogIds = new Set();
   let btnPrintCombinedSlip, btnFooterPrintCombinedSlip, selectAllCutLogs, selectedLogsCount, selectedLogsCountFooter;
   let cutLogsViewMode = window.innerWidth <= 768 ? 'cards' : 'table';
@@ -313,6 +321,31 @@
     cutLogsCardsContainer = document.getElementById('cutLogsCardsContainer');
     btnCutLogsCards = document.getElementById('btnCutLogsCards');
     btnCutLogsTable = document.getElementById('btnCutLogsTable');
+    filterCutLogsDateInput = document.getElementById('filterCutLogsDateInput');
+    btnClearDateFilter = document.getElementById('btnClearDateFilter');
+    cutLogsDateFilterInfo = document.getElementById('cutLogsDateFilterInfo');
+
+    editCutLogModalOverlay = document.getElementById('editCutLogModalOverlay');
+    btnCloseEditCutLogModal = document.getElementById('btnCloseEditCutLogModal');
+    btnCancelEditCutLog = document.getElementById('btnCancelEditCutLog');
+    editCutLogForm = document.getElementById('editCutLogForm');
+    editCutLogId = document.getElementById('editCutLogId');
+    editLogDateTime = document.getElementById('editLogDateTime');
+    editLogRodName = document.getElementById('editLogRodName');
+    editLogDiameter = document.getElementById('editLogDiameter');
+    editLogQuantity = document.getElementById('editLogQuantity');
+    editLogOriginalLen = document.getElementById('editLogOriginalLen');
+    editLogOrigLenHint = document.getElementById('editLogOrigLenHint');
+    editLogCutLen = document.getElementById('editLogCutLen');
+    editLogCutLenHint = document.getElementById('editLogCutLenHint');
+    editLogRemainder = document.getElementById('editLogRemainder');
+    editLogRemainderHint = document.getElementById('editLogRemainderHint');
+    editLogRemnantAdded = document.getElementById('editLogRemnantAdded');
+    editLogAssignBy = document.getElementById('editLogAssignBy');
+    editLogAssignByLabel = document.getElementById('editLogAssignByLabel');
+    editLogAssignTo = document.getElementById('editLogAssignTo');
+    editLogReason = document.getElementById('editLogReason');
+    btnDeleteCutLogSingle = document.getElementById('btnDeleteCutLogSingle');
     btnPrintCombinedSlip = document.getElementById('btnPrintCombinedSlip');
     btnFooterPrintCombinedSlip = document.getElementById('btnFooterPrintCombinedSlip');
     selectAllCutLogs = document.getElementById('selectAllCutLogs');
@@ -574,6 +607,13 @@
       rods.forEach(r => {
         if (r.location !== undefined) delete r.location;
       });
+      // Purge any 300mm test rods and invalid/corrupted rods to keep inventory strictly matching Google Sheet
+      rods = rods.filter(r => {
+        const dia = Number(r.diameterMm) || 0;
+        const len = Number(r.lengthIn) || Number(r.lengthFt) || 0;
+        const qty = Number(r.quantity) || 0;
+        return dia > 0 && len > 0 && qty > 0 && dia !== 300;
+      });
       // Optionally sync to local as backup if we have valid rods
       if (rods.length > 0) {
         localStorage.setItem(STORAGE_KEY, JSON.stringify(rods));
@@ -615,6 +655,7 @@
         }
       }
       if (cutLogs.length > 0) {
+        cutLogs = cutLogs.filter(l => Number(l.diameterMm) !== 300);
         localStorage.setItem(CUT_LOGS_STORAGE_KEY, JSON.stringify(cutLogs));
       }
     } catch (e) {
@@ -632,14 +673,64 @@
     }
   }
 
+  function isGuidedRailLog(log) {
+    if (!log) return false;
+    if (log.isRail === true) return true;
+    if (log.modelName) return true;
+    const idStr = String(log.id || '');
+    if (idStr.startsWith('gr-cut-')) return true;
+    const rodName = String(log.rodName || '').toLowerCase();
+    if (rodName.includes('guided rail') || rodName.startsWith('hgr') || rodName.startsWith('rail')) {
+      return true;
+    }
+    if (log.holesCount !== undefined && log.holesCount !== null && log.holesCount !== '') return true;
+    if (log.pitchMm !== undefined && log.pitchMm !== null && log.pitchMm !== '') return true;
+    if (log.endMarginMm !== undefined && log.endMarginMm !== null && log.endMarginMm !== '') return true;
+    return false;
+  }
+
+  function getCurrentSystemMode() {
+    try {
+      const railBtn = document.getElementById('btnToggleModeGuidedRail');
+      if (railBtn) {
+        if (railBtn.classList.contains('active') || railBtn.getAttribute('aria-selected') === 'true') {
+          return 'guided-rail';
+        }
+      }
+      const chromeBtn = document.getElementById('btnToggleModeChromeRod');
+      if (chromeBtn) {
+        if (chromeBtn.classList.contains('active') || chromeBtn.getAttribute('aria-selected') === 'true') {
+          return 'chrome-rod';
+        }
+      }
+      const railSection = document.getElementById('guidedRailSection');
+      if (railSection && railSection.style.display !== 'none' && !railSection.classList.contains('hidden')) {
+        return 'guided-rail';
+      }
+      const saved = localStorage.getItem('rodsync_system_mode');
+      if (saved === 'guided-rail') return 'guided-rail';
+      if (saved === 'chrome-rod') return 'chrome-rod';
+    } catch {}
+    return 'chrome-rod';
+  }
+
   function updateCutLogsBadge() {
+    refreshDomElements();
+    const railCount = cutLogs.filter(isGuidedRailLog).length;
+    const chromeCount = cutLogs.filter(l => !isGuidedRailLog(l)).length;
+
     if (cutLogsBadge) {
-      cutLogsBadge.textContent = cutLogs.length;
+      cutLogsBadge.textContent = chromeCount;
+    }
+    const grBadge = document.getElementById('grCutLogsBadge');
+    if (grBadge) {
+      grBadge.textContent = railCount;
     }
   }
 
   // --- TOAST NOTIFICATIONS ---
   function showToast(message, type = 'info', duration = 4000) {
+    if (typeof window !== 'undefined') window.showToast = showToast;
     const toast = document.createElement('div');
     toast.className = `toast toast-${type}`;
 
@@ -2307,6 +2398,44 @@
     }
   };
 
+
+  // Helper to get active logged-in user profile for slip generation
+  function getRodsyncCurrentSessionUser() {
+    let email = '';
+    try {
+      if (typeof window !== 'undefined' && window.rodsyncCurrentUserEmail) {
+        email = window.rodsyncCurrentUserEmail;
+      }
+      if (!email && typeof localStorage !== 'undefined') {
+        email = localStorage.getItem('rodsync_user_email') || '';
+      }
+      if (!email && typeof document !== 'undefined') {
+        const match = document.cookie.match(/(?:^|;\s*)rodsync_user=([^;]+)/);
+        if (match && match[1]) {
+          email = decodeURIComponent(match[1]);
+        }
+      }
+    } catch {}
+
+    const clean = String(email || '').toLowerCase().trim();
+    if (clean.includes('roshni') || clean.includes('roshini')) {
+      return { email: clean, name: 'Roshini', isLocked: true };
+    }
+    if (clean.includes('suman')) {
+      return { email: clean, name: 'Suman', isLocked: true };
+    }
+    if (clean.includes('bhawna')) {
+      return { email: clean, name: 'Bhawna', isLocked: true };
+    }
+    if (clean) {
+      const prefix = clean.split('@')[0].replace(/[._\d]/g, ' ').trim();
+      const formatted = prefix ? (prefix.charAt(0).toUpperCase() + prefix.slice(1)) : 'User';
+      return { email: clean, name: formatted, isLocked: true };
+    }
+    return { email: '', name: '', isLocked: false };
+  }
+  window.getRodsyncCurrentSessionUser = getRodsyncCurrentSessionUser;
+
   // --- CUT SLIP INVOICE PRINTER (SUPPORTS 1 OR MANY CUTTING LOGS IN ONE SLIP) ---
   function printCutSlip(input) {
     let logs = [];
@@ -2325,6 +2454,13 @@
       return;
     }
 
+    // If these are Guided Rail logs, delegate to Guided Rail's specialized thermal slip printer
+    const isRail = logs.every(l => l.isRail || String(l.rodName || '').toLowerCase().includes('guided rail'));
+    if (isRail && typeof window.printGuidedRailCutSlip === 'function') {
+      window.printGuidedRailCutSlip(logs);
+      return;
+    }
+
     const isMulti = logs.length > 1;
 
     // Format clean Ref number like Cut14070316 or CutBatch-8821-3Items
@@ -2340,6 +2476,7 @@
     }
 
     // Resolve initial Assign By and Assign To
+    const sessionUser = getRodsyncCurrentSessionUser();
     let defaultAssignBy = '';
     let defaultAssignTo = '';
     for (const log of logs) {
@@ -2350,6 +2487,12 @@
         defaultAssignTo = log.assignTo || (log.assignedBy && log.assignedBy !== defaultAssignBy ? log.assignedBy : '');
       }
       if (defaultAssignBy && defaultAssignTo) break;
+    }
+
+    let isAssignByLocked = false;
+    if (sessionUser && sessionUser.name) {
+      defaultAssignBy = sessionUser.name;
+      isAssignByLocked = Boolean(sessionUser.isLocked);
     }
 
     // Totals
@@ -2901,11 +3044,11 @@
       </div>
     </div>
 
-    <div class="preview-hint">You can edit Assign By and Assign To before printing:</div>
+    <div class="preview-hint">${isAssignByLocked ? 'You can edit Assign To before printing:' : 'You can edit Assign By and Assign To before printing:'}</div>
 
     <div class="preview-field">
-      <label class="preview-label" for="inputAssignBy">Assign By :</label>
-      <input type="text" id="inputAssignBy" class="preview-input" value="${escapeForHtml(defaultAssignBy)}" placeholder="e.g. Roshni, Suman, Bhawna" />
+      <label class="preview-label" for="inputAssignBy">Assign By : ${isAssignByLocked ? '<span style="font-size: 0.62rem; color: #64748b; font-weight: 700; margin-left: 4px;">(🔒 Locked)</span>' : ''}</label>
+      <input type="text" id="inputAssignBy" class="preview-input" value="${escapeForHtml(defaultAssignBy)}" placeholder="e.g. Roshni, Suman, Bhawna" ${isAssignByLocked ? 'readonly tabindex="-1" style="background: #f1f5f9; cursor: not-allowed; color: #334155; font-weight: 700; border-color: #cbd5e1;" title="Assign By is automatically set to your login account and cannot be modified."' : ''} />
     </div>
 
     <div class="preview-field">
@@ -2982,7 +3125,7 @@
       const dispTo = document.getElementById('displayAssignTo');
 
       function sync() {
-        const byVal = inBy ? inBy.value.trim() : '';
+        const byVal = ${isAssignByLocked ? JSON.stringify(defaultAssignBy) : "(inBy ? inBy.value.trim() : '')"};
         const toVal = inTo ? inTo.value.trim() : '';
         if (dispBy) dispBy.textContent = byVal || '—';
         if (dispTo) dispTo.textContent = toVal || '—';
@@ -3032,21 +3175,421 @@
     }
   }
 
+  // --- Cut Logs Date Parsing & Filtering Helpers ---
+  function parseLogDate(timestamp) {
+    if (!timestamp) return null;
+    let d;
+    if (typeof timestamp === 'number') {
+      d = new Date(timestamp);
+    } else if (typeof timestamp === 'string' && /^\d+$/.test(timestamp.trim())) {
+      d = new Date(Number(timestamp.trim()));
+    } else {
+      d = new Date(timestamp);
+    }
+    return (!isNaN(d.getTime())) ? d : null;
+  }
+
+  function getLocalDateKey(dateObj) {
+    if (!dateObj) return '';
+    const d = (dateObj instanceof Date) ? dateObj : parseLogDate(dateObj);
+    if (!d) return '';
+    const y = d.getFullYear();
+    const m = String(d.getMonth() + 1).padStart(2, '0');
+    const day = String(d.getDate()).padStart(2, '0');
+    return `${y}-${m}-${day}`;
+  }
+
+  function getLogDateKey(log) {
+    if (!log || !log.timestamp) return '';
+    return getLocalDateKey(log.timestamp);
+  }
+
+  function getTargetDateFilterKey() {
+    const now = new Date();
+    if (cutLogsDateFilter === 'today') {
+      return getLocalDateKey(now);
+    }
+    if (cutLogsDateFilter === 'tomorrow') {
+      const tom = new Date(now.getFullYear(), now.getMonth(), now.getDate() + 1);
+      return getLocalDateKey(tom);
+    }
+    if (cutLogsDateFilter === 'yesterday') {
+      const yest = new Date(now.getFullYear(), now.getMonth(), now.getDate() - 1);
+      return getLocalDateKey(yest);
+    }
+    if (cutLogsDateFilter === 'custom' && cutLogsCustomDate) {
+      return cutLogsCustomDate;
+    }
+    return '';
+  }
+
+  function updateDateFilterUI() {
+    refreshDomElements();
+    document.querySelectorAll('#cutLogsDateQuickFilters .date-pill-btn').forEach(btn => {
+      const filterType = btn.getAttribute('data-date-filter');
+      btn.classList.toggle('active', filterType === cutLogsDateFilter);
+    });
+
+    if (filterCutLogsDateInput) {
+      if (cutLogsDateFilter === 'custom') {
+        filterCutLogsDateInput.value = cutLogsCustomDate;
+      } else {
+        filterCutLogsDateInput.value = '';
+      }
+    }
+
+    if (btnClearDateFilter) {
+      btnClearDateFilter.style.display = (cutLogsDateFilter !== 'all') ? 'inline-flex' : 'none';
+    }
+
+    if (cutLogsDateFilterInfo) {
+      const now = new Date();
+      if (cutLogsDateFilter === 'all') {
+        cutLogsDateFilterInfo.textContent = 'All dates';
+      } else if (cutLogsDateFilter === 'today') {
+        cutLogsDateFilterInfo.textContent = `Today (${now.toLocaleDateString([], { month: 'short', day: 'numeric' })})`;
+      } else if (cutLogsDateFilter === 'tomorrow') {
+        const tom = new Date(now.getFullYear(), now.getMonth(), now.getDate() + 1);
+        cutLogsDateFilterInfo.textContent = `Tomorrow (${tom.toLocaleDateString([], { month: 'short', day: 'numeric' })})`;
+      } else if (cutLogsDateFilter === 'yesterday') {
+        const yest = new Date(now.getFullYear(), now.getMonth(), now.getDate() - 1);
+        cutLogsDateFilterInfo.textContent = `Yesterday (${yest.toLocaleDateString([], { month: 'short', day: 'numeric' })})`;
+      } else if (cutLogsDateFilter === 'custom' && cutLogsCustomDate) {
+        const parts = cutLogsCustomDate.split('-');
+        if (parts.length === 3) {
+          const d = new Date(Number(parts[0]), Number(parts[1]) - 1, Number(parts[2]));
+          cutLogsDateFilterInfo.textContent = d.toLocaleDateString([], { month: 'short', day: 'numeric', year: 'numeric' });
+        } else {
+          cutLogsDateFilterInfo.textContent = cutLogsCustomDate;
+        }
+      }
+    }
+  }
+
+  function setCutLogsDateFilter(filterType, customDateVal) {
+    cutLogsDateFilter = filterType;
+    cutLogsCustomDate = customDateVal || '';
+    updateDateFilterUI();
+    renderCutLogsTable();
+  }
+
+  function getFilteredCutLogs() {
+    const mode = getCurrentSystemMode();
+    const isRailMode = (mode === 'guided-rail');
+    const keyword = filterCutLogsInput ? filterCutLogsInput.value.trim().toLowerCase() : '';
+    const targetDateKey = getTargetDateFilterKey();
+
+    return cutLogs.filter(log => {
+      if (!log) return false;
+
+      // 0. Mode Isolation:
+      // When Chrome Rod toggle is ON: do NOT show rail logs
+      // When Guided Rail toggle is ON: do NOT show Chrome Rod logs
+      const isRail = isGuidedRailLog(log);
+      if (isRailMode && !isRail) return false;
+      if (!isRailMode && isRail) return false;
+
+      // 1. Keyword search filter
+      if (keyword) {
+        const matchName = String(log.rodName || '').toLowerCase().includes(keyword);
+        const matchModel = String(log.modelName || '').toLowerCase().includes(keyword);
+        const matchReason = String(log.reason || '').toLowerCase().includes(keyword);
+        const matchDia = (log.diameterMm ? (log.diameterMm + 'mm') : '').includes(keyword) || (log.pitchMm ? (log.pitchMm + 'mm') : '').includes(keyword);
+        const matchCreated = String(log.createdBy || '').toLowerCase().includes(keyword);
+        const matchAssigned = String(log.assignedBy || '').toLowerCase().includes(keyword);
+        const matchAssignBy = String(log.assignBy || '').toLowerCase().includes(keyword);
+        const matchAssignTo = String(log.assignTo || '').toLowerCase().includes(keyword);
+        if (!matchName && !matchModel && !matchReason && !matchDia && !matchCreated && !matchAssigned && !matchAssignBy && !matchAssignTo) {
+          return false;
+        }
+      }
+
+      // 2. Date filter (only filters if user explicitly selected a date filter like Today, Tomorrow, Yesterday, or custom date)
+      if (targetDateKey) {
+        const logDateKey = getLogDateKey(log);
+        if (!logDateKey || logDateKey !== targetDateKey) {
+          return false;
+        }
+      }
+
+      return true;
+    });
+  }
+
+  function formatDateTimeLocal(timestamp) {
+    const d = parseLogDate(timestamp) || new Date();
+    const year = d.getFullYear();
+    const month = String(d.getMonth() + 1).padStart(2, '0');
+    const day = String(d.getDate()).padStart(2, '0');
+    const hours = String(d.getHours()).padStart(2, '0');
+    const minutes = String(d.getMinutes()).padStart(2, '0');
+    return `${year}-${month}-${day}T${hours}:${minutes}`;
+  }
+
+  function updateEditLogCalculations() {
+    refreshDomElements();
+    const origLen = parseFloat(editLogOriginalLen ? editLogOriginalLen.value : '0') || 0;
+    const cutLen = parseFloat(editLogCutLen ? editLogCutLen.value : '0') || 0;
+    const qty = parseInt(editLogQuantity ? editLogQuantity.value : '1', 10) || 1;
+
+    if (editLogOrigLenHint) {
+      const origMm = (origLen * 25.4).toFixed(1);
+      const origFt = (origLen / 12).toFixed(2);
+      editLogOrigLenHint.textContent = `${origFt} ft (${origMm} mm)`;
+    }
+
+    if (editLogCutLenHint) {
+      const cutMm = (cutLen * 25.4).toFixed(1);
+      const cutFt = (cutLen / 12).toFixed(2);
+      editLogCutLenHint.textContent = `${cutFt} ft (${cutMm} mm) per pc • Total: ${(cutLen * qty).toFixed(2)} In`;
+    }
+
+    if (editLogRemainderHint) {
+      const expectedRem = Math.max(0, origLen - (cutLen * qty));
+      const remMm = (expectedRem * 25.4).toFixed(1);
+      editLogRemainderHint.textContent = `Expected: ${expectedRem.toFixed(2)} In (${remMm} mm)`;
+    }
+  }
+
+  function openEditCutLogModal(logId) {
+    refreshDomElements();
+    if (!logId) return;
+    const log = cutLogs.find(l => l.id === logId);
+    if (!log) {
+      showToast('Cut log entry not found', 'warning');
+      return;
+    }
+
+    if (editCutLogId) editCutLogId.value = log.id;
+    if (editCutLogForm) editCutLogForm.dataset.isRail = log.isRail ? 'true' : 'false';
+
+    if (editLogDateTime) editLogDateTime.value = formatDateTimeLocal(log.timestamp);
+    if (editLogRodName) editLogRodName.value = log.rodName || '';
+    if (editLogDiameter) editLogDiameter.value = log.diameterMm || log.pitchMm || '';
+    if (editLogQuantity) editLogQuantity.value = log.quantity || 1;
+
+    const origLen = getLogOrigLength(log);
+    const cutLen = getLogCutLength(log);
+    const remLen = getLogRemainder(log);
+
+    if (editLogOriginalLen) editLogOriginalLen.value = origLen;
+    if (editLogCutLen) editLogCutLen.value = cutLen;
+    if (editLogRemainder) editLogRemainder.value = remLen;
+    if (editLogRemnantAdded) editLogRemnantAdded.checked = Boolean(log.remnantAdded);
+
+    // Assignees & Session lock check (Roshini rule)
+    const sessionUser = (typeof getRodsyncCurrentSessionUser === 'function') ? getRodsyncCurrentSessionUser() : null;
+    const isLockedRoshni = sessionUser && sessionUser.isLocked && (sessionUser.name === 'Roshini' || String(sessionUser.email || '').toLowerCase().includes('roshni'));
+
+    if (editLogAssignBy) {
+      if (isLockedRoshni) {
+        editLogAssignBy.value = 'Roshini';
+        editLogAssignBy.readOnly = true;
+        editLogAssignBy.tabIndex = -1;
+        editLogAssignBy.style.background = '#f1f5f9';
+        editLogAssignBy.style.cursor = 'not-allowed';
+        editLogAssignBy.style.color = '#334155';
+        editLogAssignBy.style.fontWeight = '700';
+        editLogAssignBy.title = 'Assign By is automatically set to your login account and cannot be modified.';
+        if (editLogAssignByLabel) {
+          editLogAssignByLabel.innerHTML = 'Assign By <span style="font-size: 0.65rem; color: #64748b; font-weight: 700; margin-left: 4px;">(🔒 Locked)</span>';
+        }
+      } else {
+        editLogAssignBy.value = log.assignBy || log.createdBy || '';
+        editLogAssignBy.readOnly = false;
+        editLogAssignBy.tabIndex = 0;
+        editLogAssignBy.style.background = '';
+        editLogAssignBy.style.cursor = '';
+        editLogAssignBy.style.color = '';
+        editLogAssignBy.style.fontWeight = '';
+        editLogAssignBy.title = '';
+        if (editLogAssignByLabel) {
+          editLogAssignByLabel.textContent = 'Assign By';
+        }
+      }
+    }
+
+    if (editLogAssignTo) {
+      editLogAssignTo.value = log.assignTo || log.assignedBy || '';
+    }
+
+    if (editLogReason) {
+      editLogReason.value = log.reason || '';
+    }
+
+    updateEditLogCalculations();
+
+    if (editCutLogModalOverlay) {
+      editCutLogModalOverlay.classList.remove('hidden');
+    }
+  }
+
+  function closeEditCutLogModal() {
+    refreshDomElements();
+    if (editCutLogModalOverlay) {
+      editCutLogModalOverlay.classList.add('hidden');
+    }
+  }
+
+  function handleSaveCutLog(e) {
+    if (e && typeof e.preventDefault === 'function') e.preventDefault();
+    refreshDomElements();
+
+    const logId = editCutLogId ? editCutLogId.value : '';
+    const log = cutLogs.find(l => l.id === logId);
+    if (!log) {
+      showToast('Cut log entry not found', 'danger');
+      return;
+    }
+
+    // 1. Date & Time
+    if (editLogDateTime && editLogDateTime.value) {
+      const parsedTime = new Date(editLogDateTime.value).getTime();
+      if (!isNaN(parsedTime) && parsedTime > 0) {
+        log.timestamp = parsedTime;
+      }
+    }
+
+    // 2. Rod name & Diameter
+    if (editLogRodName && editLogRodName.value.trim()) {
+      log.rodName = editLogRodName.value.trim();
+    }
+    if (editLogDiameter) {
+      const dia = parseFloat(editLogDiameter.value);
+      if (!isNaN(dia) && dia >= 0) {
+        log.diameterMm = dia;
+        if (log.isRail) log.pitchMm = dia;
+      }
+    }
+
+    // 3. Lengths & Quantity
+    const origLenIn = parseFloat(editLogOriginalLen ? editLogOriginalLen.value : '0') || 0;
+    const cutLenIn = parseFloat(editLogCutLen ? editLogCutLen.value : '0') || 0;
+    const remLenIn = parseFloat(editLogRemainder ? editLogRemainder.value : '0') || 0;
+    const qty = parseInt(editLogQuantity ? editLogQuantity.value : '1', 10) || 1;
+
+    log.originalLengthIn = origLenIn;
+    log.originalLengthFt = Number((origLenIn / 12).toFixed(2));
+    log.cutLengthIn = cutLenIn;
+    log.cutLengthFt = Number((cutLenIn / 12).toFixed(2));
+    log.remainderIn = remLenIn;
+    log.remainderFt = Number((remLenIn / 12).toFixed(2));
+    log.quantity = qty;
+    log.remnantAdded = Boolean(editLogRemnantAdded && editLogRemnantAdded.checked);
+    log.reason = editLogReason ? editLogReason.value.trim() : (log.reason || '');
+
+    // 4. Assignees
+    const assignByVal = editLogAssignBy ? editLogAssignBy.value.trim() : '';
+    const assignToVal = editLogAssignTo ? editLogAssignTo.value.trim() : '';
+    log.assignBy = assignByVal;
+    log.assignTo = assignToVal;
+    log.assignedBy = assignToVal || assignByVal;
+    log.createdBy = assignByVal || log.createdBy;
+
+    // 5. Guided rail specifics
+    if (log.isRail) {
+      log.originalLengthMm = Math.round(origLenIn * 25.4);
+      log.cutLengthMm = Math.round(cutLenIn * 25.4);
+      log.remainderMm = Math.round(remLenIn * 25.4);
+      if (log.pitchMm > 0) {
+        log.holesCount = Math.floor(log.cutLengthMm / log.pitchMm);
+        log.endMarginMm = Number(((log.cutLengthMm - Math.max(0, log.holesCount - 1) * log.pitchMm) / 2).toFixed(1));
+      }
+    }
+
+    // 6. Save & Sync
+    saveCutLogsToStorage();
+    updateCutLogsBadge();
+    renderCutLogsTable();
+    closeEditCutLogModal();
+
+    window.dispatchEvent(new CustomEvent('syncBothToBackend', {
+      detail: { rods: rods, cutLogs: cutLogs }
+    }));
+
+    showToast('Cut log updated successfully', 'success');
+  }
+
+  function handleDeleteCutLogSingle(logId) {
+    if (!logId) return;
+    const log = cutLogs.find(l => l.id === logId);
+    const rodName = log ? log.rodName : 'this cut log';
+
+    showConfirm(
+      'Delete Cut Log Entry?',
+      `Are you sure you want to delete the cut history entry for "${rodName}"? This record will be permanently removed.`,
+      () => {
+        cutLogs = cutLogs.filter(l => l.id !== logId);
+        selectedCutLogIds.delete(logId);
+        saveCutLogsToStorage();
+        updateCutLogsBadge();
+        renderCutLogsTable();
+        closeEditCutLogModal();
+
+        window.dispatchEvent(new CustomEvent('syncBothToBackend', {
+          detail: { rods: rods, cutLogs: cutLogs }
+        }));
+
+        showToast('Cut log entry removed successfully', 'info');
+      }
+    );
+  }
+
   function openCutLogsModal() {
-    filterCutLogsInput.value = '';
+    refreshDomElements();
+    if (filterCutLogsInput) filterCutLogsInput.value = '';
+    // Always default to 'all' dates when opening so all historical entries are immediately visible
+    cutLogsDateFilter = 'all';
+    cutLogsCustomDate = '';
+    updateDateFilterUI();
+
+    const mode = getCurrentSystemMode();
+    const isRailMode = (mode === 'guided-rail');
+    const modalTitle = document.getElementById('cutLogsModalTitle');
+    const modalSubtitle = document.getElementById('cutLogsModalSubtitle');
+    const searchInput = document.getElementById('filterCutLogsInput');
+    const thSpec = document.getElementById('thCutLogsItemSpec');
+
+    if (modalTitle) {
+      modalTitle.textContent = isRailMode
+        ? 'Guided Rail Cutting & Offcut History'
+        : 'Rod Cutting & Offcut History';
+    }
+    if (modalSubtitle) {
+      modalSubtitle.textContent = isRailMode
+        ? 'Log of all linear guided rail precision cuts and offcut remnants'
+        : 'Log of all cuts, deducted sizes, and generated offcut remnants';
+    }
+    if (searchInput) {
+      searchInput.placeholder = isRailMode
+        ? 'Search rail logs by model, length, order ref...'
+        : 'Search logs by rod name, diameter, job ref...';
+    }
+    if (thSpec) {
+      thSpec.textContent = isRailMode ? 'Rail Model / PCC' : 'Rod / Spec';
+    }
+
     // Automatically default to card view on phone screens (<= 768px)
     if (window.innerWidth <= 768) {
       setCutLogsViewMode('cards');
     } else {
       setCutLogsViewMode(cutLogsViewMode || 'table');
     }
-    renderCutLogsTable();
-    cutLogsModalOverlay.classList.remove('hidden');
-    filterCutLogsInput.focus();
+
+    // Make modal visible first
+    if (cutLogsModalOverlay) cutLogsModalOverlay.classList.remove('hidden');
+
+    try {
+      renderCutLogsTable();
+    } catch (err) {
+      console.error('Error rendering cut logs table:', err);
+    }
+
+    if (filterCutLogsInput) filterCutLogsInput.focus();
   }
 
   function closeCutLogsModal() {
-    cutLogsModalOverlay.classList.add('hidden');
+    if (cutLogsModalOverlay) cutLogsModalOverlay.classList.add('hidden');
   }
 
   function updateSelectedCutLogsUI() {
@@ -3094,14 +3637,7 @@
 
   function handlePrintSelectedSlip() {
     if (selectedCutLogIds.size === 0) {
-      const keyword = filterCutLogsInput ? filterCutLogsInput.value.trim().toLowerCase() : '';
-      const filteredLogs = cutLogs.filter(log => {
-        if (!keyword) return true;
-        const matchName = (log.rodName || '').toLowerCase().includes(keyword);
-        const matchReason = (log.reason || '').toLowerCase().includes(keyword);
-        const matchDia = (log.diameterMm + 'mm').includes(keyword);
-        return matchName || matchReason || matchDia;
-      });
+      const filteredLogs = getFilteredCutLogs();
 
       if (filteredLogs.length === 1) {
         printCutSlip(filteredLogs[0]);
@@ -3122,24 +3658,62 @@
   }
 
   function renderCutLogsTable() {
-    const keyword = filterCutLogsInput.value.trim().toLowerCase();
+    refreshDomElements();
+    const mode = getCurrentSystemMode();
+    const isRailMode = (mode === 'guided-rail');
+    const keyword = filterCutLogsInput ? filterCutLogsInput.value.trim() : '';
+    const targetDateKey = getTargetDateFilterKey();
+    const filteredLogs = getFilteredCutLogs();
 
-    const filteredLogs = cutLogs.filter(log => {
-      if (!keyword) return true;
-      const matchName = (log.rodName || '').toLowerCase().includes(keyword);
-      const matchReason = (log.reason || '').toLowerCase().includes(keyword);
-      const matchDia = (log.diameterMm + 'mm').includes(keyword);
-      return matchName || matchReason || matchDia;
-    });
+    // Mode-specific total count
+    const modeTotalLogs = cutLogs.filter(l => isRailMode ? isGuidedRailLog(l) : !isGuidedRailLog(l)).length;
 
-    cutLogsCountText.textContent = `Showing ${filteredLogs.length} of ${cutLogs.length} logged cut(s)`;
-    cutLogsTableBody.innerHTML = '';
+    let dateFilterText = '';
+    if (cutLogsDateFilter === 'today') dateFilterText = ' • Today';
+    else if (cutLogsDateFilter === 'tomorrow') dateFilterText = ' • Tomorrow';
+    else if (cutLogsDateFilter === 'yesterday') dateFilterText = ' • Yesterday';
+    else if (cutLogsDateFilter === 'custom' && cutLogsCustomDate) dateFilterText = ` • Date: ${cutLogsCustomDate}`;
+
+    if (cutLogsCountText) {
+      const modeLabel = isRailMode ? 'rail' : 'rod';
+      cutLogsCountText.textContent = `Showing ${filteredLogs.length} of ${modeTotalLogs} logged ${modeLabel} cut(s)${dateFilterText}`;
+    }
+    if (cutLogsTableBody) cutLogsTableBody.innerHTML = '';
     if (cutLogsCardsContainer) cutLogsCardsContainer.innerHTML = '';
+
+    const thSpec = document.getElementById('thCutLogsItemSpec');
+    if (thSpec) {
+      thSpec.textContent = isRailMode ? 'Rail Model / PCC' : 'Rod / Spec';
+    }
 
     if (filteredLogs.length === 0) {
       if (cutLogsTableWrapper) cutLogsTableWrapper.classList.add('hidden');
       if (cutLogsCardsContainer) cutLogsCardsContainer.classList.add('hidden');
-      cutLogsEmptyState.classList.remove('hidden');
+      if (cutLogsEmptyState) {
+        cutLogsEmptyState.classList.remove('hidden');
+        const titleEl = cutLogsEmptyState.querySelector('.empty-title');
+        const descEl = cutLogsEmptyState.querySelector('.empty-desc');
+
+        if (modeTotalLogs > 0) {
+          if (titleEl) titleEl.textContent = 'No Cut Logs for Selected Filter';
+          if (descEl) {
+            const dateDesc = targetDateKey ? ` on ${targetDateKey}` : '';
+            const searchDesc = keyword ? ` matching "${escapeHtml(keyword)}"` : '';
+            descEl.innerHTML = `No ${isRailMode ? 'guided rail ' : ''}cuts recorded${dateDesc}${searchDesc}.<br><button type="button" class="btn btn-secondary btn-sm" id="btnResetCutLogsFilter" style="margin-top: 10px; cursor: pointer;">Show All Dates & Clear Filter</button>`;
+          }
+        } else {
+          if (titleEl) {
+            titleEl.textContent = isRailMode
+              ? 'No Guided Rail Cut Logs Recorded Yet'
+              : 'No Rod Cut Logs Recorded Yet';
+          }
+          if (descEl) {
+            descEl.textContent = isRailMode
+              ? 'When you cut guided rails to size, every precision cut and generated offcut will be recorded here.'
+              : 'When you cut rods to size, every cut and generated offcut will be recorded here.';
+          }
+        }
+      }
       updateSelectedCutLogsUI();
       return;
     }
@@ -3150,13 +3724,15 @@
 
     filteredLogs.forEach(log => {
       const isSelected = selectedCutLogIds.has(log.id);
-      const dateStr = new Date(log.timestamp).toLocaleString([], {
+      const isRail = isGuidedRailLog(log);
+      const dObj = parseLogDate(log.timestamp);
+      const dateStr = dObj ? dObj.toLocaleString([], {
         year: 'numeric',
         month: 'short',
         day: 'numeric',
         hour: '2-digit',
         minute: '2-digit'
-      });
+      }) : '—';
 
       const origLen = getLogOrigLength(log);
       const cutLen = getLogCutLength(log);
@@ -3164,13 +3740,40 @@
 
       let remnantDisplay = '';
       let remnantCardBadge = '';
-      if (remLen > 0) {
-        remnantDisplay = `<span class="badge-cut-rem">✂️ +${formatDisplayLength(remLen)} In</span> ${log.remnantAdded ? '<span style="font-size: 0.725rem; color: var(--success-solid); font-weight: 600;">(Added to stock)</span>' : ''}`;
-        remnantCardBadge = `<span class="badge-cut-rem">✂️ Offcut +${formatDisplayLength(remLen)} In</span> ${log.remnantAdded ? '<span style="font-size: 0.725rem; color: var(--success-solid); font-weight: 600;">(In Stock)</span>' : ''}`;
+      if (isRail) {
+        const remMm = log.remainderMm !== undefined ? log.remainderMm : Math.round(remLen * 25.4);
+        if (remMm > 0) {
+          remnantDisplay = `<span class="badge-cut-rem">✂️ +${remMm} mm (${formatDisplayLength(remLen)} In)</span> ${log.remnantAdded ? '<span style="font-size: 0.725rem; color: var(--success-solid); font-weight: 600;">(In Stock)</span>' : ''}`;
+          remnantCardBadge = `<span class="badge-cut-rem">✂️ Offcut +${remMm} mm</span> ${log.remnantAdded ? '<span style="font-size: 0.725rem; color: var(--success-solid); font-weight: 600;">(In Stock)</span>' : ''}`;
+        } else {
+          remnantDisplay = `<span class="badge-cut-exact">Exact Cut (0 scrap)</span>`;
+          remnantCardBadge = `<span class="badge-cut-exact">Exact Cut (0 scrap)</span>`;
+        }
       } else {
-        remnantDisplay = `<span class="badge-cut-exact">Exact Cut (0 scrap)</span>`;
-        remnantCardBadge = `<span class="badge-cut-exact">Exact Cut (0 scrap)</span>`;
+        if (remLen > 0) {
+          remnantDisplay = `<span class="badge-cut-rem">✂️ +${formatDisplayLength(remLen)} In</span> ${log.remnantAdded ? '<span style="font-size: 0.725rem; color: var(--success-solid); font-weight: 600;">(Added to stock)</span>' : ''}`;
+          remnantCardBadge = `<span class="badge-cut-rem">✂️ Offcut +${formatDisplayLength(remLen)} In</span> ${log.remnantAdded ? '<span style="font-size: 0.725rem; color: var(--success-solid); font-weight: 600;">(In Stock)</span>' : ''}`;
+        } else {
+          remnantDisplay = `<span class="badge-cut-exact">Exact Cut (0 scrap)</span>`;
+          remnantCardBadge = `<span class="badge-cut-exact">Exact Cut (0 scrap)</span>`;
+        }
       }
+
+      // Spec column details
+      const specTitle = isRail
+        ? (log.modelName ? `${log.modelName}` : escapeHtml(log.rodName))
+        : escapeHtml(log.rodName);
+      const specSub = isRail
+        ? `PCC: ${log.pitchMm || log.diameterMm || '—'} mm • ${log.holesCount !== undefined ? log.holesCount + ' holes' : 'Linear Rail'}`
+        : `${log.diameterMm} mm diameter`;
+
+      // Length displays
+      const origText = isRail
+        ? `${log.originalLengthMm || Math.round(origLen * 25.4)} mm`
+        : `${formatDisplayLength(origLen)} In`;
+      const cutText = isRail
+        ? `-${log.cutLengthMm || Math.round(cutLen * 25.4)} mm`
+        : `-${formatDisplayLength(cutLen)} In`;
 
       // 1. Table Row (for Desktop view)
       const tr = document.createElement('tr');
@@ -3181,25 +3784,31 @@
         </td>
         <td style="font-size: 0.8rem; color: var(--text-muted); white-space: nowrap;">${dateStr}</td>
         <td>
-          <div style="font-weight: 600;">${escapeHtml(log.rodName)}</div>
-          <div class="font-mono text-muted" style="font-size: 0.75rem;">${log.diameterMm} mm diameter</div>
+          <div style="font-weight: 600;">${specTitle} ${isRail ? '<span style="font-size: 0.68rem; background: #ede9fe; color: #6d28d9; padding: 1px 6px; border-radius: 9999px; font-weight: 700; margin-left: 4px;">Rail</span>' : ''}</div>
+          <div class="font-mono text-muted" style="font-size: 0.75rem;">${specSub}</div>
         </td>
-        <td class="text-right font-mono">${formatDisplayLength(origLen)} In</td>
-        <td class="text-right font-mono" style="color: var(--danger-solid); font-weight: 700;">-${formatDisplayLength(cutLen)} In</td>
+        <td class="text-right font-mono">${origText}</td>
+        <td class="text-right font-mono" style="color: var(--danger-solid); font-weight: 700;">${cutText}</td>
         <td class="text-right font-mono"><strong>${log.quantity}</strong></td>
         <td>${remnantDisplay}</td>
         <td><span style="font-size: 0.825rem; color: var(--text-secondary);">${escapeHtml(log.reason || '—')}</span></td>
         <td style="text-align:center;">
           <div style="font-size:0.75rem; color:var(--text-secondary); line-height:1.5;">
-            ${log.createdBy ? `<div><span style="font-weight:500;">👤 Created:</span> ${escapeHtml(log.createdBy)}</div>` : ''}
-            ${log.assignedBy ? `<div><span style="font-weight:500;">🏷️ Assigned:</span> ${escapeHtml(log.assignedBy)}</div>` : (!log.createdBy ? '—' : '')}
+            ${(log.assignBy || log.createdBy) ? `<div><span style="font-weight:500;">👤 By:</span> ${escapeHtml(log.assignBy || log.createdBy)}</div>` : ''}
+            ${(log.assignTo || log.assignedBy) ? `<div><span style="font-weight:500;">🏷️ To:</span> ${escapeHtml(log.assignTo || log.assignedBy)}</div>` : (!log.assignBy && !log.createdBy ? '—' : '')}
           </div>
         </td>
         <td style="text-align:center;">
-          <button class="btn btn-secondary btn-xs btn-print-slip" data-log-id="${log.id}" title="Print cut invoice slip"
-            style="padding:3px 8px; font-size:0.72rem; white-space:nowrap;">
-            🖨️ Slip
-          </button>
+          <div style="display:inline-flex; align-items:center; gap:4px;">
+            <button class="btn btn-secondary btn-xs btn-print-slip" data-log-id="${log.id}" title="Print cut invoice slip"
+              style="padding:3px 8px; font-size:0.72rem; white-space:nowrap;">
+              🖨️ Slip
+            </button>
+            <button class="btn btn-ghost btn-xs btn-edit-cut-log" data-log-id="${log.id}" title="Edit this cut log entry"
+              style="padding:3px 6px; font-size:0.72rem;">
+              ✏️
+            </button>
+          </div>
         </td>
       `;
       cutLogsTableBody.appendChild(tr);
@@ -3211,8 +3820,8 @@
         card.innerHTML = `
           <div class="cut-log-card-header" style="display:flex; justify-content:space-between; align-items:flex-start; gap:8px;">
             <div class="cut-log-card-title-group" style="flex:1;">
-              <span class="cut-log-rod-name">${escapeHtml(log.rodName)}</span>
-              <span class="cut-log-spec-pill">⌀ ${log.diameterMm} mm</span>
+              <span class="cut-log-rod-name">${specTitle} ${isRail ? '<span style="font-size: 0.68rem; background: #ede9fe; color: #6d28d9; padding: 1px 6px; border-radius: 9999px; font-weight: 700;">Rail</span>' : ''}</span>
+              <span class="cut-log-spec-pill">${isRail ? 'PCC ' + (log.pitchMm || log.diameterMm) + ' mm' : '⌀ ' + log.diameterMm + ' mm'}</span>
             </div>
             <label class="cut-log-select-pill" style="display:inline-flex; align-items:center; gap:5px; font-size:0.75rem; font-weight:700; cursor:pointer; background:var(--bg-surface-elevated, #f1f5f9); border:1px solid var(--border-medium, #cbd5e1); border-radius:9999px; padding:3px 9px; user-select:none; flex-shrink:0;">
               <input type="checkbox" class="cut-log-checkbox" data-log-id="${log.id}" ${isSelected ? 'checked' : ''} style="cursor:pointer; width:15px; height:15px; accent-color: var(--primary-600);" />
@@ -3224,11 +3833,11 @@
           <div class="cut-log-card-metrics">
             <div class="cut-log-metric-item">
               <span class="cut-log-metric-label">Original</span>
-              <span class="cut-log-metric-value font-mono">${formatDisplayLength(origLen)} In</span>
+              <span class="cut-log-metric-value font-mono">${origText}</span>
             </div>
             <div class="cut-log-metric-item">
               <span class="cut-log-metric-label">Cut Size</span>
-              <span class="cut-log-metric-value cut-length font-mono">-${formatDisplayLength(cutLen)} In</span>
+              <span class="cut-log-metric-value cut-length font-mono">${cutText}</span>
             </div>
             <div class="cut-log-metric-item">
               <span class="cut-log-metric-label">Quantity</span>
@@ -3248,17 +3857,21 @@
           </div>
           ` : ''}
 
-          ${(log.createdBy || log.assignedBy) ? `
+          ${(log.assignBy || log.createdBy || log.assignTo || log.assignedBy) ? `
           <div class="cut-log-card-reason" style="margin-top:4px; display:flex; flex-direction:column; gap:2px;">
-            ${log.createdBy ? `<div style="font-size:0.78rem; color:var(--text-secondary);"><strong>👤 Created by:</strong> ${escapeHtml(log.createdBy)}</div>` : ''}
-            ${log.assignedBy ? `<div style="font-size:0.78rem; color:var(--text-secondary);"><strong>🏷️ Assigned by:</strong> ${escapeHtml(log.assignedBy)}</div>` : ''}
+            ${(log.assignBy || log.createdBy) ? `<div style="font-size:0.78rem; color:var(--text-secondary);"><strong>👤 Assign By:</strong> ${escapeHtml(log.assignBy || log.createdBy)}</div>` : ''}
+            ${(log.assignTo || log.assignedBy) ? `<div style="font-size:0.78rem; color:var(--text-secondary);"><strong>🏷️ Assign To:</strong> ${escapeHtml(log.assignTo || log.assignedBy)}</div>` : ''}
           </div>
           ` : ''}
 
-          <div style="margin-top: 10px; border-top: 1px dashed var(--border-subtle); padding-top: 10px;">
+          <div style="margin-top: 10px; border-top: 1px dashed var(--border-subtle); padding-top: 10px; display:flex; gap:8px;">
             <button class="btn btn-secondary btn-sm btn-print-slip" data-log-id="${log.id}"
-              style="width:100%; font-size:0.8rem; display:flex; align-items:center; justify-content:center; gap:6px;">
-              🖨️ Print Single Slip
+              style="flex:1; font-size:0.8rem; display:flex; align-items:center; justify-content:center; gap:6px;">
+              🖨️ Print Slip
+            </button>
+            <button class="btn btn-ghost btn-sm btn-edit-cut-log" data-log-id="${log.id}"
+              style="font-size:0.8rem; padding:6px 12px;" title="Edit log">
+              ✏️ Edit
             </button>
           </div>
         `;
@@ -3270,23 +3883,70 @@
   }
 
   function exportCutLogsCsv() {
-    if (cutLogs.length === 0) {
-      showToast('No cut logs to export', 'warning');
+    const mode = getCurrentSystemMode();
+    const isRailMode = (mode === 'guided-rail');
+    const modeCutLogs = cutLogs.filter(l => isRailMode ? isGuidedRailLog(l) : !isGuidedRailLog(l));
+
+    if (modeCutLogs.length === 0) {
+      showToast(`No ${isRailMode ? 'guided rail' : 'chrome rod'} cut logs to export`, 'warning');
       return;
     }
 
-    const headers = ['Timestamp', 'Rod Name', 'Diameter (mm)', 'Original Length (In)', 'Cut Length (In)', 'Quantity', 'Remainder Offcut (In)', 'Remnant Added', 'Job Reason'];
-    const rows = cutLogs.map(log => [
-      escapeCsvField(new Date(log.timestamp).toISOString()),
-      escapeCsvField(log.rodName || ''),
-      log.diameterMm,
-      getLogOrigLength(log),
-      getLogCutLength(log),
-      log.quantity,
-      getLogRemainder(log),
-      log.remnantAdded ? 'Yes' : 'No',
-      escapeCsvField(log.reason || '')
-    ]);
+    const targetDateKey = getTargetDateFilterKey();
+    const keyword = filterCutLogsInput ? filterCutLogsInput.value.trim() : '';
+    const isFiltered = Boolean(targetDateKey || keyword);
+    const logsToExport = isFiltered ? getFilteredCutLogs() : modeCutLogs;
+
+    if (logsToExport.length === 0) {
+      showToast('No cut logs match active filter to export', 'warning');
+      return;
+    }
+
+    let headers = [];
+    let rows = [];
+
+    if (isRailMode) {
+      headers = ['Timestamp', 'Rail Model', 'PCC / Pitch (mm)', 'Original Length (mm)', 'Cut Length (mm)', 'Quantity', 'Remainder Offcut (mm)', 'Holes Count', 'End Margin (mm)', 'Remnant Added', 'Order Notes', 'Assign By', 'Assign To'];
+      rows = logsToExport.map(log => {
+        const d = parseLogDate(log.timestamp);
+        const origMm = log.originalLengthMm || Math.round(getLogOrigLength(log) * 25.4);
+        const cutMm = log.cutLengthMm || Math.round(getLogCutLength(log) * 25.4);
+        const remMm = log.remainderMm !== undefined ? log.remainderMm : Math.round(getLogRemainder(log) * 25.4);
+        return [
+          escapeCsvField(d ? d.toISOString() : ''),
+          escapeCsvField(log.modelName || log.rodName || ''),
+          log.pitchMm || log.diameterMm || '',
+          origMm,
+          cutMm,
+          log.quantity,
+          remMm,
+          log.holesCount !== undefined ? log.holesCount : '',
+          log.endMarginMm !== undefined ? log.endMarginMm : '',
+          log.remnantAdded ? 'Yes' : 'No',
+          escapeCsvField(log.reason || ''),
+          escapeCsvField(log.assignBy || log.createdBy || ''),
+          escapeCsvField(log.assignTo || log.assignedBy || '')
+        ];
+      });
+    } else {
+      headers = ['Timestamp', 'Rod Name', 'Diameter (mm)', 'Original Length (In)', 'Cut Length (In)', 'Quantity', 'Remainder Offcut (In)', 'Remnant Added', 'Job Reason', 'Assign By', 'Assign To'];
+      rows = logsToExport.map(log => {
+        const d = parseLogDate(log.timestamp);
+        return [
+          escapeCsvField(d ? d.toISOString() : ''),
+          escapeCsvField(log.rodName || ''),
+          log.diameterMm,
+          getLogOrigLength(log),
+          getLogCutLength(log),
+          log.quantity,
+          getLogRemainder(log),
+          log.remnantAdded ? 'Yes' : 'No',
+          escapeCsvField(log.reason || ''),
+          escapeCsvField(log.assignBy || log.createdBy || ''),
+          escapeCsvField(log.assignTo || log.assignedBy || '')
+        ];
+      });
+    }
 
     const csvContent = [headers.join(','), ...rows.map(row => row.join(','))].join('\r\n');
     const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
@@ -3294,27 +3954,34 @@
 
     const a = document.createElement('a');
     a.href = url;
-    a.download = `Rod_Cut_History_Logs_${new Date().toISOString().slice(0, 10)}.csv`;
+    const prefix = isRailMode ? 'Guided_Rail_Cut_History_Logs' : 'Rod_Cut_History_Logs';
+    const dateSuffix = targetDateKey ? `_${targetDateKey}` : `_${new Date().toISOString().slice(0, 10)}`;
+    a.download = `${prefix}${dateSuffix}.csv`;
     document.body.appendChild(a);
     a.click();
     document.body.removeChild(a);
     URL.revokeObjectURL(url);
 
-    showToast('Cut logs exported to CSV successfully', 'success');
+    showToast(`Exported ${logsToExport.length} ${isRailMode ? 'guided rail' : 'chrome rod'} cut log(s) to CSV successfully`, 'success');
   }
 
   function clearCutLogs() {
+    const mode = getCurrentSystemMode();
+    const isRailMode = (mode === 'guided-rail');
+    const modeLabel = isRailMode ? 'Guided Rail' : 'Chrome Rod';
+
     showConfirm(
-      'Clear Cut History Logs?',
-      'This will delete all recorded cutting log entries from storage. This will not change current stock quantities.',
+      `Clear ${modeLabel} Cut History Logs?`,
+      `This will delete all recorded ${modeLabel} cutting log entries from storage. This will not change current stock quantities or affect the other system's logs.`,
       () => {
-        cutLogs = [];
+        // Keep logs belonging to the OTHER mode
+        cutLogs = cutLogs.filter(l => isRailMode ? !isGuidedRailLog(l) : isGuidedRailLog(l));
         selectedCutLogIds.clear();
         saveCutLogsToStorage();
         updateCutLogsBadge();
         renderCutLogsTable();
         updateSelectedCutLogsUI();
-        showToast('All cut history logs cleared', 'info');
+        showToast(`All ${modeLabel} cut history logs cleared`, 'info');
       },
       true
     );
@@ -3419,7 +4086,12 @@
         saveRodsToStorage();
         updateDashboard();
         closeRodModal();
-        showToast(`Updated "${name}" successfully`, 'success');
+        const hasScriptUrl = Boolean(localStorage.getItem('rodsync_gsheets_script_url'));
+        if (hasScriptUrl) {
+          showToast(`Updated "${name}" in stock (Synced to Google Sheet)!`, 'success');
+        } else {
+          showToast(`Updated "${name}" in local stock. (To save to Google Sheet, connect Apps Script URL)`, 'info', 5000);
+        }
       }
       return;
     }
@@ -3467,7 +4139,12 @@
     saveRodsToStorage();
     updateDashboard();
     closeRodModal();
-    showToast(`Added ${quantity} units of "${name}" to stock`, 'success');
+    const hasScriptUrl = Boolean(localStorage.getItem('rodsync_gsheets_script_url'));
+    if (hasScriptUrl) {
+      showToast(`Added ${quantity} units of "${name}" (Synced to Google Sheet)!`, 'success');
+    } else {
+      showToast(`Added ${quantity} units of "${name}" to local stock. (To save to Google Sheet, connect Apps Script URL)`, 'info', 5000);
+    }
   }
 
   // --- DUPLICATE RESOLUTION DIALOG ---
@@ -3673,6 +4350,292 @@
     showToast('Exported inventory to CSV successfully', 'success');
   }
 
+  // --- 5-SHEET MASTER EXCEL (.XLS / SPREADSHEETML) EXPORT ---
+  function exportMasterExcel() {
+    try {
+      const rodList = Array.isArray(rods) ? rods : [];
+      const allLogs = Array.isArray(cutLogs) ? cutLogs : [];
+      let railList = [];
+      if (typeof window !== 'undefined' && window.getGuidedRailStock) {
+        railList = window.getGuidedRailStock() || [];
+      }
+
+      // Filter cut logs for Chrome Rod vs Guided Rail
+      const rodLogs = allLogs.filter(l => !l.isRail && !l.modelName && !String(l.id || '').startsWith('gr-cut-') && !String(l.rodName || '').toLowerCase().includes('guided rail'));
+      const railLogs = allLogs.filter(l => l.isRail === true || Boolean(l.modelName) || String(l.id || '').startsWith('gr-cut-') || String(l.rodName || '').toLowerCase().includes('guided rail'));
+
+      function escapeXml(val) {
+        if (val === null || val === undefined) return '';
+        return String(val)
+          .replace(/&/g, '&amp;')
+          .replace(/</g, '&lt;')
+          .replace(/>/g, '&gt;')
+          .replace(/"/g, '&quot;')
+          .replace(/'/g, '&apos;');
+      }
+
+      function cell(val, type, styleId) {
+        const s = styleId ? ` ss:StyleID="${styleId}"` : '';
+        const t = (type === 'Number' && !isNaN(Number(val)) && val !== '') ? 'Number' : 'String';
+        const v = (t === 'Number') ? Number(val) : escapeXml(val);
+        return `<Cell${s}><Data ss:Type="${t}">${v}</Data></Cell>`;
+      }
+
+      function row(cells) {
+        return `<Row>${cells.join('')}</Row>`;
+      }
+
+      // Build XML Spreadsheet 2003 (SpreadsheetML)
+      let xml = `<?xml version="1.0" encoding="UTF-8"?>
+<?mso-application progid="Excel.Sheet"?>
+<Workbook xmlns="urn:schemas-microsoft-com:office:spreadsheet"
+ xmlns:o="urn:schemas-microsoft-com:office:office"
+ xmlns:x="urn:schemas-microsoft-com:office:excel"
+ xmlns:ss="urn:schemas-microsoft-com:office:spreadsheet"
+ xmlns:html="http://www.w3.org/TR/REC-html40">
+ <Styles>
+  <Style ss:ID="Default" ss:Name="Normal">
+   <Alignment ss:Vertical="Center"/>
+   <Borders/>
+   <Font ss:FontName="Calibri" ss:Size="11" ss:Color="#000000"/>
+   <Interior/>
+   <NumberFormat/>
+   <Protection/>
+  </Style>
+  <Style ss:ID="Title">
+   <Font ss:FontName="Calibri" ss:Size="13" ss:Color="#FFFFFF" ss:Bold="1"/>
+   <Interior ss:Color="#4F46E5" ss:Pattern="Solid"/>
+   <Alignment ss:Horizontal="Left" ss:Vertical="Center"/>
+  </Style>
+  <Style ss:ID="Header1">
+   <Font ss:FontName="Calibri" ss:Size="11" ss:Color="#0F172A" ss:Bold="1"/>
+   <Interior ss:Color="#E2E8F0" ss:Pattern="Solid"/>
+   <Borders>
+    <Border ss:Position="Bottom" ss:LineStyle="Continuous" ss:Weight="1" ss:Color="#94A3B8"/>
+   </Borders>
+  </Style>
+  <Style ss:ID="Header2">
+   <Font ss:FontName="Calibri" ss:Size="11" ss:Color="#1E3A8A" ss:Bold="1"/>
+   <Interior ss:Color="#DBEAFE" ss:Pattern="Solid"/>
+   <Borders>
+    <Border ss:Position="Bottom" ss:LineStyle="Continuous" ss:Weight="1" ss:Color="#93C5FD"/>
+   </Borders>
+  </Style>
+  <Style ss:ID="Header3">
+   <Font ss:FontName="Calibri" ss:Size="11" ss:Color="#4C1D95" ss:Bold="1"/>
+   <Interior ss:Color="#EDE9FE" ss:Pattern="Solid"/>
+   <Borders>
+    <Border ss:Position="Bottom" ss:LineStyle="Continuous" ss:Weight="1" ss:Color="#C4B5FD"/>
+   </Borders>
+  </Style>
+  <Style ss:ID="Header4">
+   <Font ss:FontName="Calibri" ss:Size="11" ss:Color="#7F1D1D" ss:Bold="1"/>
+   <Interior ss:Color="#FEE2E2" ss:Pattern="Solid"/>
+   <Borders>
+    <Border ss:Position="Bottom" ss:LineStyle="Continuous" ss:Weight="1" ss:Color="#FCA5A5"/>
+   </Borders>
+  </Style>
+  <Style ss:ID="Header5">
+   <Font ss:FontName="Calibri" ss:Size="11" ss:Color="#78350F" ss:Bold="1"/>
+   <Interior ss:Color="#FEF3C7" ss:Pattern="Solid"/>
+   <Borders>
+    <Border ss:Position="Bottom" ss:LineStyle="Continuous" ss:Weight="1" ss:Color="#FDE68A"/>
+   </Borders>
+  </Style>
+ </Styles>
+`;
+
+      // ── Sheet 1: Overview ──
+      xml += ` <Worksheet ss:Name="Sheet 1 - Overview">
+  <Table>
+   ${row([cell('RodSync - Central Stock & Cut History Overview', 'String', 'Title')])}
+   ${row([cell('Export Timestamp', 'String'), cell(new Date().toLocaleString(), 'String')])}
+   ${row([cell('', 'String'), cell('', 'String')])}
+   ${row([cell('Worksheet Name', 'String', 'Header1'), cell('Total Records', 'String', 'Header1')])}
+   ${row([cell('Chrome rod inventory', 'String'), cell(rodList.length, 'Number')])}
+   ${row([cell('Guided rail inventory', 'String'), cell(railList.length, 'Number')])}
+   ${row([cell('Chrome rod cutting logs', 'String'), cell(rodLogs.length, 'Number')])}
+   ${row([cell('Guided rail cutting logs', 'String'), cell(railLogs.length, 'Number')])}
+  </Table>
+ </Worksheet>
+`;
+
+      // ── Sheet 2: Chrome Rod Stock ──
+      const rodRows = [
+        row([
+          cell('ID', 'String', 'Header2'),
+          cell('SKU', 'String', 'Header2'),
+          cell('Rod Name', 'String', 'Header2'),
+          cell('Diameter (mm)', 'String', 'Header2'),
+          cell('Length (In)', 'String', 'Header2'),
+          cell('Quantity', 'String', 'Header2'),
+          cell('Notes', 'String', 'Header2'),
+          cell('Last Updated', 'String', 'Header2')
+        ])
+      ];
+      rodList.forEach(r => {
+        const len = (r.lengthIn !== undefined && r.lengthIn !== null) ? r.lengthIn : (r.lengthFt || 0);
+        rodRows.push(row([
+          cell(r.id || '', 'String'),
+          cell(r.sku || '', 'String'),
+          cell(r.name || '', 'String'),
+          cell(r.diameterMm || 0, 'Number'),
+          cell(len, 'Number'),
+          cell(r.quantity || 0, 'Number'),
+          cell(r.notes || '', 'String'),
+          cell(r.updatedAt ? new Date(r.updatedAt).toLocaleString() : '', 'String')
+        ]));
+      });
+      xml += ` <Worksheet ss:Name="Chrome rod inventory">
+  <Table>
+   ${rodRows.join('\n   ')}
+  </Table>
+ </Worksheet>
+`;
+
+      // ── Sheet 3: Guided Rail Stock ──
+      const railRows = [
+        row([
+          cell('ID', 'String', 'Header3'),
+          cell('Model Name', 'String', 'Header3'),
+          cell('SKU', 'String', 'Header3'),
+          cell('Rail Width (mm)', 'String', 'Header3'),
+          cell('Rail Height (mm)', 'String', 'Header3'),
+          cell('Pitch / PCC (mm)', 'String', 'Header3'),
+          cell('Length (mm)', 'String', 'Header3'),
+          cell('Quantity', 'String', 'Header3'),
+          cell('Storage Rack / Notes', 'String', 'Header3'),
+          cell('Last Updated', 'String', 'Header3')
+        ])
+      ];
+      railList.forEach(g => {
+        railRows.push(row([
+          cell(g.id || '', 'String'),
+          cell(g.modelName || '', 'String'),
+          cell(g.sku || '', 'String'),
+          cell(g.railWidthMm || 0, 'Number'),
+          cell(g.railHeightMm || 0, 'Number'),
+          cell(g.pitchMm || 0, 'Number'),
+          cell(g.lengthMm || 0, 'Number'),
+          cell(g.quantity || 0, 'Number'),
+          cell(g.notes || '', 'String'),
+          cell(g.updatedAt ? new Date(g.updatedAt).toLocaleString() : '', 'String')
+        ]));
+      });
+      xml += ` <Worksheet ss:Name="Guided rail inventory">
+  <Table>
+   ${railRows.join('\n   ')}
+  </Table>
+ </Worksheet>
+`;
+
+      // ── Sheet 4: Chrome Rod Cut Logs ──
+      const rodCutRows = [
+        row([
+          cell('ID', 'String', 'Header4'),
+          cell('Date & Time', 'String', 'Header4'),
+          cell('Rod Name', 'String', 'Header4'),
+          cell('Diameter (mm)', 'String', 'Header4'),
+          cell('Original Length (In)', 'String', 'Header4'),
+          cell('Cut Length (In)', 'String', 'Header4'),
+          cell('Quantity', 'String', 'Header4'),
+          cell('Remnant Offcut (In)', 'String', 'Header4'),
+          cell('Remnant Added', 'String', 'Header4'),
+          cell('Job / Reason', 'String', 'Header4'),
+          cell('Assign By', 'String', 'Header4'),
+          cell('Assign To', 'String', 'Header4')
+        ])
+      ];
+      rodLogs.forEach(l => {
+        const origLen = (l.originalLengthIn !== undefined && l.originalLengthIn !== null) ? l.originalLengthIn : (l.originalLengthFt || 0);
+        const cutLen = (l.cutLengthIn !== undefined && l.cutLengthIn !== null) ? l.cutLengthIn : (l.cutLengthFt || 0);
+        const remLen = (l.remainderIn !== undefined && l.remainderIn !== null) ? l.remainderIn : (l.remainderFt || 0);
+        rodCutRows.push(row([
+          cell(l.id || '', 'String'),
+          cell(l.timestamp ? new Date(l.timestamp).toLocaleString() : '', 'String'),
+          cell(l.rodName || '', 'String'),
+          cell(l.diameterMm || 0, 'Number'),
+          cell(origLen, 'Number'),
+          cell(cutLen, 'Number'),
+          cell(l.quantity || 0, 'Number'),
+          cell(remLen, 'Number'),
+          cell((l.remnantAdded === true || l.remnantAdded === 'Yes') ? 'Yes' : 'No', 'String'),
+          cell(l.reason || '', 'String'),
+          cell(l.assignBy || l.createdBy || '', 'String'),
+          cell(l.assignTo || l.assignedBy || '', 'String')
+        ]));
+      });
+      xml += ` <Worksheet ss:Name="Chrome rod cutting logs">
+  <Table>
+   ${rodCutRows.join('\n   ')}
+  </Table>
+ </Worksheet>
+`;
+
+      // ── Sheet 5: Guided Rail Cut Logs ──
+      const railCutRows = [
+        row([
+          cell('ID', 'String', 'Header5'),
+          cell('Date & Time', 'String', 'Header5'),
+          cell('Rail Model', 'String', 'Header5'),
+          cell('Pitch / PCC (mm)', 'String', 'Header5'),
+          cell('Original Length (mm)', 'String', 'Header5'),
+          cell('Cut Length (mm)', 'String', 'Header5'),
+          cell('Quantity', 'String', 'Header5'),
+          cell('Remnant Offcut (mm)', 'String', 'Header5'),
+          cell('Holes Count', 'String', 'Header5'),
+          cell('End Margin (mm)', 'String', 'Header5'),
+          cell('Remnant Added', 'String', 'Header5'),
+          cell('Order / Job Notes', 'String', 'Header5'),
+          cell('Assign By', 'String', 'Header5'),
+          cell('Assign To', 'String', 'Header5')
+        ])
+      ];
+      railLogs.forEach(q => {
+        const origMm = q.originalLengthMm || (q.originalLengthIn ? Math.round(q.originalLengthIn * 25.4) : 0);
+        const cutMm = q.cutLengthMm || (q.cutLengthIn ? Math.round(q.cutLengthIn * 25.4) : 0);
+        const remMm = q.remainderMm !== undefined ? q.remainderMm : (q.remainderIn ? Math.round(q.remainderIn * 25.4) : 0);
+        railCutRows.push(row([
+          cell(q.id || '', 'String'),
+          cell(q.timestamp ? new Date(q.timestamp).toLocaleString() : '', 'String'),
+          cell(q.modelName || q.rodName || '', 'String'),
+          cell(q.pitchMm || q.diameterMm || 0, 'Number'),
+          cell(origMm, 'Number'),
+          cell(cutMm, 'Number'),
+          cell(q.quantity || 0, 'Number'),
+          cell(remMm, 'Number'),
+          cell(q.holesCount || 0, 'Number'),
+          cell(q.endMarginMm || 0, 'Number'),
+          cell((q.remnantAdded === true || q.remnantAdded === 'Yes') ? 'Yes' : 'No', 'String'),
+          cell(q.reason || '', 'String'),
+          cell(q.assignBy || q.createdBy || '', 'String'),
+          cell(q.assignTo || q.assignedBy || '', 'String')
+        ]));
+      });
+      xml += ` <Worksheet ss:Name="Guided rail cutting logs">
+  <Table>
+   ${railCutRows.join('\n   ')}
+  </Table>
+ </Worksheet>
+</Workbook>`;
+
+      const blob = new Blob([xml], { type: 'application/vnd.ms-excel;charset=utf-8;' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `RodSync_Master_5Sheets_${new Date().toISOString().slice(0, 10)}.xls`;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(url);
+
+      showToast('Exported Master Excel (.xls) with 5 sheets successfully!', 'success');
+    } catch (err) {
+      console.error('Error exporting Master Excel:', err);
+      showToast('Export failed: ' + (err.message || 'Unknown error'), 'error');
+    }
+  }
+
   function escapeCsvField(str) {
     const stringVal = String(str);
     if (stringVal.includes(',') || stringVal.includes('"') || stringVal.includes('\n')) {
@@ -3710,19 +4673,40 @@
     const lines = csvText.split(/\r?\n/).filter(line => line.trim().length > 0);
     if (lines.length < 2) return 0;
 
+    const headers = parseCsvRow(lines[0]).map(h => (h || '').trim().toLowerCase());
+    let nameIdx = -1, diaIdx = -1, lenIdx = -1, qtyIdx = -1, skuIdx = -1, notesIdx = -1;
+
+    headers.forEach((h, idx) => {
+      if (h.includes('dia')) diaIdx = idx;
+      else if (h.includes('len')) lenIdx = idx;
+      else if (h.includes('qty') || h.includes('quant')) qtyIdx = idx;
+      else if (h.includes('name') || h.includes('rod')) nameIdx = idx;
+      else if (h.includes('sku')) skuIdx = idx;
+      else if (h.includes('note')) notesIdx = idx;
+    });
+
+    const hasHeaderMatch = (diaIdx !== -1 && lenIdx !== -1 && qtyIdx !== -1);
+    if (!hasHeaderMatch) {
+      if (headers.length === 4) {
+        nameIdx = 0; diaIdx = 1; lenIdx = 2; qtyIdx = 3;
+      } else {
+        skuIdx = 0; nameIdx = 1; diaIdx = 2; lenIdx = 3; qtyIdx = 4; notesIdx = 5;
+      }
+    }
+
     let addedCount = 0;
     for (let i = 1; i < lines.length; i++) {
       const parts = parseCsvRow(lines[i]);
-      if (parts.length < 5) continue;
+      if (parts.length < 3) continue;
 
-      const sku = (parts[0] || '').trim();
-      const name = (parts[1] || '').trim();
-      const diameterMm = parseFloat(parts[2]);
-      const lengthVal = parseFloat(parts[3]);
-      const quantity = parseInt(parts[4], 10);
-      const notes = (parts.length >= 7 ? parts[6] : parts[5] || '').trim();
+      const diameterMm = parseFloat(diaIdx >= 0 ? parts[diaIdx] : '');
+      const lengthVal = parseFloat(lenIdx >= 0 ? parts[lenIdx] : '');
+      const quantity = parseInt(qtyIdx >= 0 ? parts[qtyIdx] : '1', 10);
+      const name = (nameIdx >= 0 && parts[nameIdx] ? parts[nameIdx] : 'Chrome Rod').trim();
+      const sku = (skuIdx >= 0 && parts[skuIdx] ? parts[skuIdx] : `ROD-${Math.round(diameterMm)}MM-${lengthVal}IN-STOCK`).trim();
+      const notes = (notesIdx >= 0 && parts[notesIdx] ? parts[notesIdx] : '').trim();
 
-      if (!name || isNaN(diameterMm) || diameterMm <= 0 || isNaN(lengthVal) || lengthVal <= 0 || isNaN(quantity) || quantity < 0) {
+      if (isNaN(diameterMm) || diameterMm <= 0 || isNaN(lengthVal) || lengthVal <= 0 || isNaN(quantity) || quantity < 0) {
         continue;
       }
 
@@ -3817,10 +4801,17 @@
       }
     }, { passive: true });
 
+    document.addEventListener('touchend', () => {
+      setTimeout(() => {
+        isTouchScrolling = false;
+      }, 50);
+    }, { passive: true });
+
     // Delegated click handling on document
     document.addEventListener('click', (e) => {
       // If user was swiping or scrolling, ignore synthetic click
       if (isTouchScrolling) {
+        isTouchScrolling = false;
         return;
       }
 
@@ -3840,6 +4831,18 @@
           });
         } else {
           openAddRodModal();
+        }
+        return;
+      }
+
+      // 1b. Direct submit for Save Rod button
+      const saveRodBtn = e.target.closest('#btnSaveRod');
+      if (saveRodBtn) {
+        e.preventDefault();
+        const form = document.getElementById('rodForm');
+        if (form) {
+          if (typeof form.requestSubmit === 'function') form.requestSubmit();
+          else handleSaveRodSubmit(e);
         }
         return;
       }
@@ -3993,18 +4996,46 @@
       } else if (target.classList.contains('btn-rod-more')) {
         const id = target.dataset.id;
         openMobileActionSheet(id);
+      } else if (target.classList.contains('btn-edit-cut-log') || target.closest('.btn-edit-cut-log')) {
+        const btn = target.classList.contains('btn-edit-cut-log') ? target : target.closest('.btn-edit-cut-log');
+        const logId = btn.dataset.logId;
+        openEditCutLogModal(logId);
+      } else if (target.id === 'btnCloseEditCutLogModal' || target.id === 'btnCancelEditCutLog') {
+        closeEditCutLogModal();
+      } else if (target.id === 'btnDeleteCutLogSingle' || target.closest('#btnDeleteCutLogSingle')) {
+        const logId = editCutLogId ? editCutLogId.value : '';
+        handleDeleteCutLogSingle(logId);
+      } else if (target === editCutLogModalOverlay) {
+        closeEditCutLogModal();
       } else if (target.classList.contains('btn-print-slip')) {
         const logId = target.dataset.logId;
         const logEntry = cutLogs.find(l => l.id === logId);
         if (logEntry) printCutSlip(logEntry);
       } else if (target.id === 'btnPrintCombinedSlip' || target.closest('#btnPrintCombinedSlip') || target.id === 'btnFooterPrintCombinedSlip' || target.closest('#btnFooterPrintCombinedSlip')) {
         handlePrintSelectedSlip();
-      } else if (target.id === 'btnOpenCutLogsModal') {
+      } else if (target.id === 'btnOpenCutLogsModal' || target.closest('#btnOpenCutLogsModal') || target.id === 'btnGrOpenCutLogsModal' || target.closest('#btnGrOpenCutLogsModal') || target.closest('.btn-cut-logs')) {
         openCutLogsModal();
       } else if (target.id === 'btnExportCutLogsCsv') {
         exportCutLogsCsv();
+      } else if (target.id === 'btnToggleModeChromeRod' || target.closest('#btnToggleModeChromeRod') || target.id === 'btnToggleModeGuidedRail' || target.closest('#btnToggleModeGuidedRail') || target.classList.contains('system-switcher-btn')) {
+        setTimeout(() => {
+          selectedCutLogIds.clear();
+          updateCutLogsBadge();
+          if (cutLogsModalOverlay && !cutLogsModalOverlay.classList.contains('hidden')) {
+            renderCutLogsTable();
+          }
+        }, 50);
       } else if (target.id === 'btnClearCutLogs') {
         clearCutLogs();
+      } else if (target.closest('#cutLogsDateQuickFilters .date-pill-btn')) {
+        const btn = target.closest('#cutLogsDateQuickFilters .date-pill-btn');
+        const filterType = btn.getAttribute('data-date-filter');
+        setCutLogsDateFilter(filterType);
+      } else if (target.id === 'btnClearDateFilter' || target.closest('#btnClearDateFilter')) {
+        setCutLogsDateFilter('all');
+      } else if (target.id === 'btnResetCutLogsFilter' || target.closest('#btnResetCutLogsFilter')) {
+        if (filterCutLogsInput) filterCutLogsInput.value = '';
+        setCutLogsDateFilter('all');
       } else if (target.id === 'btnCutLogsCards') {
         setCutLogsViewMode('cards');
       } else if (target.id === 'btnCutLogsTable') {
@@ -4098,6 +5129,8 @@
         closeConfirmModal();
       } else if (target.id === 'btnExportCsv') {
         exportInventoryCsv();
+      } else if (target.id === 'btnExportAllExcel' || target.id === 'btnGrExportAllExcel') {
+        exportMasterExcel();
       } else if (target.id === 'btnCutPiecesPerRodDown') {
         refreshDomElements();
         const current = parseInt(cutPiecesPerRodInput ? cutPiecesPerRodInput.value : '1', 10) || 1;
@@ -4210,6 +5243,10 @@
     // Delegated submit on document
     document.addEventListener('submit', (e) => {
       if (!e.target) return;
+      if (e.target.id === 'editCutLogForm') {
+        handleSaveCutLog(e);
+        return;
+      }
       if (e.target.id === 'rodForm') {
         handleSaveRodSubmit(e);
       } else if (e.target.id === 'cutForm') {
@@ -4259,8 +5296,17 @@
         renderInventoryTable();
       } else if (e.target.id === 'filterCutLogsInput') {
         renderCutLogsTable();
+      } else if (e.target.id === 'filterCutLogsDateInput') {
+        const val = e.target.value;
+        if (val) {
+          setCutLogsDateFilter('custom', val);
+        } else {
+          setCutLogsDateFilter('all');
+        }
       } else if (e.target.id === 'cutRequiredLengthInput' || e.target.id === 'cutPiecesQtyInput' || e.target.id === 'cutPiecesPerRodInput') {
         updateCutCalculations();
+      } else if (e.target.id === 'editLogOriginalLen' || e.target.id === 'editLogCutLen' || e.target.id === 'editLogQuantity') {
+        updateEditLogCalculations();
       } else if (e.target.id === 'deductQuantityInput') {
         refreshDomElements();
         const rod = rods.find(r => r.id === (deductRodId ? deductRodId.value : ''));
@@ -4271,7 +5317,14 @@
 
     document.addEventListener('change', (e) => {
       if (!e.target) return;
-      if (e.target.id === 'searchLengthUnitSelect') {
+      if (e.target.id === 'filterCutLogsDateInput') {
+        const val = e.target.value;
+        if (val) {
+          setCutLogsDateFilter('custom', val);
+        } else {
+          setCutLogsDateFilter('all');
+        }
+      } else if (e.target.id === 'searchLengthUnitSelect') {
         setSmartSearchUnit(e.target.value);
       } else if (e.target.id === 'filterDiameter') {
         renderQuickDiameterChips();
@@ -4388,7 +5441,12 @@
   window.isRoundLengthEnabled = () => isRoundLengthEnabled;
   window.setVanillaRods = (newRods) => {
     if (Array.isArray(newRods)) {
-      rods = newRods;
+      rods = newRods.filter(r => {
+        const dia = Number(r.diameterMm) || 0;
+        const len = Number(r.lengthIn) || Number(r.lengthFt) || 0;
+        const qty = Number(r.quantity) || 0;
+        return dia > 0 && len > 0 && qty > 0 && dia !== 300;
+      });
       try {
         localStorage.setItem(STORAGE_KEY, JSON.stringify(rods));
       } catch (e) {
@@ -4399,7 +5457,7 @@
   };
   window.setVanillaCutLogs = (newLogs) => {
     if (Array.isArray(newLogs)) {
-      cutLogs = newLogs;
+      cutLogs = newLogs.filter(l => Number(l.diameterMm) !== 300);
       try {
         localStorage.setItem(CUT_LOGS_STORAGE_KEY, JSON.stringify(cutLogs));
       } catch (e) {
@@ -4408,6 +5466,42 @@
       updateCutLogsBadge();
     }
   };
+  window.isGuidedRailLog = isGuidedRailLog;
+  window.getCurrentSystemMode = getCurrentSystemMode;
+  window.addCutLog = (entry) => {
+    if (!entry) return;
+    cutLogs.unshift(entry);
+    saveCutLogsToStorage();
+    updateCutLogsBadge();
+    if (cutLogsModalOverlay && !cutLogsModalOverlay.classList.contains('hidden')) {
+      renderCutLogsTable();
+    }
+    window.dispatchEvent(new CustomEvent('syncBothToBackend', {
+      detail: { rods: rods, cutLogs: cutLogs }
+    }));
+  };
+  window.setCutLogsDateFilter = setCutLogsDateFilter;
+  window.openEditCutLogModal = openEditCutLogModal;
+  window.closeEditCutLogModal = closeEditCutLogModal;
+  window.openCutLogsModal = openCutLogsModal;
+  window.closeCutLogsModal = closeCutLogsModal;
+  window.updateCutLogsBadge = updateCutLogsBadge;
+  window.exportMasterExcel = exportMasterExcel;
+  window.openAddRodModal = openAddRodModal;
+  window.openAddModal = openAddRodModal;
+  window.openEditRodModal = openEditRodModal;
+  window.closeRodModal = closeRodModal;
+
+  // React to system mode switch event
+  if (typeof window !== 'undefined') {
+    window.addEventListener('rodsyncSystemModeChanged', () => {
+      selectedCutLogIds.clear();
+      updateCutLogsBadge();
+      if (cutLogsModalOverlay && !cutLogsModalOverlay.classList.contains('hidden')) {
+        renderCutLogsTable();
+      }
+    });
+  }
 
   // Auto-initialize when DOM is ready
   if (typeof document !== 'undefined') {

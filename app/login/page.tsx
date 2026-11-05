@@ -54,6 +54,9 @@ export default function Login() {
             // Issue session cookies ONLY after verified credentials
             document.cookie = "auth=true; path=/; max-age=604800; SameSite=Lax";
             document.cookie = `rodsync_user=${encodeURIComponent(registeredEmail)}; path=/; max-age=604800; SameSite=Lax`;
+            try {
+                localStorage.setItem('rodsync_user_email', registeredEmail);
+            } catch {}
 
             window.location.href = '/';
         } catch (authErr: unknown) {
