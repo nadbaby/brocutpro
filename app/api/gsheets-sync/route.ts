@@ -75,6 +75,17 @@ const STOCK_FILE = join(DATA_DIR, 'guided-rail-stock.json');
 const RODS_FILE = join(DATA_DIR, 'chrome-rods.json');
 const CUT_LOGS_FILE = join(DATA_DIR, 'cut-logs.json');
 
+const MODEL_SPECS: Record<string, { railWidthMm: number; railHeightMm: number; pitchMm: number }> = {
+    'HGR15': { railWidthMm: 15, railHeightMm: 15,   pitchMm: 60 },
+    'HGR20': { railWidthMm: 20, railHeightMm: 17.5, pitchMm: 60 },
+    'HGR25': { railWidthMm: 23, railHeightMm: 22,   pitchMm: 60 },
+    'HGR30': { railWidthMm: 28, railHeightMm: 26,   pitchMm: 80 },
+    'HGR35': { railWidthMm: 34, railHeightMm: 29,   pitchMm: 80 },
+    'HGR45': { railWidthMm: 45, railHeightMm: 38,   pitchMm: 105 },
+    'HGR55': { railWidthMm: 53, railHeightMm: 44,   pitchMm: 120 },
+    'HGR65': { railWidthMm: 63, railHeightMm: 53,   pitchMm: 150 },
+};
+
 function ensureDataDir(): void {
     if (!existsSync(DATA_DIR)) mkdirSync(DATA_DIR, { recursive: true });
 }
@@ -181,30 +192,33 @@ async function fetchDirectSheetRailStock(sheetId: string): Promise<GuidedRailSto
                 return def;
             };
 
-            const id = String(getVal(0, `grs-${i + 1}`));
-            const modelName = String(getVal(1, '')).trim();
-            const sku = String(getVal(2, '')).trim();
-            const railWidthMm = parseFloat(getVal(3, 0)) || 0;
-            const railHeightMm = parseFloat(getVal(4, 0)) || 0;
-            const pitchMm = parseFloat(getVal(5, 0)) || 0;
+            const rawModel = String(getVal(1, '')).trim();
+            const modelName = rawModel.toUpperCase();
             const lengthMm = parseFloat(getVal(6, 0)) || 0;
             const quantity = parseInt(getVal(7, 0), 10) || 0;
+
+            if (!modelName && lengthMm <= 0) return;
+
+            const spec = MODEL_SPECS[modelName] || { railWidthMm: 0, railHeightMm: 0, pitchMm: 60 };
+            const railWidthMm = parseFloat(getVal(3, 0)) || spec.railWidthMm;
+            const railHeightMm = parseFloat(getVal(4, 0)) || spec.railHeightMm;
+            const pitchMm = parseFloat(getVal(5, 0)) || spec.pitchMm;
+            const sku = String(getVal(2, '')).trim() || `RAIL-${modelName}-${Math.round(lengthMm)}MM`;
+            const id = (getVal(0) ? String(getVal(0)).trim() : '') || `grs-${modelName.toLowerCase()}-${Math.round(lengthMm)}-${i + 1}`;
             const notes = String(getVal(8, '')).trim();
 
-            if (modelName || (railWidthMm > 0 && lengthMm > 0)) {
-                rails.push({
-                    id,
-                    modelName: modelName || `Rail-${railWidthMm}`,
-                    sku: sku || `RAIL-${modelName || railWidthMm}-${lengthMm}MM`,
-                    railWidthMm,
-                    railHeightMm,
-                    pitchMm,
-                    lengthMm,
-                    quantity,
-                    notes,
-                    updatedAt: new Date().toISOString()
-                });
-            }
+            rails.push({
+                id,
+                modelName: modelName || `Rail-${railWidthMm}`,
+                sku,
+                railWidthMm,
+                railHeightMm,
+                pitchMm,
+                lengthMm,
+                quantity,
+                notes,
+                updatedAt: getVal(9) ? String(getVal(9)) : new Date().toISOString()
+            });
         });
         return rails;
     } catch {
@@ -754,9 +768,18 @@ export async function POST(req: Request) {
     }
 
     // Update in-memory cache immediately
-    if (payload.rods && payload.rods.length > 0) {
+    if (memoryCache) {
+        if (payload.rods && payload.rods.length > 0) memoryCache.rods = payload.rods;
+        if (payload.railStock && payload.railStock.length > 0) memoryCache.railStock = payload.railStock;
+        if (payload.cutLogs) {
+            memoryCache.cutLogs = payload.cutLogs.filter(l => (l.diameterMm || 0) !== 300);
+            memoryCache.rodCutLogs = (payload.rodCutLogs || []).filter(l => (l.diameterMm || 0) !== 300);
+            memoryCache.railCutLogs = payload.railCutLogs || [];
+        }
+        memoryCache.timestamp = Date.now();
+    } else {
         memoryCache = {
-            rods: payload.rods,
+            rods: payload.rods || [],
             railStock: payload.railStock || [],
             cutLogs: (payload.cutLogs || []).filter(l => (l.diameterMm || 0) !== 300),
             rodCutLogs: (payload.rodCutLogs || []).filter(l => (l.diameterMm || 0) !== 300),

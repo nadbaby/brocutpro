@@ -30,6 +30,17 @@
 
 var TARGET_SPREADSHEET_ID = "1_rDLZvfHCD4Tzmzk7XHBqK2qHtxOjSP32wOLUOABkMQ";
 
+var MODEL_SPECS = {
+  'HGR15': { railWidthMm: 15, railHeightMm: 15, pitchMm: 60 },
+  'HGR20': { railWidthMm: 20, railHeightMm: 17.5, pitchMm: 60 },
+  'HGR25': { railWidthMm: 23, railHeightMm: 22, pitchMm: 60 },
+  'HGR30': { railWidthMm: 28, railHeightMm: 26, pitchMm: 80 },
+  'HGR35': { railWidthMm: 34, railHeightMm: 29, pitchMm: 80 },
+  'HGR45': { railWidthMm: 45, railHeightMm: 38, pitchMm: 105 },
+  'HGR55': { railWidthMm: 53, railHeightMm: 44, pitchMm: 120 },
+  'HGR65': { railWidthMm: 63, railHeightMm: 53, pitchMm: 150 }
+};
+
 function getSpreadsheet(e, postData) {
   var id = (postData && postData.spreadsheetId) || (e && e.parameter && e.parameter.spreadsheetId) || TARGET_SPREADSHEET_ID;
   if (id) {
@@ -158,18 +169,29 @@ function doGet(e) {
       var data3 = sheet3.getDataRange().getValues();
       for (var j = 1; j < data3.length; j++) {
         var g = data3[j];
-        if (!g[0] && !g[1]) continue;
+        var rModel = String(g[1] || '').trim().toUpperCase();
+        var rLen = Number(g[6]) || 0;
+        var rQty = Number(g[7]) || 0;
+        if (!rModel && rLen <= 0) continue;
+
+        var spec = MODEL_SPECS[rModel] || { railWidthMm: 0, railHeightMm: 0, pitchMm: 60 };
+        var rWidth = Number(g[3]) || spec.railWidthMm;
+        var rHeight = Number(g[4]) || spec.railHeightMm;
+        var rPitch = Number(g[5]) || spec.pitchMm;
+        var rSku = String(g[2] || '').trim() || ('RAIL-' + rModel + '-' + Math.round(rLen) + 'MM');
+        var rId = String(g[0] || '').trim() || ('grs-' + rModel.toLowerCase() + '-' + Math.round(rLen) + '-' + j);
+
         railStock.push({
-          id: String(g[0] || ''),
-          modelName: String(g[1] || ''),
-          sku: String(g[2] || ''),
-          railWidthMm: Number(g[3]) || 0,
-          railHeightMm: Number(g[4]) || 0,
-          pitchMm: Number(g[5]) || 0,
-          lengthMm: Number(g[6]) || 0,
-          quantity: Number(g[7]) || 0,
+          id: rId,
+          modelName: rModel,
+          sku: rSku,
+          railWidthMm: rWidth,
+          railHeightMm: rHeight,
+          pitchMm: rPitch,
+          lengthMm: rLen,
+          quantity: rQty,
           notes: String(g[8] || ''),
-          updatedAt: g[9] || ''
+          updatedAt: g[9] || new Date().toISOString()
         });
       }
     }

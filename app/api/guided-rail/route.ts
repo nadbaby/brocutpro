@@ -24,7 +24,11 @@ const DATA_DIR  = join(process.cwd(), '.data');
 const DATA_FILE = join(DATA_DIR, 'guided-rail-models.json');
 
 function ensureDir(): void {
-  if (!existsSync(DATA_DIR)) mkdirSync(DATA_DIR, { recursive: true });
+  try {
+    if (!existsSync(DATA_DIR)) mkdirSync(DATA_DIR, { recursive: true });
+  } catch {
+    // Read-only filesystem on serverless/Vercel
+  }
 }
 
 function readModels(): GuidedRailModel[] {
@@ -38,8 +42,12 @@ function readModels(): GuidedRailModel[] {
 }
 
 function writeModels(models: GuidedRailModel[]): void {
-  ensureDir();
-  writeFileSync(DATA_FILE, JSON.stringify(models, null, 2), 'utf8');
+  try {
+    ensureDir();
+    writeFileSync(DATA_FILE, JSON.stringify(models, null, 2), 'utf8');
+  } catch (e) {
+    console.warn('[GuidedRail] Disk write skipped for models (safe on serverless/read-only):', e);
+  }
 }
 
 function generateId(): string {

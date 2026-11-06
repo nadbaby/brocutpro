@@ -5476,8 +5476,9 @@
     if (cutLogsModalOverlay && !cutLogsModalOverlay.classList.contains('hidden')) {
       renderCutLogsTable();
     }
+    const currentRailStock = (typeof window.getGuidedRailStock === 'function') ? window.getGuidedRailStock() : [];
     window.dispatchEvent(new CustomEvent('syncBothToBackend', {
-      detail: { rods: rods, cutLogs: cutLogs }
+      detail: { rods: rods, cutLogs: cutLogs, railStock: currentRailStock }
     }));
   };
   window.setCutLogsDateFilter = setCutLogsDateFilter;

@@ -194,12 +194,31 @@
   }
 
   // ── API Calls: Rail Stock Inventory ──────────────────────────────────────────
-  async function _loadRailStock() {
+  async function _loadRailStock(forceRefresh) {
     try {
-      const res = await fetch('/api/guided-rail/stock');
+      // 1. Instant render from local cache if present
+      if (!forceRefresh && _railStock.length === 0) {
+        const cached = localStorage.getItem('guided_rail_stock_inventory_v1');
+        if (cached) {
+          try {
+            const parsed = JSON.parse(cached);
+            if (Array.isArray(parsed) && parsed.length > 0) {
+              _railStock = parsed;
+              _renderStockTable();
+            }
+          } catch (_) {}
+        }
+      }
+
+      // 2. Fetch fresh stock from backend / Google Sheets
+      const url = forceRefresh ? '/api/guided-rail/stock?refresh=true' : '/api/guided-rail/stock';
+      const res = await fetch(url);
       const data = await res.json();
-      if (data.success && Array.isArray(data.stock)) {
+      if (data.success && Array.isArray(data.stock) && data.stock.length > 0) {
         _railStock = data.stock;
+        try {
+          localStorage.setItem('guided_rail_stock_inventory_v1', JSON.stringify(_railStock));
+        } catch (_) {}
       }
     } catch (e) {
       console.warn('[GuidedRail] Error loading rail stock', e);
@@ -436,15 +455,15 @@
     const notes = document.getElementById('formGrNotes')?.value.trim();
 
     if (!modelName) {
-      alert('Please select a Guided Rail model.');
+      _toast('Please select a Guided Rail model.', 'warning');
       return;
     }
     if (isNaN(len) || len <= 0) {
-      alert('Please enter a valid stock length in millimeters.');
+      _toast('Please enter a valid stock length in millimeters.', 'warning');
       return;
     }
     if (isNaN(qty) || qty < 0) {
-      alert('Please enter a valid positive quantity.');
+      _toast('Please enter a valid positive quantity.', 'warning');
       return;
     }
 
@@ -452,6 +471,8 @@
     const railWidthMm = matchedModel ? matchedModel.railWidthMm : (parseFloat(opt?.dataset.width) || 0);
     const railHeightMm = matchedModel ? matchedModel.railHeightMm : (parseFloat(opt?.dataset.height) || 0);
     const pitchMm = matchedModel ? matchedModel.pitchMm : (parseFloat(opt?.dataset.pitch) || 60);
+
+    const scriptUrl = localStorage.getItem('rodsync_gsheets_script_url') || '';
 
     const payload = {
       modelName,
@@ -461,40 +482,79 @@
       lengthMm: len,
       quantity: qty,
       notes: notes || '',
+      scriptUrl,
       ...(editId ? { id: editId } : {}),
     };
 
     const method = editId ? 'PUT' : 'POST';
     try {
+      const headers = { 'Content-Type': 'application/json' };
+      if (scriptUrl) headers['x-google-script-url'] = scriptUrl;
+
       const res = await fetch('/api/guided-rail/stock', {
         method,
-        headers: { 'Content-Type': 'application/json' },
+        headers,
         body: JSON.stringify(payload),
       });
       const data = await res.json();
       if (data.success) {
         closeRailStockModal();
-        await _loadRailStock();
+        if (Array.isArray(data.stock)) {
+          _railStock = data.stock;
+        } else if (data.item) {
+          const idx = _railStock.findIndex(s => s.id === data.item.id);
+          if (idx !== -1) _railStock[idx] = data.item;
+          else _railStock.unshift(data.item);
+        }
+        try {
+          localStorage.setItem('guided_rail_stock_inventory_v1', JSON.stringify(_railStock));
+        } catch (_) {}
+        _renderStockTable();
+
+        // Dispatch sync event so app/page.tsx syncs to Google Sheets live
+        try {
+          if (typeof window !== 'undefined') {
+            window.dispatchEvent(new CustomEvent('syncRailStockToBackend', { detail: _railStock }));
+          }
+        } catch (_) {}
+
+        _toast(`✅ Guided Rail ${modelName} (${len} mm) saved & synced to Excel!`, 'success');
       } else {
-        alert(data.message || 'Error saving rail stock');
+        _toast(data.message || 'Error saving rail stock', 'danger');
       }
-    } catch {
-      alert('Network error while saving guided rail stock.');
+    } catch (err) {
+      console.error(err);
+      _toast('Network error while saving guided rail stock.', 'danger');
     }
   }
 
   async function deleteRailStock(id) {
     if (!confirm('Are you sure you want to remove this guided rail stock item from storage?')) return;
+    const scriptUrl = localStorage.getItem('rodsync_gsheets_script_url') || '';
     try {
-      const res = await fetch(`/api/guided-rail/stock?id=${encodeURIComponent(id)}`, { method: 'DELETE' });
+      const headers = {};
+      if (scriptUrl) headers['x-google-script-url'] = scriptUrl;
+      const res = await fetch(`/api/guided-rail/stock?id=${encodeURIComponent(id)}`, { method: 'DELETE', headers });
       const data = await res.json();
       if (data.success) {
-        await _loadRailStock();
+        if (Array.isArray(data.stock)) {
+          _railStock = data.stock;
+        } else {
+          _railStock = _railStock.filter(s => s.id !== id);
+        }
+        try {
+          localStorage.setItem('guided_rail_stock_inventory_v1', JSON.stringify(_railStock));
+        } catch (_) {}
+        _renderStockTable();
+        try {
+          window.dispatchEvent(new CustomEvent('syncRailStockToBackend', { detail: _railStock }));
+        } catch (_) {}
+        _toast('Rail stock item removed and synced.', 'info');
       } else {
-        alert(data.message || 'Error deleting rail stock');
+        _toast(data.message || 'Error deleting rail stock', 'danger');
       }
     } catch {
-      alert('Network error while deleting rail stock.');
+      _toast('Network error while deleting rail stock.', 'danger');
     }
   }
 
@@ -502,16 +562,25 @@
     const item = _railStock.find(s => s.id === id);
     if (!item) return;
     const newQty = Math.max(0, (Number(item.quantity) || 0) + delta);
+    const scriptUrl = localStorage.getItem('rodsync_gsheets_script_url') || '';
     try {
+      const headers = { 'Content-Type': 'application/json' };
+      if (scriptUrl) headers['x-google-script-url'] = scriptUrl;
       const res = await fetch('/api/guided-rail/stock', {
         method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ id, quantity: newQty }),
+        headers,
+        body: JSON.stringify({ id, quantity: newQty, scriptUrl }),
       });
       const data = await res.json();
       if (data.success) {
         item.quantity = newQty;
+        try {
+          localStorage.setItem('guided_rail_stock_inventory_v1', JSON.stringify(_railStock));
+        } catch (_) {}
         _renderStockTable();
+        try {
+          window.dispatchEvent(new CustomEvent('syncRailStockToBackend', { detail: _railStock }));
+        } catch (_) {}
       }
     } catch (e) {
       console.warn('Quick adjust stock failed', e);
@@ -661,12 +730,16 @@
     if (confirmText) confirmText.textContent = 'Recording Cut…';
 
     try {
+      const scriptUrl = localStorage.getItem('rodsync_gsheets_script_url') || '';
+      const headers = { 'Content-Type': 'application/json' };
+      if (scriptUrl) headers['x-google-script-url'] = scriptUrl;
+
       // 1. Deduct 1 whole bar from source stock
       const newSourceQty = Math.max(0, Number(bar.quantity) - 1);
       const deductRes = await fetch('/api/guided-rail/stock', {
         method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ id: bar.id, quantity: newSourceQty }),
+        headers,
+        body: JSON.stringify({ id: bar.id, quantity: newSourceQty, scriptUrl }),
       });
       const deductData = await deductRes.json();
       if (!deductData.success) {
@@ -678,7 +751,7 @@
       if (shouldSaveRemnant) {
         const offcutRes = await fetch('/api/guided-rail/stock', {
           method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
+          headers,
           body: JSON.stringify({
             modelName: bar.modelName,
             railWidthMm: bar.railWidthMm,
@@ -688,6 +761,7 @@
             quantity: 1,
             notes: `Offcut from ${bar.lengthMm}mm (${orderNotes || 'Cut order'})`,
             sku: `RAIL-${bar.modelName}-${Math.round(remnantMm)}MM-OFFCUT`,
+            scriptUrl,
           }),
         });
         await offcutRes.json();
@@ -696,6 +770,8 @@
       // 3. Save into unified Cut Logs with rich Guided Rail properties
       const holesPerRail = (bar.pitchMm > 0) ? Math.floor(cutMm / bar.pitchMm) : 0;
       const endMargin = (bar.pitchMm > 0) ? Number(((cutMm - Math.max(0, holesPerRail - 1) * bar.pitchMm) / 2).toFixed(1)) : 0;
+      const assignBy = (document.getElementById('grCutAssignBy')?.value || '').trim();
+      const assignTo = (document.getElementById('grCutAssignTo')?.value || '').trim();
 
       const logEntry = {
         id: 'gr-cut-' + Date.now(),
@@ -718,6 +794,10 @@
         remainderIn: Number((Math.max(0, remnantMm) / 25.4).toFixed(2)),
         reason: orderNotes ? `Order: ${orderNotes}` : `Guided Rail precision cut (${pcs} pc${pcs > 1 ? 's' : ''} of ${cutMm} mm)`,
         remnantAdded: shouldSaveRemnant,
+        assignBy: assignBy,
+        assignTo: assignTo,
+        createdBy: assignBy,
+        assignedBy: assignBy,
       };
 
       if (typeof window.addCutLog === 'function') {
@@ -735,11 +815,20 @@
       }
 
       // 4. Reload stock & refresh UI
-      await _loadRailStock();
+      await _loadRailStock(true);
       closeGrCutModal();
 
-      const remMsg = shouldSaveRemnant ? ` Remnant ${remnantMm} mm (${(remnantMm / 25.4).toFixed(2)}") saved to stock.` : '';
-      _toast(`✂️ Cut recorded successfully! ${pcs} pc${pcs > 1 ? 's' : ''} of ${bar.modelName} cut.${remMsg}`, 'success');
+      // Trigger sync of rail cut log & rail stock to Google Sheets
+      try {
+        if (typeof window !== 'undefined') {
+          window.dispatchEvent(new CustomEvent('syncBothToBackend', {
+            detail: { railStock: _railStock, cutLogs: [logEntry] }
+          }));
+        }
+      } catch (_) {}
+
+      const remMsg = shouldSaveRemnant ? ` Remnant ${remnantMm} mm saved to stock.` : '';
+      _toast(`✂️ Cut recorded successfully! Saved to Guided Rail Cut Logs in Excel.${remMsg}`, 'success');
 
       // Re-run validation to update matching bars list
       _onValidate(new Event('submit'));
