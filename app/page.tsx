@@ -31,7 +31,6 @@ export default function Home() {
   const [isCheckingAuth, setIsCheckingAuth] = useState(true);
   const [userProfile, setUserProfile] = useState<UserRoleProfile | null>(null);
   const [isInitializing, setIsInitializing] = useState(false);
-  const [theme, setTheme] = useState(() => (typeof document !== 'undefined' ? document.documentElement.getAttribute('data-theme') || 'light' : 'light'));
   const [isImportModalOpen, setIsImportModalOpen] = useState(false);
   const [isGrImportModalOpen, setIsGrImportModalOpen] = useState(false);
   const [firebaseStatus, setFirebaseStatus] = useState<'connected' | 'syncing' | 'offline'>('connected');
@@ -422,16 +421,12 @@ export default function Home() {
   };
 
   useEffect(() => {
-    // Check initial theme from document element after mount
-    const observer = new MutationObserver((mutations) => {
-      mutations.forEach((mutation) => {
-        if (mutation.attributeName === 'data-theme') {
-          const current = document.documentElement.getAttribute('data-theme') || 'light';
-          setTheme(current);
-        }
-      });
-    });
-    observer.observe(document.documentElement, { attributes: true });
+    // Strictly enforce Light Theme only across all devices
+    if (typeof document !== 'undefined') {
+      document.documentElement.setAttribute('data-theme', 'light');
+      document.documentElement.setAttribute('data-theme-mode', 'light');
+      try { localStorage.setItem('rodsync_theme', 'light'); } catch { }
+    }
 
     // Clear and unregister any stale ServiceWorker caches
     if (typeof window !== 'undefined' && 'serviceWorker' in navigator) {
@@ -446,10 +441,6 @@ export default function Home() {
         });
       }
     }
-
-    return () => {
-      observer.disconnect();
-    };
   }, []);
 
   const handleLogout = async () => {
@@ -474,19 +465,7 @@ export default function Home() {
     window.location.href = '/login';
   };
 
-  const toggleTheme = () => {
-    const currentTheme = document.documentElement.getAttribute('data-theme') || 'light';
-    const newTheme = currentTheme === 'dark' ? 'light' : 'dark';
 
-    document.documentElement.setAttribute('data-theme', newTheme);
-    document.documentElement.setAttribute('data-theme-mode', 'manual');
-    localStorage.setItem('rodsync_theme', newTheme);
-
-    // Attempt to target layout meta theme, if it exists
-    const metaElems = document.getElementsByName('theme-color');
-    if (metaElems.length > 0) metaElems[0].setAttribute('content', newTheme === 'dark' ? '#070a12' : '#f5f7fb');
-    setTheme(newTheme);
-  };
 
   const syncInventoryData = async (forceRefresh = false) => {
     setFirebaseStatus('syncing');
@@ -1424,38 +1403,7 @@ export default function Home() {
               </button>
             </div>
 
-            {/* Theme Toggle - Hidden from frontend per user request */}
-            <button onClick={toggleTheme} className="btn btn-secondary btn-sm btn-nav-pill" title="Toggle Dark/Light Mode" style={{ display: 'none' }}>
-              <div style={{ position: 'relative', width: '15px', height: '15px', overflow: 'hidden', flexShrink: 0 }}>
-                <div style={{
-                  position: 'absolute', top: 0, left: 0,
-                  transform: theme === 'dark' ? 'translateY(100%)' : 'translateY(0)',
-                  transition: 'transform 0.4s cubic-bezier(0.68, -0.55, 0.27, 1.55)', opacity: theme === 'dark' ? 0 : 1
-                }}>
-                  <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                    <path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"></path>
-                  </svg>
-                </div>
-                <div style={{
-                  position: 'absolute', top: 0, left: 0,
-                  transform: theme === 'dark' ? 'translateY(0)' : 'translateY(-100%)',
-                  transition: 'transform 0.4s cubic-bezier(0.68, -0.55, 0.27, 1.55)', opacity: theme === 'dark' ? 1 : 0
-                }}>
-                  <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                    <circle cx="12" cy="12" r="5"></circle>
-                    <line x1="12" y1="1" x2="12" y2="3"></line>
-                    <line x1="12" y1="21" x2="12" y2="23"></line>
-                    <line x1="4.22" y1="4.22" x2="5.64" y2="5.64"></line>
-                    <line x1="18.36" y1="18.36" x2="19.78" y2="19.78"></line>
-                    <line x1="1" y1="12" x2="3" y2="12"></line>
-                    <line x1="21" y1="12" x2="23" y2="12"></line>
-                    <line x1="4.22" y1="19.78" x2="5.64" y2="18.36"></line>
-                    <line x1="18.36" y1="4.22" x2="19.78" y2="5.64"></line>
-                  </svg>
-                </div>
-              </div>
-              <span className="btn-nav-text">Theme</span>
-            </button>
+
 
             {/* Firebase Cloud Console Link */}
             <a

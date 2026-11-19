@@ -433,19 +433,12 @@
     }
   }
 
-  // --- THEME SYSTEM (AUTOMATIC SYSTEM SYNC) ---
+  // --- THEME SYSTEM (PURE LIGHT THEME ONLY) ---
   const metaThemeColor = document.getElementById('metaThemeColor');
 
   function initTheme() {
-    // Check localStorage for manually saved theme, else fallback to system theme
-    const savedTheme = localStorage.getItem('rodsync_theme');
-    if (savedTheme) {
-      applyTheme(savedTheme, false);
-    } else {
-      applySystemTheme(false);
-    }
-
-
+    // Exclusively enforce single Light Theme across all devices and OS modes
+    applyTheme('light', true);
 
     // Clean up outdated service worker caches
     if ('caches' in window) {
@@ -455,34 +448,20 @@
         });
       }).catch(() => { });
     }
-
-    // Listen to OS system theme changes in real-time, ONLY if not manually overridden
-    const mediaQuery = window.matchMedia('(prefers-color-scheme: dark)');
-    const sysThemeListener = () => {
-      if (!localStorage.getItem('rodsync_theme')) {
-        applySystemTheme(false);
-      }
-    };
-    if (mediaQuery.addEventListener) {
-      mediaQuery.addEventListener('change', sysThemeListener);
-    } else if (mediaQuery.addListener) {
-      mediaQuery.addListener(sysThemeListener);
-    }
   }
 
-  function applySystemTheme(save = true) {
-    const isSystemDark = window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches;
-    applyTheme(isSystemDark ? 'dark' : 'light', save);
+  function applySystemTheme() {
+    applyTheme('light', true);
   }
 
-  function applyTheme(theme, save = true) {
-    document.documentElement.setAttribute('data-theme', theme);
-    document.documentElement.setAttribute('data-theme-mode', save ? 'manual' : 'system');
+  function applyTheme(_theme, save = true) {
+    document.documentElement.setAttribute('data-theme', 'light');
+    document.documentElement.setAttribute('data-theme-mode', 'light');
     if (metaThemeColor) {
-      metaThemeColor.setAttribute('content', theme === 'dark' ? '#070a12' : '#f5f7fb');
+      metaThemeColor.setAttribute('content', '#f5f7fb');
     }
     if (save) {
-      localStorage.setItem('rodsync_theme', theme);
+      localStorage.setItem('rodsync_theme', 'light');
     }
   }
 

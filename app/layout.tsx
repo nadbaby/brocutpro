@@ -21,11 +21,14 @@ export default function RootLayout({
   children: React.ReactNode;
 }) {
   return (
-    <html lang="en">
+    <html lang="en" data-theme="light">
       <head>
         <script
           dangerouslySetInnerHTML={{
             __html: `
+              document.documentElement.setAttribute('data-theme', 'light');
+              document.documentElement.setAttribute('data-theme-mode', 'light');
+              try { localStorage.setItem('rodsync_theme', 'light'); } catch(e){}
               if (typeof Node !== 'undefined' && Node.prototype) {
                 const origRemove = Node.prototype.removeChild;
                 Node.prototype.removeChild = function(child) {
