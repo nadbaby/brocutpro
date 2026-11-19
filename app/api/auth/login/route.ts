@@ -1,4 +1,5 @@
 import { NextResponse } from 'next/server';
+import { getUserRoleProfile } from '@/lib/roles';
 
 export async function POST(req: Request) {
   try {
@@ -13,10 +14,14 @@ export async function POST(req: Request) {
       );
     }
 
+    const cleanEmail = String(email || '').toLowerCase().trim();
+    const profile = getUserRoleProfile(cleanEmail);
+
     const response = NextResponse.json({
       success: true,
       message: 'Authenticated successfully',
-      user: { email: email || 'user@rodsync.com' }
+      user: { email: cleanEmail, name: profile.name, role: profile.role },
+      profile
     });
 
     // Set auth cookie for session verification

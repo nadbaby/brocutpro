@@ -100,11 +100,15 @@ function doGet(e) {
           var dia = Number(r[1]) || 0;
           var len = Number(r[2]) || 0;
           var qty = Number(r[3]) || 0;
+          var cleanName = 'Chrome Rod';
+          if (/honed/i.test(name)) cleanName = 'Honed Tube';
+          else if (/sbrc/i.test(name)) cleanName = 'SBRC';
           if (dia > 0 && len > 0 && qty > 0) {
             rods.push({
               id: 'rod-' + Math.round(dia) + '-' + len + '-' + i,
               sku: 'ROD-' + Math.round(dia) + 'MM-' + len + 'IN-STOCK',
-              name: name,
+              name: cleanName,
+              category: cleanName,
               diameterMm: dia,
               lengthIn: len,
               lengthFt: len,
@@ -118,11 +122,15 @@ function doGet(e) {
           var rDia = Number(r[3]) || 0;
           var rLen = Number(r[4]) || 0;
           var rQty = Number(r[5]) || 0;
+          var rClean = 'Chrome Rod';
+          if (/honed/i.test(rName)) rClean = 'Honed Tube';
+          else if (/sbrc/i.test(rName)) rClean = 'SBRC';
           if (rDia > 0 && rLen > 0 && rQty > 0) {
             rods.push({
               id: String(r[0] || ('rod-' + Math.round(rDia) + '-' + rLen + '-' + i)),
               sku: String(r[1] || ('ROD-' + Math.round(rDia) + 'MM-' + rLen + 'IN-STOCK')),
-              name: rName,
+              name: rClean,
+              category: rClean,
               diameterMm: rDia,
               lengthIn: rLen,
               lengthFt: rLen,
@@ -172,7 +180,7 @@ function doGet(e) {
         var rModel = String(g[1] || '').trim().toUpperCase();
         var rLen = Number(g[6]) || 0;
         var rQty = Number(g[7]) || 0;
-        if (!rModel && rLen <= 0) continue;
+        if ((!rModel && rLen <= 0) || rQty <= 0 || rLen <= 0) continue;
 
         var spec = MODEL_SPECS[rModel] || { railWidthMm: 0, railHeightMm: 0, pitchMm: 60 };
         var rWidth = Number(g[3]) || spec.railWidthMm;
@@ -181,16 +189,27 @@ function doGet(e) {
         var rSku = String(g[2] || '').trim() || ('RAIL-' + rModel + '-' + Math.round(rLen) + 'MM');
         var rId = String(g[0] || '').trim() || ('grs-' + rModel.toLowerCase() + '-' + Math.round(rLen) + '-' + j);
 
+        var notesRaw = String(g[8] || '');
+        var brand = 'FINHY';
+        var mBrand = notesRaw.match(/\[(HIWIN|FINHY|PMI)\]/i);
+        if (mBrand) {
+          brand = mBrand[1].toUpperCase();
+        } else if (/\b(FINHY|PMI|HIWIN)\b/i.test(notesRaw)) {
+          var found = notesRaw.match(/\b(FINHY|PMI|HIWIN)\b/i);
+          if (found) brand = found[1].toUpperCase();
+        }
+
         railStock.push({
           id: rId,
           modelName: rModel,
+          brand: brand,
           sku: rSku,
           railWidthMm: rWidth,
           railHeightMm: rHeight,
           pitchMm: rPitch,
           lengthMm: rLen,
           quantity: rQty,
-          notes: String(g[8] || ''),
+          notes: notesRaw,
           updatedAt: g[9] || new Date().toISOString()
         });
       }
@@ -307,8 +326,12 @@ function doPost(e) {
       sheet2.appendRow(['Rod Name', 'Dia (mm)', 'Length (in)', 'Quantity']);
       var rows2 = rodsList.map(function (r) {
         var len = (r.lengthIn !== undefined && r.lengthIn !== null) ? r.lengthIn : (r.lengthFt || 0);
+        var rName = String(r.name || r.category || 'Chrome Rod').trim();
+        var cleanName = 'Chrome Rod';
+        if (/honed/i.test(rName)) cleanName = 'Honed Tube';
+        else if (/sbrc/i.test(rName)) cleanName = 'SBRC';
         return [
-          r.name || 'Chrome Rod',
+          cleanName,
           r.diameterMm || 0,
           len,
           r.quantity || 0
@@ -320,25 +343,36 @@ function doPost(e) {
 
     // 2. Sync Guided Rail Stock (Guided rail inventory)
     var railList = postData.railStock;
-    if (railList && Array.isArray(railList) && railList.length > 0) {
+    if (railList && Array.isArray(railList)) {
+      var validRails = railList.filter(function (g) {
+        return (Number(g.quantity) || 0) > 0 && (Number(g.lengthMm) || 0) > 0;
+      });
       sheet3.clear();
       sheet3.appendRow(['ID', 'Model Name', 'SKU', 'Rail Width (mm)', 'Rail Height (mm)', 'Pitch / PCC (mm)', 'Length (mm)', 'Quantity', 'Storage Rack / Notes', 'Last Updated']);
-      var rows3 = railList.map(function (g) {
-        return [
-          g.id || '',
-          g.modelName || '',
-          g.sku || '',
-          g.railWidthMm || 0,
-          g.railHeightMm || 0,
-          g.pitchMm || 0,
-          g.lengthMm || 0,
-          g.quantity || 0,
-          g.notes || '',
-          g.updatedAt ? new Date(g.updatedAt).toISOString() : new Date().toISOString()
-        ];
-      });
-      sheet3.getRange(2, 1, rows3.length, 10).setValues(rows3);
-      formatHeader(sheet3, 10, "#ede9fe");
+      if (validRails.length > 0) {
+        var rows3 = validRails.map(function (g) {
+          var brandVal = (g.brand || 'FINHY').toUpperCase();
+          var rawNotes = String(g.notes || '');
+          var fullNotes = rawNotes;
+          if (fullNotes.indexOf('[' + brandVal + ']') === -1 && !new RegExp('\\b' + brandVal + '\\b', 'i').test(fullNotes)) {
+            fullNotes = ('[' + brandVal + '] ' + fullNotes).trim();
+          }
+          return [
+            g.id || '',
+            g.modelName || '',
+            g.sku || '',
+            g.railWidthMm || 0,
+            g.railHeightMm || 0,
+            g.pitchMm || 0,
+            g.lengthMm || 0,
+            g.quantity || 0,
+            fullNotes,
+            g.updatedAt ? new Date(g.updatedAt).toISOString() : new Date().toISOString()
+          ];
+        });
+        sheet3.getRange(2, 1, rows3.length, 10).setValues(rows3);
+        formatHeader(sheet3, 10, "#ede9fe");
+      }
     }
 
     // Extract rod cuts vs rail cuts
@@ -388,8 +422,6 @@ function doPost(e) {
 
     // 4. Sync Guided Rail Cut Logs (Guided rail cutting logs)
     if (railCuts && Array.isArray(railCuts) && railCuts.length > 0) {
-      sheet5.clear();
-      sheet5.appendRow(['ID', 'Date & Time', 'Rail Model', 'Pitch / PCC (mm)', 'Original Length (mm)', 'Cut Length (mm)', 'Quantity', 'Remnant Offcut (mm)', 'Holes Count', 'End Margin (mm)', 'Remnant Added', 'Order / Job Notes', 'Assign By', 'Assign To']);
       var rows5 = railCuts.map(function (q) {
         var origMm = q.originalLengthMm || (q.originalLengthIn ? Math.round(q.originalLengthIn * 25.4) : 0);
         var cutMm = q.cutLengthMm || (q.cutLengthIn ? Math.round(q.cutLengthIn * 25.4) : 0);
@@ -411,8 +443,15 @@ function doPost(e) {
           q.assignTo || q.assignedBy || ''
         ];
       });
-      sheet5.getRange(2, 1, rows5.length, 14).setValues(rows5);
-      formatHeader(sheet5, 14, "#fef3c7");
+
+      if (postData.appendLogs === true && sheet5.getLastRow() > 1) {
+        sheet5.getRange(sheet5.getLastRow() + 1, 1, rows5.length, 14).setValues(rows5);
+      } else {
+        sheet5.clear();
+        sheet5.appendRow(['ID', 'Date & Time', 'Rail Model', 'Pitch / PCC (mm)', 'Original Length (mm)', 'Cut Length (mm)', 'Quantity', 'Remnant Offcut (mm)', 'Holes Count', 'End Margin (mm)', 'Remnant Added', 'Order / Job Notes', 'Assign By', 'Assign To']);
+        sheet5.getRange(2, 1, rows5.length, 14).setValues(rows5);
+        formatHeader(sheet5, 14, "#fef3c7");
+      }
     }
 
     return ContentService.createTextOutput(JSON.stringify({

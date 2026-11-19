@@ -1,6 +1,5 @@
 import { NextResponse } from 'next/server';
-import { readFileSync, writeFileSync, existsSync, mkdirSync } from 'fs';
-import { join } from 'path';
+import { getFirebaseInventory, saveFirebaseInventory, GuidedRailModelRecord } from '@/lib/firebase-service';
 
 // ─── TYPES ────────────────────────────────────────────────────────────────────
 
@@ -15,39 +14,6 @@ export interface GuidedRailModel {
   active: boolean;
   createdAt: string;
   updatedAt: string;
-}
-
-// ─── FILE-BASED STORAGE ───────────────────────────────────────────────────────
-// Stored in .data/guided-rail-models.json (gitignored-safe, survives dev restarts)
-
-const DATA_DIR  = join(process.cwd(), '.data');
-const DATA_FILE = join(DATA_DIR, 'guided-rail-models.json');
-
-function ensureDir(): void {
-  try {
-    if (!existsSync(DATA_DIR)) mkdirSync(DATA_DIR, { recursive: true });
-  } catch {
-    // Read-only filesystem on serverless/Vercel
-  }
-}
-
-function readModels(): GuidedRailModel[] {
-  ensureDir();
-  if (!existsSync(DATA_FILE)) return [];
-  try {
-    return JSON.parse(readFileSync(DATA_FILE, 'utf8')) as GuidedRailModel[];
-  } catch {
-    return [];
-  }
-}
-
-function writeModels(models: GuidedRailModel[]): void {
-  try {
-    ensureDir();
-    writeFileSync(DATA_FILE, JSON.stringify(models, null, 2), 'utf8');
-  } catch (e) {
-    console.warn('[GuidedRail] Disk write skipped for models (safe on serverless/read-only):', e);
-  }
 }
 
 function generateId(): string {
@@ -67,19 +33,27 @@ const DEFAULT_RAIL_MODELS: Omit<GuidedRailModel, 'id' | 'createdAt' | 'updatedAt
   { modelName: 'HGR65', railWidthMm: 63,   railHeightMm: 53,   pitchMm: 150, minCuttingLengthMm: 150, minEndMarginMm: 20, active: true },
 ];
 
-function seedIfEmpty(): GuidedRailModel[] {
-  let models = readModels();
-  if (models.length === 0) {
-    const now = new Date().toISOString();
-    models = DEFAULT_RAIL_MODELS.map(m => ({
-      ...m,
-      id: generateId(),
-      createdAt: now,
-      updatedAt: now,
+async function loadRailModelsFromDb(): Promise<GuidedRailModel[]> {
+  try {
+    const inv = await getFirebaseInventory();
+    const models: GuidedRailModel[] = (inv.railModels || []).map((m: GuidedRailModelRecord) => ({
+      id: m.id || m.modelName,
+      modelName: m.modelName,
+      railWidthMm: Number(m.railWidthMm) || 0,
+      railHeightMm: Number(m.railHeightMm) || 0,
+      pitchMm: Number(m.pitchMm) || 60,
+      minCuttingLengthMm: Number(m.minCuttingLengthMm || m.pitchMm || 60),
+      minEndMarginMm: Number(m.minEndMarginMm || 10),
+      active: m.active !== false,
+      createdAt: m.createdAt || new Date().toISOString(),
+      updatedAt: m.updatedAt || new Date().toISOString(),
     }));
-    writeModels(models);
+
+    return models;
+  } catch (err) {
+    console.warn('[GuidedRail] Error loading models from Firebase:', err);
+    return [];
   }
-  return models;
 }
 
 // ─── CUTTING VALIDATION LOGIC (server-side) ───────────────────────────────────
@@ -122,8 +96,6 @@ function validateCuttingLength(model: GuidedRailModel, requestedLengthMm: number
   }
 
   // 2. Linear guided rails must be cut in multiples of pitch (hole spacing)
-  // Check if requestedLength is within 2.0mm tolerance of an exact multiple of pitch
-  // (2.0mm tolerance accommodates imperial unit roundings from inches and feet)
   const kClosest = Math.round(requestedLengthMm / pitch);
   const closestMultiple = Math.max(pitch, kClosest * pitch);
   const diffFromMultiple = Math.abs(requestedLengthMm - closestMultiple);
@@ -167,11 +139,11 @@ function validateCuttingLength(model: GuidedRailModel, requestedLengthMm: number
   };
 }
 
-// ─── GET — list all rail models ───────────────────────────────────────────────
+// ─── GET — list all rail models directly from Firebase ─────────────────────────
 
 export async function GET() {
   try {
-    const models = seedIfEmpty();
+    const models = await loadRailModelsFromDb();
     const sorted = [...models].sort((a, b) => a.modelName.localeCompare(b.modelName));
     return NextResponse.json({ success: true, models: sorted });
   } catch (err: unknown) {
@@ -192,9 +164,15 @@ export async function POST(req: Request) {
       if (!modelId || requestedLengthMm === undefined || requestedLengthMm === null) {
         return NextResponse.json({ success: false, message: 'modelId and requestedLengthMm are required' }, { status: 400 });
       }
-      const models = readModels();
+      const models = await loadRailModelsFromDb();
       const targetId = String(modelId).trim().toUpperCase();
-      const model = models.find(m => m.id === modelId || m.modelName === modelId || m.modelName.toUpperCase() === targetId);
+      let model = models.find(m => m.id === modelId || m.modelName === modelId || m.modelName.toUpperCase() === targetId);
+      if (!model) {
+        const def = DEFAULT_RAIL_MODELS.find(m => m.modelName.toUpperCase() === targetId);
+        if (def) {
+          model = { ...def, id: def.modelName, createdAt: '', updatedAt: '' };
+        }
+      }
       if (!model) {
         return NextResponse.json({ success: false, message: `Model '${modelId}' not found` }, { status: 404 });
       }
@@ -202,12 +180,12 @@ export async function POST(req: Request) {
       return NextResponse.json({ success: true, validation: result, model });
     }
 
-    // Create new model
+    // Create new model in Firebase database
     const { modelName, railWidthMm, railHeightMm, pitchMm, minCuttingLengthMm, minEndMarginMm, active } = body;
     if (!modelName || !railWidthMm || !railHeightMm || !pitchMm) {
       return NextResponse.json({ success: false, message: 'modelName, railWidthMm, railHeightMm, pitchMm are required' }, { status: 400 });
     }
-    const models = readModels();
+    const models = await loadRailModelsFromDb();
     const now = new Date().toISOString();
     const newModel: GuidedRailModel = {
       id: generateId(),
@@ -222,7 +200,7 @@ export async function POST(req: Request) {
       updatedAt: now,
     };
     models.push(newModel);
-    writeModels(models);
+    await saveFirebaseInventory({ railModels: models });
     return NextResponse.json({ success: true, id: newModel.id });
   } catch (err: unknown) {
     const msg = err instanceof Error ? err.message : 'Unknown error';
@@ -230,7 +208,7 @@ export async function POST(req: Request) {
   }
 }
 
-// ─── PUT — update an existing model ──────────────────────────────────────────
+// ─── PUT — update an existing model in Firebase database ──────────────────────
 
 export async function PUT(req: Request) {
   try {
@@ -239,8 +217,8 @@ export async function PUT(req: Request) {
     if (!id) {
       return NextResponse.json({ success: false, message: 'id is required' }, { status: 400 });
     }
-    const models = readModels();
-    const idx = models.findIndex(m => m.id === id);
+    const models = await loadRailModelsFromDb();
+    const idx = models.findIndex(m => m.id === id || m.modelName === id);
     if (idx === -1) {
       return NextResponse.json({ success: false, message: 'Model not found' }, { status: 404 });
     }
@@ -258,7 +236,7 @@ export async function PUT(req: Request) {
       updatedAt: new Date().toISOString(),
     };
     models[idx] = updated;
-    writeModels(models);
+    await saveFirebaseInventory({ railModels: models });
     return NextResponse.json({ success: true });
   } catch (err: unknown) {
     const msg = err instanceof Error ? err.message : 'Unknown error';
@@ -266,7 +244,7 @@ export async function PUT(req: Request) {
   }
 }
 
-// ─── DELETE — remove a model ──────────────────────────────────────────────────
+// ─── DELETE — remove a model from Firebase database ───────────────────────────
 
 export async function DELETE(req: Request) {
   try {
@@ -275,12 +253,12 @@ export async function DELETE(req: Request) {
     if (!id) {
       return NextResponse.json({ success: false, message: 'id query param is required' }, { status: 400 });
     }
-    const models = readModels();
-    const filtered = models.filter(m => m.id !== id);
+    const models = await loadRailModelsFromDb();
+    const filtered = models.filter(m => m.id !== id && m.modelName !== id);
     if (filtered.length === models.length) {
       return NextResponse.json({ success: false, message: 'Model not found' }, { status: 404 });
     }
-    writeModels(filtered);
+    await saveFirebaseInventory({ railModels: filtered });
     return NextResponse.json({ success: true });
   } catch (err: unknown) {
     const msg = err instanceof Error ? err.message : 'Unknown error';

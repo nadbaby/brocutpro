@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server';
 import { cookies } from 'next/headers';
+import { getUserRoleProfile } from '@/lib/roles';
 
 export async function GET() {
   const cookieStore = await cookies();
@@ -12,8 +13,12 @@ export async function GET() {
     return NextResponse.json({ authenticated: false }, { status: 401 });
   }
 
+  const email = userCookie ? decodeURIComponent(userCookie) : '';
+  const profile = getUserRoleProfile(email);
+
   return NextResponse.json({
     authenticated: true,
-    user: userCookie ? decodeURIComponent(userCookie) : 'user@rodsync.com'
+    user: email,
+    profile
   });
 }

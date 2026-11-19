@@ -1,9 +1,14 @@
 import { NextResponse } from 'next/server';
+import { cookies } from 'next/headers';
 import { readFileSync, writeFileSync, existsSync, mkdirSync } from 'fs';
 import { join } from 'path';
+import { getFirebaseInventory, saveFirebaseInventory, GuidedRailStockRecord } from '@/lib/firebase-service';
+import { getUserRoleProfile } from '@/lib/roles';
 
 export interface GuidedRailStockItem {
   id: string;
+  brand?: string;             // Rail brand / category e.g. "HIWIN", "FINHY", "PMI"
+  category?: string;          // Rail category / catagorie
   modelName: string;          // e.g. "HGR15", "HGR20"
   modelId?: string;           // reference to GuidedRailModel id
   railWidthMm: number;        // Wr in mm
@@ -17,11 +22,10 @@ export interface GuidedRailStockItem {
   updatedAt?: string;
 }
 
-const TARGET_SPREADSHEET_ID = "1_rDLZvfHCD4Tzmzk7XHBqK2qHtxOjSP32wOLUOABkMQ";
 const DATA_DIR = join(process.cwd(), '.data');
 const STOCK_FILE = join(DATA_DIR, 'guided-rail-stock.json');
 
-const MODEL_SPECS: Record<string, { railWidthMm: number; railHeightMm: number; pitchMm: number }> = {
+export const MODEL_SPECS: Record<string, { railWidthMm: number; railHeightMm: number; pitchMm: number }> = {
   'HGR15': { railWidthMm: 15, railHeightMm: 15,   pitchMm: 60 },
   'HGR20': { railWidthMm: 20, railHeightMm: 17.5, pitchMm: 60 },
   'HGR25': { railWidthMm: 23, railHeightMm: 22,   pitchMm: 60 },
@@ -32,190 +36,99 @@ const MODEL_SPECS: Record<string, { railWidthMm: number; railHeightMm: number; p
   'HGR65': { railWidthMm: 63, railHeightMm: 53,   pitchMm: 150 },
 };
 
-const DEFAULT_STOCK: Omit<GuidedRailStockItem, 'id' | 'createdAt' | 'updatedAt'>[] = [
-  { modelName: 'HGR15', railWidthMm: 15, railHeightMm: 15,   pitchMm: 60,  lengthMm: 2000, quantity: 10, sku: 'RAIL-HGR15-2000MM', notes: 'Rack R-1 • Standard Industrial' },
-  { modelName: 'HGR20', railWidthMm: 20, railHeightMm: 17.5, pitchMm: 60,  lengthMm: 3000, quantity: 15, sku: 'RAIL-HGR20-3000MM', notes: 'Rack R-2 • Heavy Duty Assembly' },
-  { modelName: 'HGR25', railWidthMm: 23, railHeightMm: 22,   pitchMm: 60,  lengthMm: 3000, quantity: 8,  sku: 'RAIL-HGR25-3000MM', notes: 'Rack R-3 • Precision Guide' },
-  { modelName: 'HGR30', railWidthMm: 28, railHeightMm: 26,   pitchMm: 80,  lengthMm: 4000, quantity: 5,  sku: 'RAIL-HGR30-4000MM', notes: 'Rack R-4 • High Rigidity' },
-];
+const DEFAULT_STOCK: Omit<GuidedRailStockItem, 'id' | 'createdAt' | 'updatedAt'>[] = [];
 
 let memoryStockCache: GuidedRailStockItem[] | null = null;
 let lastFetchTimestamp = 0;
 const CACHE_TTL_MS = 20 * 1000; // 20 seconds TTL
 
-function ensureDir(): void {
+export function setMemoryStockCache(stock: GuidedRailStockItem[], ttlOffsetMs = 60000): void {
+  memoryStockCache = stock.filter(s => (Number(s.quantity) || 0) > 0 && (Number(s.lengthMm) || 0) > 0);
+  lastFetchTimestamp = Date.now() + ttlOffsetMs;
+}
+
+export function readLocalStockFile(): GuidedRailStockItem[] {
+  if (memoryStockCache && memoryStockCache.length > 0) return memoryStockCache;
+  try {
+    if (existsSync(STOCK_FILE)) {
+      const raw = readFileSync(STOCK_FILE, 'utf8');
+      const parsed = JSON.parse(raw);
+      if (Array.isArray(parsed) && parsed.length > 0) {
+        memoryStockCache = parsed.filter((s: any) => (Number(s.quantity) || 0) > 0 && (Number(s.lengthMm) || 0) > 0);
+        return memoryStockCache;
+      }
+    }
+  } catch (e) {
+    console.warn('Error reading local rail stock file', e);
+  }
+  return [];
+}
+
+export function writeLocalStockFile(stock: GuidedRailStockItem[]): void {
+  const validStock = stock.filter(s => (Number(s.quantity) || 0) > 0 && (Number(s.lengthMm) || 0) > 0);
+  memoryStockCache = validStock;
   try {
     if (!existsSync(DATA_DIR)) mkdirSync(DATA_DIR, { recursive: true });
-  } catch {
-    // Read-only filesystem on Vercel/lambda - safe ignore
-  }
-}
-
-function readLocalStockFile(): GuidedRailStockItem[] {
-  try {
-    ensureDir();
-    if (!existsSync(STOCK_FILE)) return [];
-    const raw = readFileSync(STOCK_FILE, 'utf8');
-    const parsed = JSON.parse(raw);
-    return Array.isArray(parsed) ? parsed : [];
-  } catch {
-    return [];
-  }
-}
-
-function writeLocalStockFile(stock: GuidedRailStockItem[]): void {
-  memoryStockCache = stock;
-  try {
-    ensureDir();
-    writeFileSync(STOCK_FILE, JSON.stringify(stock, null, 2), 'utf8');
+    writeFileSync(STOCK_FILE, JSON.stringify(validStock, null, 2), 'utf8');
   } catch (e) {
-    console.warn('[GuidedRail] Disk write skipped (safe in serverless/read-only environment):', e);
+    console.warn('Error writing local rail stock file', e);
   }
 }
 
-function generateId(model: string, lengthMm: number, idx?: number): string {
+export function generateId(model: string, lengthMm: number, idx?: number): string {
   const clean = model ? model.toLowerCase() : 'rail';
   const len = Math.round(lengthMm);
   const rand = Math.random().toString(36).slice(2, 6);
   return `grs-${clean}-${len}-${idx !== undefined ? idx : rand}`;
 }
 
-// ─── Direct Google Sheet Fetcher (Sheet: Guided rail inventory) ───────────────
-async function fetchDirectSheetRailStock(): Promise<GuidedRailStockItem[]> {
+// ─── Sync Rail Stock to Firebase ─────────────────────────────────────────────
+export async function syncStockToFirebase(
+  stock: GuidedRailStockItem[],
+  cutLogs?: unknown[]
+): Promise<boolean> {
   try {
-    const gvizUrl = `https://docs.google.com/spreadsheets/d/${TARGET_SPREADSHEET_ID}/gviz/tq?tqx=out:json&sheet=Guided%20rail%20inventory`;
-    const controller = new AbortController();
-    const timeoutId = setTimeout(() => controller.abort(), 12000);
-    const res = await fetch(gvizUrl, {
-      headers: { 'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64)' },
-      cache: 'no-store',
-      signal: controller.signal,
+    const validStock = stock.filter(s => (Number(s.quantity) || 0) > 0 && (Number(s.lengthMm) || 0) > 0);
+    const result = await saveFirebaseInventory({
+      railStock: validStock,
+      cutLogs: cutLogs as any,
     });
-    clearTimeout(timeoutId);
-
-    if (!res.ok) return [];
-    const raw = await res.text();
-    const match = raw.match(/setResponse\(([\s\S]*)\);/);
-    if (!match || !match[1]) return [];
-
-    const json = JSON.parse(match[1]);
-    const rows = json.table?.rows || [];
-    if (!rows || rows.length === 0) return [];
-
-    const rails: GuidedRailStockItem[] = [];
-    rows.forEach((row: any, i: number) => {
-      const cells = row.c || [];
-      const getVal = (idx: number, def: any = null) => {
-        if (idx >= 0 && idx < cells.length && cells[idx] && cells[idx].v !== null && cells[idx].v !== undefined) {
-          return cells[idx].v;
-        }
-        return def;
-      };
-
-      const rawModel = String(getVal(1, '')).trim();
-      const modelName = rawModel.toUpperCase();
-      const lengthMm = parseFloat(getVal(6, 0)) || 0;
-      const quantity = parseInt(getVal(7, 0), 10) || 0;
-
-      // Skip invalid empty lines
-      if (!modelName && lengthMm <= 0) return;
-
-      const spec = MODEL_SPECS[modelName] || { railWidthMm: 0, railHeightMm: 0, pitchMm: 60 };
-      const railWidthMm = parseFloat(getVal(3, 0)) || spec.railWidthMm;
-      const railHeightMm = parseFloat(getVal(4, 0)) || spec.railHeightMm;
-      const pitchMm = parseFloat(getVal(5, 0)) || spec.pitchMm;
-      const sku = String(getVal(2, '')).trim() || `RAIL-${modelName}-${Math.round(lengthMm)}MM`;
-      const id = (getVal(0) ? String(getVal(0)).trim() : '') || generateId(modelName, lengthMm, i + 1);
-      const notes = String(getVal(8, '')).trim();
-      const updatedAt = getVal(9) ? String(getVal(9)) : new Date().toISOString();
-
-      rails.push({
-        id,
-        modelName: modelName || `Rail-${railWidthMm}`,
-        sku,
-        railWidthMm,
-        railHeightMm,
-        pitchMm,
-        lengthMm,
-        quantity,
-        notes,
-        createdAt: updatedAt,
-        updatedAt,
-      });
-    });
-
-    return rails;
+    return result.syncedToFirebase;
   } catch (err) {
-    console.warn('[GuidedRail] Direct sheet fetch error:', err);
-    return [];
-  }
-}
-
-// ─── Sync Rail Stock to Google Apps Script Web App ────────────────────────────
-async function syncStockToGoogleSheets(stock: GuidedRailStockItem[], scriptUrl?: string): Promise<boolean> {
-  const targetUrl = scriptUrl || process.env.GOOGLE_SCRIPT_URL || process.env.NEXT_PUBLIC_GOOGLE_SCRIPT_URL;
-  if (!targetUrl || !targetUrl.trim()) return false;
-
-  try {
-    const urlObj = new URL(targetUrl.trim());
-    urlObj.searchParams.set('spreadsheetId', TARGET_SPREADSHEET_ID);
-
-    const controller = new AbortController();
-    const timeoutId = setTimeout(() => controller.abort(), 25000);
-
-    const response = await fetch(urlObj.toString(), {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        spreadsheetId: TARGET_SPREADSHEET_ID,
-        railStock: stock,
-      }),
-      signal: controller.signal,
-    });
-    clearTimeout(timeoutId);
-
-    return response.ok;
-  } catch (err) {
-    console.warn('[GuidedRail] Apps Script sync failed:', err);
+    console.warn('[GuidedRail] Firebase sync failed:', err);
     return false;
   }
 }
 
-// ─── Load comprehensive stock with fallback chain ─────────────────────────────
-async function loadFullStock(forceRefresh = false): Promise<GuidedRailStockItem[]> {
+// Backward compatibility alias
+export const syncStockToGoogleSheets = async (
+  stock: GuidedRailStockItem[],
+  _scriptUrl?: string,
+  cutLogs?: unknown[]
+) => {
+  return syncStockToFirebase(stock, cutLogs);
+};
+
+// ─── Load comprehensive stock directly from Firebase Firestore ──────────────
+export async function loadFullStock(forceRefresh = false): Promise<GuidedRailStockItem[]> {
   const now = Date.now();
   if (!forceRefresh && memoryStockCache && (now - lastFetchTimestamp < CACHE_TTL_MS)) {
     return memoryStockCache;
   }
 
-  // 1. Fetch live from Google Sheets
-  const sheetStock = await fetchDirectSheetRailStock();
-  if (sheetStock.length > 0) {
-    memoryStockCache = sheetStock;
-    lastFetchTimestamp = now;
-    writeLocalStockFile(sheetStock);
-    return sheetStock;
+  // Always fetch live directly from Firebase Firestore
+  try {
+    const fb = await getFirebaseInventory();
+    if (Array.isArray(fb.railStock)) {
+      memoryStockCache = fb.railStock;
+      lastFetchTimestamp = now;
+      return fb.railStock;
+    }
+  } catch (e) {
+    console.warn('[GuidedRail] Firebase read error:', e);
   }
 
-  // 2. Read local fallback file
-  const localStock = readLocalStockFile();
-  if (localStock.length > 0) {
-    memoryStockCache = localStock;
-    lastFetchTimestamp = now;
-    return localStock;
-  }
-
-  // 3. Fallback to default stock seed
-  const defaultItems = DEFAULT_STOCK.map((s, idx) => ({
-    ...s,
-    id: generateId(s.modelName, s.lengthMm, idx + 1),
-    createdAt: new Date().toISOString(),
-    updatedAt: new Date().toISOString(),
-  }));
-  memoryStockCache = defaultItems;
-  lastFetchTimestamp = now;
-  writeLocalStockFile(defaultItems);
-  return defaultItems;
+  return memoryStockCache || [];
 }
 
 // ─── GET: List all guided rail stock ──────────────────────────────────────────
@@ -233,7 +146,7 @@ export async function GET(req: Request) {
     return NextResponse.json({
       success: true,
       count: sorted.length,
-      source: memoryStockCache ? 'live-sheets/cache' : 'default',
+      source: 'firebase',
       stock: sorted,
     });
   } catch (err: unknown) {
@@ -245,8 +158,19 @@ export async function GET(req: Request) {
 // ─── POST: Add new guided rail stock entry (or bulk import) ───────────────────
 export async function POST(req: Request) {
   try {
+    const cookieStore = await cookies();
+    const userCookie = cookieStore.get('rodsync_user')?.value;
+    const email = userCookie ? decodeURIComponent(userCookie) : '';
+    const profile = getUserRoleProfile(email);
+
+    if (!profile.canAddInventory) {
+      return NextResponse.json({
+        success: false,
+        message: 'Permission denied: Only administrators can add or import stock inventory.'
+      }, { status: 403 });
+    }
+
     const body = await req.json();
-    const scriptUrl = req.headers.get('x-google-script-url') || body.scriptUrl || '';
 
     let stock = await loadFullStock(false);
     const now = new Date().toISOString();
@@ -254,30 +178,42 @@ export async function POST(req: Request) {
     // 1. Bulk import items
     if (Array.isArray(body.items)) {
       let importedCount = 0;
+      let mergedCount = 0;
 
       for (const item of body.items) {
-        const cleanModel = String(item.modelName || '').trim().toUpperCase();
+        let cleanModel = String(item.modelName || '').trim().toUpperCase().replace(/\s+/g, '');
+        if (/^\d+$/.test(cleanModel)) {
+          cleanModel = 'HGR' + cleanModel;
+        }
+        const cleanBrand = String(item.brand || item.category || 'HIWIN').trim().toUpperCase();
         const len = Number(item.lengthMm);
         const qty = Number(item.quantity) || 1;
         if (!cleanModel || isNaN(len) || len <= 0 || qty < 0) continue;
 
         const spec = MODEL_SPECS[cleanModel] || { railWidthMm: 0, railHeightMm: 0, pitchMm: 60 };
-        const railWidthMm = Number(item.railWidthMm) || spec.railWidthMm;
-        const railHeightMm = Number(item.railHeightMm) || spec.railHeightMm;
-        const pitchMm = Number(item.pitchMm) || spec.pitchMm;
+        const numMatch = cleanModel.match(/\d+/);
+        const defaultWidth = numMatch ? parseInt(numMatch[0], 10) : 20;
+        const railWidthMm = Number(item.railWidthMm) || spec.railWidthMm || defaultWidth;
+        const railHeightMm = Number(item.railHeightMm) || spec.railHeightMm || Math.round(railWidthMm * 0.85);
+        const pitchMm = Number(item.pitchMm) || spec.pitchMm || 60;
 
         const existingIdx = stock.findIndex(
-          s => s.modelName === cleanModel && Math.abs(Number(s.lengthMm) - len) < 0.1
+          s => String(s.modelName || '').toUpperCase() === cleanModel &&
+               Math.abs(Number(s.lengthMm) - len) < 1.0 &&
+               String(s.brand || s.category || '').toUpperCase() === cleanBrand
         );
 
         if (existingIdx !== -1) {
           stock[existingIdx].quantity += qty;
           stock[existingIdx].updatedAt = now;
           if (item.notes) stock[existingIdx].notes = item.notes;
+          mergedCount++;
         } else {
           const autoSku = item.sku || `RAIL-${cleanModel}-${Math.round(len)}MM`;
           stock.push({
             id: item.id || generateId(cleanModel, len),
+            brand: cleanBrand,
+            category: cleanBrand,
             modelName: cleanModel,
             railWidthMm,
             railHeightMm,
@@ -289,17 +225,57 @@ export async function POST(req: Request) {
             createdAt: now,
             updatedAt: now,
           });
+          importedCount++;
         }
-        importedCount++;
+      }
+
+      // Auto-arrange: Sort stock database by Brand, then Model, then Length ascending
+      stock.sort((a, b) => {
+        const brandA = String(a.brand || a.category || '').toUpperCase();
+        const brandB = String(b.brand || b.category || '').toUpperCase();
+        if (brandA !== brandB) return brandA.localeCompare(brandB);
+        const modelA = String(a.modelName || '').toUpperCase();
+        const modelB = String(b.modelName || '').toUpperCase();
+        if (modelA !== modelB) return modelA.localeCompare(modelB);
+        return Number(a.lengthMm || 0) - Number(b.lengthMm || 0);
+      });
+
+      // Auto-register any newly imported brands into Firebase Categories
+      try {
+        const inventory = await getFirebaseInventory();
+        const existingCats = Array.isArray(inventory.categories?.railSubcategories) && inventory.categories.railSubcategories.length > 0
+          ? [...inventory.categories.railSubcategories]
+          : ['HIWIN', 'PMI', 'THK'];
+
+        let catsUpdated = false;
+        const newBrands: string[] = Array.from(new Set<string>(body.items.map((i: any) => String(i.brand || i.category || '').trim().toUpperCase()))).filter(Boolean);
+        newBrands.forEach((b: string) => {
+          if (!existingCats.some(c => c.toUpperCase() === b)) {
+            existingCats.push(b);
+            catsUpdated = true;
+          }
+        });
+
+        inventory.railStock = stock;
+        if (catsUpdated) {
+          inventory.categories = {
+            rodSubcategories: inventory.categories?.rodSubcategories || ['Chrome Rod', 'Hard Chrome Rod'],
+            railSubcategories: existingCats
+          };
+        }
+        await saveFirebaseInventory(inventory);
+      } catch (catErr) {
+        console.warn('Auto rail category sync error:', catErr);
       }
 
       writeLocalStockFile(stock);
-      syncStockToGoogleSheets(stock, scriptUrl).catch(() => {});
-      return NextResponse.json({ success: true, count: importedCount, stock });
+      syncStockToFirebase(stock).catch(() => {});
+      return NextResponse.json({ success: true, count: importedCount, mergedCount, stock, syncedToFirebase: true });
     }
 
     // 2. Single item creation
-    const { modelName, lengthMm, quantity, notes, sku } = body;
+    const { modelName, lengthMm, quantity, notes, sku, brand, category } = body;
+    const cleanBrand = String(category || brand || 'FINHY').trim().toUpperCase();
 
     if (!modelName || lengthMm === undefined || quantity === undefined) {
       return NextResponse.json({ success: false, message: 'modelName, lengthMm, and quantity are required' }, { status: 400 });
@@ -318,41 +294,45 @@ export async function POST(req: Request) {
     const railHeightMm = Number(body.railHeightMm) || spec.railHeightMm;
     const pitchMm = Number(body.pitchMm) || spec.pitchMm;
 
-    // Check if an existing entry matches exact model and length
+    // Check if an existing entry matches exact model, length, and brand
     const existingIdx = stock.findIndex(
-      s => s.modelName === cleanModel && Math.abs(Number(s.lengthMm) - len) < 0.1
+      s => s.modelName === cleanModel &&
+           Math.abs(Number(s.lengthMm) - len) < 0.1 &&
+           (s.brand || 'FINHY').toUpperCase() === cleanBrand
     );
 
+    let savedItem: GuidedRailStockItem;
+
     if (existingIdx !== -1) {
-      // Merge by incrementing quantity
       stock[existingIdx].quantity += qty;
       stock[existingIdx].updatedAt = now;
       if (notes) stock[existingIdx].notes = notes;
-      writeLocalStockFile(stock);
-      syncStockToGoogleSheets(stock, scriptUrl).catch(() => {});
-      return NextResponse.json({ success: true, merged: true, item: stock[existingIdx], stock });
+      savedItem = stock[existingIdx];
+    } else {
+      const autoSku = sku || `RAIL-${cleanModel}-${Math.round(len)}MM`;
+      savedItem = {
+        id: body.id || generateId(cleanModel, len),
+        brand: cleanBrand,
+        category: cleanBrand,
+        modelName: cleanModel,
+        railWidthMm,
+        railHeightMm,
+        pitchMm,
+        lengthMm: len,
+        quantity: qty,
+        sku: autoSku,
+        notes: notes || '',
+        createdAt: now,
+        updatedAt: now,
+      };
+      stock.unshift(savedItem);
     }
 
-    const autoSku = sku || `RAIL-${cleanModel}-${Math.round(len)}MM`;
-
-    const newItem: GuidedRailStockItem = {
-      id: generateId(cleanModel, len),
-      modelName: cleanModel,
-      railWidthMm,
-      railHeightMm,
-      pitchMm,
-      lengthMm: len,
-      quantity: qty,
-      sku: autoSku,
-      notes: notes || '',
-      createdAt: now,
-      updatedAt: now,
-    };
-
-    stock.unshift(newItem);
+    setMemoryStockCache(stock, 60000);
     writeLocalStockFile(stock);
-    syncStockToGoogleSheets(stock, scriptUrl).catch(() => {});
-    return NextResponse.json({ success: true, item: newItem, stock });
+    await syncStockToFirebase(stock);
+
+    return NextResponse.json({ success: true, item: savedItem, stock, syncedToFirebase: true });
   } catch (err: unknown) {
     const msg = err instanceof Error ? err.message : 'Unknown error';
     return NextResponse.json({ success: false, message: msg }, { status: 500 });
@@ -362,8 +342,19 @@ export async function POST(req: Request) {
 // ─── PUT: Update existing rail stock item ─────────────────────────────────────
 export async function PUT(req: Request) {
   try {
+    const cookieStore = await cookies();
+    const userCookie = cookieStore.get('rodsync_user')?.value;
+    const email = userCookie ? decodeURIComponent(userCookie) : '';
+    const profile = getUserRoleProfile(email);
+
+    if (!profile.canEditInventory) {
+      return NextResponse.json({
+        success: false,
+        message: 'Permission denied: Only administrators can edit stock inventory.'
+      }, { status: 403 });
+    }
+
     const body = await req.json();
-    const scriptUrl = req.headers.get('x-google-script-url') || body.scriptUrl || '';
     const { id } = body;
 
     if (!id) {
@@ -378,26 +369,39 @@ export async function PUT(req: Request) {
     }
 
     const existing = stock[idx];
+    const newQty = body.quantity !== undefined ? Number(body.quantity) : existing.quantity;
+
+    // If quantity is reduced to 0 or below, remove/delete the length from stock entirely
+    if (newQty <= 0) {
+      const removed = stock.splice(idx, 1)[0];
+      setMemoryStockCache(stock, 60000);
+      writeLocalStockFile(stock);
+      await syncStockToFirebase(stock);
+      return NextResponse.json({ success: true, deleted: true, item: removed, stock, syncedToFirebase: true });
+    }
+
     const updatedModel = body.modelName !== undefined ? String(body.modelName).trim().toUpperCase() : existing.modelName;
     const spec = MODEL_SPECS[updatedModel] || { railWidthMm: existing.railWidthMm, railHeightMm: existing.railHeightMm, pitchMm: existing.pitchMm };
 
     const updated: GuidedRailStockItem = {
       ...existing,
+      brand:        body.brand        !== undefined ? String(body.brand).trim().toUpperCase() : (existing.brand || 'FINHY'),
       modelName:    updatedModel,
       railWidthMm:  body.railWidthMm  !== undefined ? Number(body.railWidthMm)  : (existing.railWidthMm || spec.railWidthMm),
       railHeightMm: body.railHeightMm !== undefined ? Number(body.railHeightMm) : (existing.railHeightMm || spec.railHeightMm),
       pitchMm:      body.pitchMm      !== undefined ? Number(body.pitchMm)      : (existing.pitchMm || spec.pitchMm),
       lengthMm:     body.lengthMm     !== undefined ? Number(body.lengthMm)     : existing.lengthMm,
-      quantity:     body.quantity     !== undefined ? Math.max(0, Number(body.quantity)) : existing.quantity,
+      quantity:     newQty,
       notes:        body.notes        !== undefined ? String(body.notes)        : existing.notes,
       sku:          body.sku          !== undefined ? String(body.sku)          : existing.sku,
       updatedAt:    new Date().toISOString(),
     };
 
     stock[idx] = updated;
+    setMemoryStockCache(stock, 60000);
     writeLocalStockFile(stock);
-    syncStockToGoogleSheets(stock, scriptUrl).catch(() => {});
-    return NextResponse.json({ success: true, item: updated, stock });
+    await syncStockToFirebase(stock);
+    return NextResponse.json({ success: true, item: updated, stock, syncedToFirebase: true });
   } catch (err: unknown) {
     const msg = err instanceof Error ? err.message : 'Unknown error';
     return NextResponse.json({ success: false, message: msg }, { status: 500 });
@@ -407,9 +411,20 @@ export async function PUT(req: Request) {
 // ─── DELETE: Remove a rail stock item ─────────────────────────────────────────
 export async function DELETE(req: Request) {
   try {
+    const cookieStore = await cookies();
+    const userCookie = cookieStore.get('rodsync_user')?.value;
+    const email = userCookie ? decodeURIComponent(userCookie) : '';
+    const profile = getUserRoleProfile(email);
+
+    if (!profile.canDeleteInventory) {
+      return NextResponse.json({
+        success: false,
+        message: 'Permission denied: Only administrators can delete stock inventory.'
+      }, { status: 403 });
+    }
+
     const { searchParams } = new URL(req.url);
     const id = searchParams.get('id');
-    const scriptUrl = req.headers.get('x-google-script-url') || '';
 
     if (!id) {
       return NextResponse.json({ success: false, message: 'id is required' }, { status: 400 });
@@ -422,9 +437,10 @@ export async function DELETE(req: Request) {
       return NextResponse.json({ success: false, message: 'Stock item not found' }, { status: 404 });
     }
 
+    setMemoryStockCache(filtered, 60000);
     writeLocalStockFile(filtered);
-    syncStockToGoogleSheets(filtered, scriptUrl).catch(() => {});
-    return NextResponse.json({ success: true, stock: filtered });
+    await syncStockToFirebase(filtered);
+    return NextResponse.json({ success: true, stock: filtered, syncedToFirebase: true });
   } catch (err: unknown) {
     const msg = err instanceof Error ? err.message : 'Unknown error';
     return NextResponse.json({ success: false, message: msg }, { status: 500 });

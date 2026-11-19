@@ -1,497 +1,348 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useRef } from 'react';
 import Script from 'next/script';
 import { useRouter } from 'next/navigation';
 import { db } from '@/lib/firebase';
-import { doc, getDoc, setDoc } from 'firebase/firestore';
+import { doc, getDoc, setDoc, onSnapshot } from 'firebase/firestore';
+import { getUserRoleProfile, UserRoleProfile } from '@/lib/roles';
 
 declare global {
   interface Window {
     __INITIAL_RODS__?: unknown[];
     __INITIAL_CUT_LOGS__?: unknown[];
+    __AVAILABLE_DIAMETERS__?: number[];
+    __ROD_SUBCATEGORIES__?: string[];
+    __RAIL_SUBCATEGORIES__?: string[];
     initVanillaApp?: () => void;
     setVanillaRods?: (rods: unknown[]) => void;
     setVanillaCutLogs?: (logs: unknown[]) => void;
     updateDashboardExternal?: () => void;
+    updateRodNamesDropdown?: (cats?: string[]) => void;
+    updateRailBrandsDropdown?: (brands?: string[]) => void;
+    initAllCustomDropdowns?: () => void;
     initGuidedRail?: () => void;
     _grLoadAndRender?: () => void;
   }
 }
 
-const APPS_SCRIPT_SNIPPET = `/* eslint-disable */
-/**
- * RodSync - Google Sheets & Excel Multi-Sheet Sync
- * Connected Sheet: https://docs.google.com/spreadsheets/d/1_rDLZvfHCD4Tzmzk7XHBqK2qHtxOjSP32wOLUOABkMQ/edit
- *
- * WORKBOOK STRUCTURE:
- * - Sheet 1: Master Raw Catalog (PRESERVED - Never modified or cleared)
- * - Sheet 2: Sheet 2 - Chrome Rod Stock (Rods Inventory)
- * - Sheet 3: Sheet 3 - Guided Rail Stock (Linear Rail Inventory)
- * - Sheet 4: Sheet 4 - Chrome Rod Cut Logs
- * - Sheet 5: Sheet 5 - Guided Rail Cut Logs
- *
- * HOW TO CONNECT THIS SPREADSHEET:
- * 1. Open this spreadsheet: https://docs.google.com/spreadsheets/d/1_rDLZvfHCD4Tzmzk7XHBqK2qHtxOjSP32wOLUOABkMQ/edit
- * 2. In the top menu, click: Extensions > Apps Script.
- * 3. Delete any code in the editor and paste THIS entire script.
- * 4. Click the "Save" icon (or Ctrl+S).
- * 5. In the top right, click: Deploy > New deployment.
- * 6. Click the gear icon (Select type) > Choose "Web app".
- * 7. Set:
- *    - Description: "RodSync Multi-Sheet Sync"
- *    - Execute as: "Me"
- *    - Who has access: "Anyone"
- * 8. Click "Deploy" (grant permissions when prompted).
- * 9. Copy the "Web app URL" (starts with https://script.google.com/macros/s/...)
- * 10. Paste it into RodSync under .env (GOOGLE_SCRIPT_URL="...")
- *     or in the RodSync Google Sheets settings dialog.
- */
-
-var TARGET_SPREADSHEET_ID = "1_rDLZvfHCD4Tzmzk7XHBqK2qHtxOjSP32wOLUOABkMQ";
-
-var MODEL_SPECS = {
-  'HGR15': { railWidthMm: 15, railHeightMm: 15, pitchMm: 60 },
-  'HGR20': { railWidthMm: 20, railHeightMm: 17.5, pitchMm: 60 },
-  'HGR25': { railWidthMm: 23, railHeightMm: 22, pitchMm: 60 },
-  'HGR30': { railWidthMm: 28, railHeightMm: 26, pitchMm: 80 },
-  'HGR35': { railWidthMm: 34, railHeightMm: 29, pitchMm: 80 },
-  'HGR45': { railWidthMm: 45, railHeightMm: 38, pitchMm: 105 },
-  'HGR55': { railWidthMm: 53, railHeightMm: 44, pitchMm: 120 },
-  'HGR65': { railWidthMm: 63, railHeightMm: 53, pitchMm: 150 }
-};
-
-function getSpreadsheet(e, postData) {
-  var id = (postData && postData.spreadsheetId) || (e && e.parameter && e.parameter.spreadsheetId) || TARGET_SPREADSHEET_ID;
-  if (id) {
-    try {
-      var byId = SpreadsheetApp.openById(id);
-      if (byId) return byId;
-    } catch (err) {
-      console.warn("Could not open by id " + id + ", falling back to active spreadsheet: " + err);
-    }
-  }
-  return SpreadsheetApp.getActiveSpreadsheet();
-}
-
-function getOrCreateTargetSheet(ss, preferredName, aliases) {
-  // 1. Try to find by preferred name
-  var s = ss.getSheetByName(preferredName);
-  if (s) return s;
-
-  // 2. Try by aliases
-  if (aliases && aliases.length > 0) {
-    for (var i = 0; i < aliases.length; i++) {
-      var byAlias = ss.getSheetByName(aliases[i]);
-      if (byAlias) {
-        try { byAlias.setName(preferredName); } catch (e) {}
-        return byAlias;
-      }
-    }
-  }
-
-  // 3. Insert fresh sheet with preferredName
-  return ss.insertSheet(preferredName);
-}
-
-function doGet(e) {
-  try {
-    var ss = getSpreadsheet(e, null);
-
-    // Sheet 2: Chrome Rod Stock
-    var sheet2 = getOrCreateTargetSheet(ss, "Chrome rod inventory", ["Sheet 2 - Chrome Rod Stock", "Sheet 2", "Sheet2", "Chrome Rod Stock", "Chrome rod inventory", "Rods Inventory"]);
-    // Sheet 3: Guided Rail Stock
-    var sheet3 = getOrCreateTargetSheet(ss, "Guided rail inventory", ["Sheet 3 - Guided Rail Stock", "Sheet 3", "Sheet3", "Guided Rail Stock", "Guided rail inventory", "Rail Stock"]);
-    // Sheet 4: Cut Log of Chrome Rod
-    var sheet4 = getOrCreateTargetSheet(ss, "Chrome rod cutting logs", ["Sheet 4 - Chrome Rod Cut Logs", "Sheet 4", "Sheet4", "Chrome rod cutting logs", "Chrome Rod Cut Logs", "Cut Logs"]);
-    // Sheet 5: Cut Log of Guided Rail
-    var sheet5 = getOrCreateTargetSheet(ss, "Guided rail cutting logs", ["Sheet 5 - Guided Rail Cut Logs", "Sheet 5", "Sheet5", "Guided rail cutting logs", "Guided Rail Cut Logs", "Rail Cut Logs"]);
-
-    // 1. Read Chrome Rod Stock (Chrome rod inventory)
-    var rods = [];
-    if (sheet2 && sheet2.getLastRow() > 1) {
-      var data2 = sheet2.getDataRange().getValues();
-      var header2 = data2[0] || [];
-      var is4Col = header2.length <= 5 || String(header2[1] || '').toLowerCase().indexOf('dia') !== -1;
-      for (var i = 1; i < data2.length; i++) {
-        var r = data2[i];
-        if (is4Col) {
-          var name = String(r[0] || 'Chrome Rod').trim();
-          var dia = Number(r[1]) || 0;
-          var len = Number(r[2]) || 0;
-          var qty = Number(r[3]) || 0;
-          if (dia > 0 && len > 0 && qty > 0) {
-            rods.push({
-              id: 'rod-' + Math.round(dia) + '-' + len + '-' + i,
-              sku: 'ROD-' + Math.round(dia) + 'MM-' + len + 'IN-STOCK',
-              name: name,
-              diameterMm: dia,
-              lengthIn: len,
-              lengthFt: len,
-              quantity: qty,
-              notes: '',
-              updatedAt: new Date().toISOString()
-            });
-          }
-        } else {
-          var rName = String(r[2] || 'Chrome Rod').trim();
-          var rDia = Number(r[3]) || 0;
-          var rLen = Number(r[4]) || 0;
-          var rQty = Number(r[5]) || 0;
-          if (rDia > 0 && rLen > 0 && rQty > 0) {
-            rods.push({
-              id: String(r[0] || ('rod-' + Math.round(rDia) + '-' + rLen + '-' + i)),
-              sku: String(r[1] || ('ROD-' + Math.round(rDia) + 'MM-' + rLen + 'IN-STOCK')),
-              name: rName,
-              diameterMm: rDia,
-              lengthIn: rLen,
-              lengthFt: rLen,
-              quantity: rQty,
-              notes: String(r[6] || ''),
-              updatedAt: r[7] || new Date().toISOString()
-            });
-          }
-        }
-      }
-    }
-
-    // Fallback: If Sheet 2 is empty, check if Sheet 1 has original stock
-    if (rods.length === 0) {
-      var sheet1 = ss.getSheetByName("Sheet1") || ss.getSheetByName("Sheet 1") || ss.getSheets()[0];
-      if (sheet1 && sheet1.getLastRow() > 1) {
-        var data1 = sheet1.getDataRange().getValues();
-        for (var si = 1; si < data1.length; si++) {
-          var sRow = data1[si];
-          var sName = String(sRow[0] || 'Chrome Rod').trim();
-          var sDia = Number(sRow[1]) || 0;
-          var sLen = Number(sRow[2]) || 0;
-          var sQty = Number(sRow[3]) || 0;
-          if (sDia > 0 && sLen > 0 && sQty > 0) {
-            rods.push({
-              id: 'rod-' + Math.round(sDia) + '-' + sLen + '-' + si,
-              sku: 'ROD-' + Math.round(sDia) + 'MM-' + sLen + 'IN-STOCK',
-              name: sName,
-              diameterMm: sDia,
-              lengthIn: sLen,
-              lengthFt: sLen,
-              quantity: sQty,
-              notes: '',
-              updatedAt: new Date().toISOString()
-            });
-          }
-        }
-      }
-    }
-
-    // 2. Read Guided Rail Stock (Sheet 3)
-    var railStock = [];
-    if (sheet3 && sheet3.getLastRow() > 1) {
-      var data3 = sheet3.getDataRange().getValues();
-      for (var j = 1; j < data3.length; j++) {
-        var g = data3[j];
-        var rModel = String(g[1] || '').trim().toUpperCase();
-        var rLen = Number(g[6]) || 0;
-        var rQty = Number(g[7]) || 0;
-        if (!rModel && rLen <= 0) continue;
-
-        var spec = MODEL_SPECS[rModel] || { railWidthMm: 0, railHeightMm: 0, pitchMm: 60 };
-        var rWidth = Number(g[3]) || spec.railWidthMm;
-        var rHeight = Number(g[4]) || spec.railHeightMm;
-        var rPitch = Number(g[5]) || spec.pitchMm;
-        var rSku = String(g[2] || '').trim() || ('RAIL-' + rModel + '-' + Math.round(rLen) + 'MM');
-        var rId = String(g[0] || '').trim() || ('grs-' + rModel.toLowerCase() + '-' + Math.round(rLen) + '-' + j);
-
-        railStock.push({
-          id: rId,
-          modelName: rModel,
-          sku: rSku,
-          railWidthMm: rWidth,
-          railHeightMm: rHeight,
-          pitchMm: rPitch,
-          lengthMm: rLen,
-          quantity: rQty,
-          notes: String(g[8] || ''),
-          updatedAt: g[9] || new Date().toISOString()
-        });
-      }
-    }
-
-    // 3. Read Chrome Rod Cut Logs (Sheet 4)
-    var rodCutLogs = [];
-    if (sheet4 && sheet4.getLastRow() > 1) {
-      var data4 = sheet4.getDataRange().getValues();
-      for (var k = 1; k < data4.length; k++) {
-        var l = data4[k];
-        if (!l[0] && !l[2]) continue;
-        rodCutLogs.push({
-          id: String(l[0] || ''),
-          timestamp: l[1] || '',
-          isRail: false,
-          rodName: String(l[2] || ''),
-          diameterMm: Number(l[3]) || 0,
-          originalLengthIn: Number(l[4]) || 0,
-          originalLengthFt: Number(l[4]) || 0,
-          cutLengthIn: Number(l[5]) || 0,
-          cutLengthFt: Number(l[5]) || 0,
-          quantity: Number(l[6]) || 0,
-          remainderIn: Number(l[7]) || 0,
-          remainderFt: Number(l[7]) || 0,
-          remnantAdded: l[8] === 'Yes' || l[8] === true,
-          reason: String(l[9] || ''),
-          assignBy: String(l[10] || ''),
-          assignTo: String(l[11] || '')
-        });
-      }
-    }
-
-    // 4. Read Guided Rail Cut Logs (Sheet 5)
-    var railCutLogs = [];
-    if (sheet5 && sheet5.getLastRow() > 1) {
-      var data5 = sheet5.getDataRange().getValues();
-      for (var m = 1; m < data5.length; m++) {
-        var q = data5[m];
-        if (!q[0] && !q[2]) continue;
-        railCutLogs.push({
-          id: String(q[0] || ''),
-          timestamp: q[1] || '',
-          isRail: true,
-          modelName: String(q[2] || ''),
-          rodName: String(q[2] ? ('Guided Rail ' + q[2]) : ''),
-          pitchMm: Number(q[3]) || 0,
-          diameterMm: Number(q[3]) || 0,
-          originalLengthMm: Number(q[4]) || 0,
-          originalLengthIn: Number((Number(q[4] || 0) / 25.4).toFixed(2)),
-          cutLengthMm: Number(q[5]) || 0,
-          cutLengthIn: Number((Number(q[5] || 0) / 25.4).toFixed(2)),
-          quantity: Number(q[6]) || 0,
-          remainderMm: Number(q[7]) || 0,
-          remainderIn: Number((Number(q[7] || 0) / 25.4).toFixed(2)),
-          holesCount: Number(q[8]) || 0,
-          endMarginMm: Number(q[9]) || 0,
-          remnantAdded: q[10] === 'Yes' || q[10] === true,
-          reason: String(q[11] || ''),
-          assignBy: String(q[12] || ''),
-          assignTo: String(q[13] || '')
-        });
-      }
-    }
-
-    var cutLogs = [].concat(rodCutLogs, railCutLogs);
-
-    return ContentService.createTextOutput(JSON.stringify({
-      success: true,
-      configured: true,
-      spreadsheetId: ss.getId(),
-      rods: rods,
-      railStock: railStock,
-      rodCutLogs: rodCutLogs,
-      railCutLogs: railCutLogs,
-      cutLogs: cutLogs
-    })).setMimeType(ContentService.MimeType.JSON);
-  } catch (err) {
-    return ContentService.createTextOutput(JSON.stringify({
-      success: false,
-      message: err.toString()
-    })).setMimeType(ContentService.MimeType.JSON);
-  }
-}
-
-function doPost(e) {
-  try {
-    var contents = e.postData ? e.postData.contents : '';
-    if (!contents) throw new Error("No payload data received");
-    var postData = JSON.parse(contents);
-    var ss = getSpreadsheet(e, postData);
-
-    // Sheet 1 is preserved untouched!
-
-    // Sheet 2: Chrome Rod Stock
-    var sheet2 = getOrCreateTargetSheet(ss, "Chrome rod inventory", ["Sheet 2 - Chrome Rod Stock", "Sheet 2", "Sheet2", "Chrome Rod Stock", "Chrome rod inventory", "Rods Inventory"]);
-    // Sheet 3: Guided Rail Stock
-    var sheet3 = getOrCreateTargetSheet(ss, "Guided rail inventory", ["Sheet 3 - Guided Rail Stock", "Sheet 3", "Sheet3", "Guided Rail Stock", "Guided rail inventory", "Rail Stock"]);
-    // Sheet 4: Cut Log of Chrome Rod
-    var sheet4 = getOrCreateTargetSheet(ss, "Chrome rod cutting logs", ["Sheet 4 - Chrome Rod Cut Logs", "Sheet 4", "Sheet4", "Chrome rod cutting logs", "Chrome Rod Cut Logs", "Cut Logs"]);
-    // Sheet 5: Cut Log of Guided Rail
-    var sheet5 = getOrCreateTargetSheet(ss, "Guided rail cutting logs", ["Sheet 5 - Guided Rail Cut Logs", "Sheet 5", "Sheet5", "Guided rail cutting logs", "Guided Rail Cut Logs", "Rail Cut Logs"]);
-
-    function formatHeader(sheet, numCols, color) {
-      sheet.getRange(1, 1, 1, numCols).setFontWeight("bold").setBackground(color || "#e2e8f0").setFontColor("#0f172a");
-      sheet.setFrozenRows(1);
-    }
-
-    // 1. Sync Chrome Rod Stock (Chrome rod inventory: 4 columns matching user spreadsheet format)
-    var rodsList = postData.rods;
-    if (rodsList && Array.isArray(rodsList) && rodsList.length > 0) {
-      rodsList = rodsList.filter(function(r) { return Number(r.diameterMm) !== 300; });
-      sheet2.clear();
-      sheet2.appendRow(['Rod Name', 'Dia (mm)', 'Length (in)', 'Quantity']);
-      var rows2 = rodsList.map(function(r) {
-        var len = (r.lengthIn !== undefined && r.lengthIn !== null) ? r.lengthIn : (r.lengthFt || 0);
-        return [
-          r.name || 'Chrome Rod',
-          r.diameterMm || 0,
-          len,
-          r.quantity || 0
-        ];
-      });
-      sheet2.getRange(2, 1, rows2.length, 4).setValues(rows2);
-      formatHeader(sheet2, 4, "#dbeafe");
-    }
-
-    // 2. Sync Guided Rail Stock (Guided rail inventory)
-    var railList = postData.railStock;
-    if (railList && Array.isArray(railList) && railList.length > 0) {
-      sheet3.clear();
-      sheet3.appendRow(['ID', 'Model Name', 'SKU', 'Rail Width (mm)', 'Rail Height (mm)', 'Pitch / PCC (mm)', 'Length (mm)', 'Quantity', 'Storage Rack / Notes', 'Last Updated']);
-      var rows3 = railList.map(function(g) {
-        return [
-          g.id || '',
-          g.modelName || '',
-          g.sku || '',
-          g.railWidthMm || 0,
-          g.railHeightMm || 0,
-          g.pitchMm || 0,
-          g.lengthMm || 0,
-          g.quantity || 0,
-          g.notes || '',
-          g.updatedAt ? new Date(g.updatedAt).toISOString() : new Date().toISOString()
-        ];
-      });
-      sheet3.getRange(2, 1, rows3.length, 10).setValues(rows3);
-      formatHeader(sheet3, 10, "#ede9fe");
-    }
-
-    // Extract rod cuts vs rail cuts
-    var allLogs = postData.cutLogs || [];
-    var rodCuts = postData.rodCutLogs || [];
-    var railCuts = postData.railCutLogs || [];
-
-    if (allLogs.length > 0 && rodCuts.length === 0 && railCuts.length === 0) {
-      for (var n = 0; n < allLogs.length; n++) {
-        var item = allLogs[n];
-        var isRail = (item.isRail === true) || Boolean(item.modelName) || (String(item.id || '').indexOf('gr-cut-') === 0) || (String(item.rodName || '').toLowerCase().indexOf('guided rail') !== -1);
-        if (isRail) {
-          railCuts.push(item);
-        } else {
-          rodCuts.push(item);
-        }
-      }
-    }
-
-    // 3. Sync Chrome Rod Cut Logs (Chrome rod cutting logs)
-    if (rodCuts && Array.isArray(rodCuts) && rodCuts.length > 0) {
-      rodCuts = rodCuts.filter(function(l) { return Number(l.diameterMm) !== 300; });
-      sheet4.clear();
-      sheet4.appendRow(['ID', 'Date & Time', 'Rod Name', 'Diameter (mm)', 'Original Length (In)', 'Cut Length (In)', 'Quantity', 'Remnant Offcut (In)', 'Remnant Added', 'Job / Reason', 'Assign By', 'Assign To']);
-      var rows4 = rodCuts.map(function(l) {
-        var origLen = (l.originalLengthIn !== undefined && l.originalLengthIn !== null) ? l.originalLengthIn : (l.originalLengthFt || 0);
-        var cutLen = (l.cutLengthIn !== undefined && l.cutLengthIn !== null) ? l.cutLengthIn : (l.cutLengthFt || 0);
-        var remLen = (l.remainderIn !== undefined && l.remainderIn !== null) ? l.remainderIn : (l.remainderFt || 0);
-        return [
-          l.id || '',
-          l.timestamp ? new Date(l.timestamp).toLocaleString() : '',
-          l.rodName || 'Chrome Rod',
-          l.diameterMm || 0,
-          origLen,
-          cutLen,
-          l.quantity || 0,
-          remLen,
-          (l.remnantAdded === true || l.remnantAdded === 'Yes') ? 'Yes' : 'No',
-          l.reason || '',
-          l.assignBy || l.createdBy || '',
-          l.assignTo || l.assignedBy || ''
-        ];
-      });
-      sheet4.getRange(2, 1, rows4.length, 12).setValues(rows4);
-      formatHeader(sheet4, 12, "#fee2e2");
-    }
-
-    // 4. Sync Guided Rail Cut Logs (Guided rail cutting logs)
-    if (railCuts && Array.isArray(railCuts) && railCuts.length > 0) {
-      sheet5.clear();
-      sheet5.appendRow(['ID', 'Date & Time', 'Rail Model', 'Pitch / PCC (mm)', 'Original Length (mm)', 'Cut Length (mm)', 'Quantity', 'Remnant Offcut (mm)', 'Holes Count', 'End Margin (mm)', 'Remnant Added', 'Order / Job Notes', 'Assign By', 'Assign To']);
-      var rows5 = railCuts.map(function(q) {
-        var origMm = q.originalLengthMm || (q.originalLengthIn ? Math.round(q.originalLengthIn * 25.4) : 0);
-        var cutMm = q.cutLengthMm || (q.cutLengthIn ? Math.round(q.cutLengthIn * 25.4) : 0);
-        var remMm = q.remainderMm !== undefined ? q.remainderMm : (q.remainderIn ? Math.round(q.remainderIn * 25.4) : 0);
-        return [
-          q.id || '',
-          q.timestamp ? new Date(q.timestamp).toLocaleString() : '',
-          q.modelName || q.rodName || '',
-          q.pitchMm || q.diameterMm || 0,
-          origMm,
-          cutMm,
-          q.quantity || 0,
-          remMm,
-          q.holesCount || 0,
-          q.endMarginMm || 0,
-          (q.remnantAdded === true || q.remnantAdded === 'Yes') ? 'Yes' : 'No',
-          q.reason || '',
-          q.assignBy || q.createdBy || '',
-          q.assignTo || q.assignedBy || ''
-        ];
-      });
-      sheet5.getRange(2, 1, rows5.length, 14).setValues(rows5);
-      formatHeader(sheet5, 14, "#fef3c7");
-    }
-          q.id || '',
-          q.timestamp ? new Date(q.timestamp).toISOString() : '',
-          q.modelName || q.rodName || '',
-          q.pitchMm || q.diameterMm || 0,
-          origMm,
-          cutMm,
-          q.quantity || 0,
-          remMm,
-          q.holesCount || 0,
-          q.endMarginMm || 0,
-          (q.remnantAdded === true || q.remnantAdded === 'Yes') ? 'Yes' : 'No',
-          q.reason || '',
-          q.assignBy || q.createdBy || '',
-          q.assignTo || q.assignedBy || ''
-        ];
-      });
-      sheet5.getRange(2, 1, rows5.length, 14).setValues(rows5);
-      formatHeader(sheet5, 14, "#fef3c7");
-    }
-
-    return ContentService.createTextOutput(JSON.stringify({
-      success: true,
-      spreadsheetId: ss.getId(),
-      message: "Successfully updated Sheet 2 (Chrome Rods), Sheet 3 (Guided Rails), Sheet 4 (Rod Cut Logs), Sheet 5 (Rail Cut Logs)"
-    })).setMimeType(ContentService.MimeType.JSON);
-  } catch (err) {
-    return ContentService.createTextOutput(JSON.stringify({
-      success: false,
-      message: err.toString()
-    })).setMimeType(ContentService.MimeType.JSON);
-  }
-}
-`;
-
 export default function Home() {
   const router = useRouter();
   const [isCheckingAuth, setIsCheckingAuth] = useState(true);
+  const [userProfile, setUserProfile] = useState<UserRoleProfile | null>(null);
   const [isInitializing, setIsInitializing] = useState(false);
   const [theme, setTheme] = useState(() => (typeof document !== 'undefined' ? document.documentElement.getAttribute('data-theme') || 'light' : 'light'));
   const [isImportModalOpen, setIsImportModalOpen] = useState(false);
   const [isGrImportModalOpen, setIsGrImportModalOpen] = useState(false);
-  const [sheetsStatus, setSheetsStatus] = useState<'connected' | 'disconnected' | 'unconfigured' | 'syncing'>('unconfigured');
-  const [isSheetsModalOpen, setIsSheetsModalOpen] = useState(false);
-  const [inputScriptUrl, setInputScriptUrl] = useState(() => (typeof window !== 'undefined' ? (localStorage.getItem('rodsync_gsheets_script_url') || process.env.NEXT_PUBLIC_GOOGLE_SCRIPT_URL || '') : (process.env.NEXT_PUBLIC_GOOGLE_SCRIPT_URL || '')));
-  const [copiedSnippet, setCopiedSnippet] = useState(false);
+  const [firebaseStatus, setFirebaseStatus] = useState<'connected' | 'syncing' | 'offline'>('connected');
+  const [isFirebaseModalOpen, setIsFirebaseModalOpen] = useState(false);
   const [isRoundLength, setIsRoundLength] = useState(false);
   const [systemMode, setSystemMode] = useState<'chrome-rod' | 'guided-rail'>('chrome-rod');
+  const [portalView, setPortalView] = useState<'category' | 'rod' | 'rail' | 'main'>('category');
+  const [visitedMain, setVisitedMain] = useState(false);
+  const [selectedRodCategory, setSelectedRodCategory] = useState<string>('Chrome Rod');
+  const [selectedRailBrand, setSelectedRailBrand] = useState<string>('HIWIN');
+  const [availableRodNames, setAvailableRodNames] = useState<string[]>(['Chrome Rod', 'HoneTube', 'Sbrc', 'Hard Chrome Rod']);
+  const [availableRailBrands, setAvailableRailBrands] = useState<string[]>(['HIWIN', 'PMI', 'FINHY']);
+  const [availableRailModels, setAvailableRailModels] = useState<{ modelName: string; pitchMm: number }[]>([]);
+
+  // Category Management State (Strict 2-Category Model: Rod & Rail)
+  const [rodSubcategories, setRodSubcategories] = useState<string[]>(['Chrome Rod', 'HoneTube', 'Sbrc', 'Hard Chrome Rod']);
+  const [railSubcategories, setRailSubcategories] = useState<string[]>(['HIWIN', 'PMI', 'FINHY']);
+  const [newRodSubcat, setNewRodSubcat] = useState('');
+  const [newRailSubcat, setNewRailSubcat] = useState('');
+  const [editingSubcat, setEditingSubcat] = useState<{ type: 'rod' | 'rail'; oldName: string; value: string } | null>(null);
+  const [isSavingCategory, setIsSavingCategory] = useState(false);
+
+  // Searchable Diameter Dropdown State (Strictly derived from database inventory)
+  const [isDiaDropdownOpen, setIsDiaDropdownOpen] = useState(false);
+  const [selectedDiameter, setSelectedDiameter] = useState<string>('');
+  const [diaSearchQuery, setDiaSearchQuery] = useState<string>('');
+  const [availableRodDiameters, setAvailableRodDiameters] = useState<(number | string)[]>([]);
+  const diaDropdownRef = useRef<HTMLDivElement>(null);
+
+  // Admin-Only Inventory Deletion & Management State (dipanshu@pvtchopra.com)
+  const [isAdminManageOpen, setIsAdminManageOpen] = useState(false);
+  const [adminTab, setAdminTab] = useState<'rod' | 'rail'>('rod');
+  const [adminSearchQuery, setAdminSearchQuery] = useState('');
+  const [adminSelectedCat, setAdminSelectedCat] = useState('all');
+  const [selectedDeleteIds, setSelectedDeleteIds] = useState<Set<string>>(new Set());
+  const [isConfirmDeleteOpen, setIsConfirmDeleteOpen] = useState(false);
+  const [isDeletingItems, setIsDeletingItems] = useState(false);
+  const [itemsToConfirmDelete, setItemsToConfirmDelete] = useState<Array<{
+    id: string;
+    type: 'rod' | 'rail';
+    title: string;
+    subtitle: string;
+    quantity: number;
+  }>>([]);
+  const [adminRods, setAdminRods] = useState<any[]>([]);
+  const [adminRails, setAdminRails] = useState<any[]>([]);
+
+  const refreshAdminInventory = () => {
+    if (typeof window !== 'undefined') {
+      const currentRods = (window as any).getVanillaRods ? (window as any).getVanillaRods() : [];
+      const currentRails = (window as any).getGuidedRailStock ? (window as any).getGuidedRailStock() : [];
+      setAdminRods(Array.isArray(currentRods) ? [...currentRods] : []);
+      setAdminRails(Array.isArray(currentRails) ? [...currentRails] : []);
+    }
+  };
+
+  const toggleSelectDeleteItem = (id: string) => {
+    setSelectedDeleteIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  };
+
+  const selectAllFiltered = () => {
+    const ids = adminTab === 'rod'
+      ? filteredAdminRods.map((r: any) => String(r.id))
+      : filteredAdminRails.map((s: any) => String(s.id));
+    setSelectedDeleteIds(new Set(ids));
+  };
+
+  const deselectAll = () => {
+    setSelectedDeleteIds(new Set());
+  };
+
+  const initiateSingleDelete = (item: any, type: 'rod' | 'rail') => {
+    if (type === 'rod') {
+      setItemsToConfirmDelete([{
+        id: String(item.id),
+        type: 'rod',
+        title: `${item.category || item.name || 'Rod'} • ${item.diameterMm} mm`,
+        subtitle: `Length: ${item.lengthIn || item.lengthFt || 0} in | SKU: ${item.sku || 'N/A'}`,
+        quantity: Number(item.quantity) || 1
+      }]);
+    } else {
+      setItemsToConfirmDelete([{
+        id: String(item.id),
+        type: 'rail',
+        title: `${item.category || item.brand || 'Rail'} • ${item.modelName || 'Model'}`,
+        subtitle: `Pitch: ${item.pitchMm || 60} mm | Length: ${item.lengthMm || 0} mm (${((item.lengthMm || 0) / 25.4).toFixed(2)} in)`,
+        quantity: Number(item.quantity) || 1
+      }]);
+    }
+    setIsConfirmDeleteOpen(true);
+  };
+
+  const initiateBulkDelete = () => {
+    if (selectedDeleteIds.size === 0) return;
+    const itemsList: Array<{ id: string; type: 'rod' | 'rail'; title: string; subtitle: string; quantity: number }> = [];
+    if (adminTab === 'rod') {
+      adminRods.forEach((r: any) => {
+        if (selectedDeleteIds.has(String(r.id))) {
+          itemsList.push({
+            id: String(r.id),
+            type: 'rod',
+            title: `${r.category || r.name || 'Rod'} • ${r.diameterMm} mm`,
+            subtitle: `Length: ${r.lengthIn || r.lengthFt || 0} in | SKU: ${r.sku || 'N/A'}`,
+            quantity: Number(r.quantity) || 1
+          });
+        }
+      });
+    } else {
+      adminRails.forEach((s: any) => {
+        if (selectedDeleteIds.has(String(s.id))) {
+          itemsList.push({
+            id: String(s.id),
+            type: 'rail',
+            title: `${s.category || s.brand || 'Rail'} • ${s.modelName || 'Model'}`,
+            subtitle: `Pitch: ${s.pitchMm || 60} mm | Length: ${s.lengthMm || 0} mm`,
+            quantity: Number(s.quantity) || 1
+          });
+        }
+      });
+    }
+    setItemsToConfirmDelete(itemsList);
+    setIsConfirmDeleteOpen(true);
+  };
+
+  const executeDeleteItems = async () => {
+    if (itemsToConfirmDelete.length === 0) return;
+    setIsDeletingItems(true);
+    try {
+      const rodIds = itemsToConfirmDelete.filter(i => i.type === 'rod').map(i => i.id);
+      const railIds = itemsToConfirmDelete.filter(i => i.type === 'rail').map(i => i.id);
+
+      const res = await fetch('/api/inventory/delete', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ rodIds, railIds })
+      });
+
+      const data = await res.json();
+      if (!res.ok || !data.success) {
+        alert(data.message || 'Failed to delete selected items. Please check admin permissions.');
+        setIsDeletingItems(false);
+        return;
+      }
+
+      // Update frontend states
+      if (Array.isArray(data.rods)) {
+        setAdminRods(data.rods);
+        if (typeof window !== 'undefined' && (window as any).setVanillaRods) {
+          (window as any).setVanillaRods(data.rods);
+        }
+      }
+      if (Array.isArray(data.railStock)) {
+        setAdminRails(data.railStock);
+        if (typeof window !== 'undefined' && (window as any).setGuidedRailStock) {
+          (window as any).setGuidedRailStock(data.railStock);
+        }
+      }
+
+      // Broadcast real-time sync across devices
+      if (typeof window !== 'undefined') {
+        window.dispatchEvent(new CustomEvent('syncBothToBackend', {
+          detail: { rods: data.rods, railStock: data.railStock }
+        }));
+        if ((window as any).showToast) {
+          (window as any).showToast(data.message || 'Items deleted successfully.', 'success');
+        }
+      }
+
+      // Clear selection
+      setSelectedDeleteIds(new Set());
+      setIsConfirmDeleteOpen(false);
+      setItemsToConfirmDelete([]);
+    } catch (err: any) {
+      console.error('Delete error:', err);
+      alert('An error occurred while deleting items: ' + err.message);
+    } finally {
+      setIsDeletingItems(false);
+    }
+  };
+
+  const handleGoBack = () => {
+    if (portalView === 'main') {
+      if (systemMode === 'guided-rail') {
+        handleSetPortalView('rail');
+      } else {
+        handleSetPortalView('rod');
+      }
+    } else if (portalView === 'rod' || portalView === 'rail') {
+      handleSetPortalView('category');
+    } else if (portalView === 'category') {
+      if (visitedMain) {
+        handleSetPortalView('main');
+      } else if (typeof window !== 'undefined' && window.history.length > 1) {
+        window.history.back();
+      }
+    }
+  };
+
+  const handleSetPortalView = (view: 'category' | 'rod' | 'rail' | 'main') => {
+    setPortalView(view);
+    if (view === 'main') {
+      setVisitedMain(true);
+    }
+    try {
+      localStorage.setItem('rodsync_portal_view', view);
+    } catch { }
+    if (view === 'main') {
+      setTimeout(() => {
+        if (systemMode === 'chrome-rod') {
+          if (typeof window !== 'undefined' && (window as any).updateDashboardExternal) {
+            (window as any).updateDashboardExternal();
+          }
+        } else if (systemMode === 'guided-rail') {
+          if (typeof window !== 'undefined' && (window as any)._grLoadAndRender) {
+            (window as any)._grLoadAndRender();
+          }
+        }
+      }, 50);
+    }
+  };
+
+  const handleSelectRodCategory = (cat: string) => {
+    setSelectedRodCategory(cat);
+    if (typeof window !== 'undefined') {
+      if ((window as any).setRodCategoryFilter) {
+        (window as any).setRodCategoryFilter(cat);
+      }
+      const allRods = (window as any).getVanillaRods ? (window as any).getVanillaRods() : [];
+      if (Array.isArray(allRods)) {
+        const activeRods = (cat && cat !== 'all' && cat !== 'ALL')
+          ? allRods.filter((r: any) => String(r.category || r.name || '').toLowerCase() === cat.toLowerCase())
+          : allRods;
+        const dias = Array.from(new Set(
+          activeRods
+            .map((r: any) => r.diameterMm !== undefined && r.diameterMm !== null ? String(r.diameterMm).trim() : '')
+            .filter((d: string) => d.length > 0 && d !== '300')
+        )).sort((a: string, b: string) => {
+          const numA = parseFloat(a) || 0;
+          const numB = parseFloat(b) || 0;
+          if (numA !== numB) return numA - numB;
+          return a.localeCompare(b);
+        });
+        setAvailableRodDiameters(dias);
+        setSelectedDiameter((prev) => {
+          let nextDia = '';
+          if (dias.length > 0) {
+            nextDia = (prev && dias.some((d: any) => String(d).toLowerCase() === String(prev).toLowerCase())) ? prev : String(dias[0]);
+          }
+          const inp = document.getElementById('searchDiameterInput') as HTMLInputElement | null;
+          if (inp && inp.value !== nextDia) {
+            inp.value = nextDia;
+            inp.dispatchEvent(new Event('input', { bubbles: true }));
+            inp.dispatchEvent(new Event('change', { bubbles: true }));
+          }
+          return nextDia;
+        });
+
+        // Immediately update section title and bars badge for this category
+        const sectionTitle = document.getElementById('rodInventorySectionTitle');
+        if (sectionTitle) {
+          sectionTitle.textContent = `${cat} Stock Inventory`;
+        }
+        const totalBars = activeRods.reduce((sum: number, r: any) => sum + (Number(r.quantity) || 0), 0);
+        const crBadge = document.getElementById('crTotalStockBarsBadge');
+        if (crBadge) {
+          crBadge.textContent = `${totalBars} bar${totalBars !== 1 ? 's' : ''}`;
+        }
+      }
+    }
+  };
+
+  const handleSelectRailBrand = (brand: string) => {
+    setSelectedRailBrand(brand);
+    if (typeof window !== 'undefined' && (window as any).setRailBrandFilter) {
+      (window as any).setRailBrandFilter(brand);
+    }
+    const title = document.getElementById('railInventorySectionTitle');
+    if (title) {
+      title.textContent = `${brand} Stock Inventory`;
+    }
+  };
 
   useEffect(() => {
     try {
-      const saved = localStorage.getItem('rodsync_system_mode') as 'chrome-rod' | 'guided-rail';
-      const initialMode = (saved === 'guided-rail' || saved === 'chrome-rod') ? saved : 'chrome-rod';
+      const savedMode = localStorage.getItem('rodsync_system_mode') as 'chrome-rod' | 'guided-rail';
+      const initialMode = (savedMode === 'guided-rail' || savedMode === 'chrome-rod') ? savedMode : 'chrome-rod';
       setSystemMode(initialMode);
       if (typeof document !== 'undefined') {
         document.documentElement.setAttribute('data-system-mode', initialMode);
       }
-    } catch {}
+
+      const savedView = localStorage.getItem('rodsync_portal_view') as 'category' | 'rod' | 'rail' | 'main';
+      if (savedView === 'category' || savedView === 'rod' || savedView === 'rail' || savedView === 'main') {
+        setPortalView(savedView);
+      }
+    } catch { }
   }, []);
+
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      if (typeof window !== 'undefined' && (window as any).initAllCustomDropdowns) {
+        (window as any).initAllCustomDropdowns();
+      }
+    }, 150);
+    return () => clearTimeout(timer);
+  }, [portalView, systemMode]);
 
   const handleSwitchSystem = (mode: 'chrome-rod' | 'guided-rail') => {
     setSystemMode(mode);
@@ -500,25 +351,36 @@ export default function Home() {
     }
     try {
       localStorage.setItem('rodsync_system_mode', mode);
-    } catch {}
+    } catch { }
+    if (portalView !== 'main') {
+      handleSetPortalView(mode === 'chrome-rod' ? 'rod' : 'rail');
+    }
     if (mode === 'guided-rail' && typeof window !== 'undefined' && (window as any)._grLoadAndRender) {
       setTimeout(() => {
         try {
           (window as any)._grLoadAndRender();
-        } catch {}
+        } catch { }
+      }, 50);
+    }
+    if (mode === 'chrome-rod' && typeof window !== 'undefined' && (window as any).updateDashboardExternal) {
+      setTimeout(() => {
+        try {
+          (window as any).updateDashboardExternal();
+        } catch { }
       }, 50);
     }
     if (typeof window !== 'undefined') {
       try {
         window.dispatchEvent(new CustomEvent('rodsyncSystemModeChanged', { detail: { mode } }));
+        if ((window as any).updateGrKpis) (window as any).updateGrKpis();
         if ((window as any).updateCutLogsBadge) (window as any).updateCutLogsBadge();
         if ((window as any).renderCutLogsTable) (window as any).renderCutLogsTable();
-      } catch {}
+      } catch { }
     }
   };
 
   const handleDownloadGrTemplate = () => {
-    const csvContent = "data:text/csv;charset=utf-8,Model,Length (mm),Quantity,Notes,SKU\nHGR15,2000,5,Rack A-1 • Standard,RAIL-HGR15-2000MM\nHGR20,3000,10,Rack A-2 • Heavy Duty,RAIL-HGR20-3000MM\nHGR25,3000,8,Rack B-1 • Precision,RAIL-HGR25-3000MM\nHGR30,4000,6,Rack B-2 • High Rigidity,RAIL-HGR30-4000MM";
+    const csvContent = "data:text/csv;charset=utf-8,Rail\nSub Category,Diameter (mm),Length (in),Pieces,PCC\nFinhy,Hgr 15,12.53,8,30\nHiwin,20,34.54,11,60\nPmi,egr 35,464,1,100";
     const encodedUri = encodeURI(csvContent);
     const link = document.createElement("a");
     link.setAttribute("href", encodedUri);
@@ -541,7 +403,7 @@ export default function Home() {
       if (typeof window !== 'undefined' && (window as any).setRoundLengthEnabled) {
         (window as any).setRoundLengthEnabled(saved);
       }
-    } catch {}
+    } catch { }
   }, []);
 
   const handleToggleRoundLength = () => {
@@ -549,7 +411,7 @@ export default function Home() {
     setIsRoundLength(next);
     try {
       localStorage.setItem('rodsync_round_length', next ? 'true' : 'false');
-    } catch {}
+    } catch { }
     if (typeof window !== 'undefined') {
       if ((window as any).setRoundLengthEnabled) {
         (window as any).setRoundLengthEnabled(next);
@@ -571,9 +433,18 @@ export default function Home() {
     });
     observer.observe(document.documentElement, { attributes: true });
 
-    // PWA Service Worker Registration
-    if ('serviceWorker' in navigator) {
-      navigator.serviceWorker.register('/sw.js').catch(err => console.error('SW registration failed:', err));
+    // Clear and unregister any stale ServiceWorker caches
+    if (typeof window !== 'undefined' && 'serviceWorker' in navigator) {
+      navigator.serviceWorker.getRegistrations().then(registrations => {
+        for (const reg of registrations) {
+          reg.unregister();
+        }
+      });
+      if ('caches' in window) {
+        caches.keys().then(names => {
+          for (const name of names) caches.delete(name);
+        });
+      }
     }
 
     return () => {
@@ -598,7 +469,7 @@ export default function Home() {
     try {
       localStorage.removeItem('rodsync_user_email');
       if (typeof window !== 'undefined') (window as any).rodsyncCurrentUserEmail = '';
-    } catch {}
+    } catch { }
     // Force full page navigation to login portal
     window.location.href = '/login';
   };
@@ -618,137 +489,221 @@ export default function Home() {
   };
 
   const syncInventoryData = async (forceRefresh = false) => {
-    let loadedFromBackend = false;
-    setSheetsStatus('syncing');
+    setFirebaseStatus('syncing');
 
-    const hasLocalData = typeof window !== 'undefined' && (() => {
-      try {
-        const stored = localStorage.getItem('rod_stock_inventory_v1');
-        return Boolean(stored && JSON.parse(stored).length > 0);
-      } catch {
-        return false;
-      }
-    })();
+    let loadedFromFirebase = false;
 
-    if (!hasLocalData && !forceRefresh) {
-      setIsInitializing(true);
-    }
-
-    const scriptUrl = (typeof window !== 'undefined' ? localStorage.getItem('rodsync_gsheets_script_url') : null) || process.env.NEXT_PUBLIC_GOOGLE_SCRIPT_URL || '';
-
-    // 1. Fetch from Google Sheets (via Apps Script or service account)
+    // 1. Fetch live directly from Firebase Cloud Database API
     try {
-      const headers: Record<string, string> = {};
-      if (scriptUrl) headers['x-google-script-url'] = scriptUrl;
-      if (forceRefresh) headers['x-refresh'] = 'true';
-      const controller = new AbortController();
-      const timeoutId = setTimeout(() => controller.abort(), 40000); // 40s timeout for cold starts
-      const url = forceRefresh ? '/api/gsheets-sync?refresh=true' : '/api/gsheets-sync';
-      const res = await fetch(url, { headers, signal: controller.signal });
-      clearTimeout(timeoutId);
+      const res = await fetch('/api/firebase-sync');
       if (res.ok) {
-        const gsData = await res.json();
-        if (gsData.success) {
-          if (gsData.mode === 'apps-script' || (scriptUrl && gsData.configured)) {
-            setSheetsStatus('connected');
-          } else {
-            setSheetsStatus('unconfigured');
-          }
-            const cleanRods = (gsData.rods || []).filter((r: any) => Number(r.diameterMm) !== 300);
-            const cleanLogs = (gsData.cutLogs || []).filter((l: any) => Number(l.diameterMm) !== 300);
-            if (cleanRods.length > 0 || cleanLogs.length > 0) {
-              window.__INITIAL_RODS__ = cleanRods;
-              window.__INITIAL_CUT_LOGS__ = cleanLogs;
-              if (typeof window !== 'undefined') {
-                if (cleanRods.length > 0) {
-                  localStorage.setItem('rod_stock_inventory_v1', JSON.stringify(cleanRods));
-                }
-                localStorage.setItem('rod_stock_cut_logs_v1', JSON.stringify(cleanLogs));
-              }
-              if (window.setVanillaRods) window.setVanillaRods(cleanRods);
-              if (window.setVanillaCutLogs) window.setVanillaCutLogs(cleanLogs);
-              if (gsData.railStock && Array.isArray(gsData.railStock) && typeof window !== 'undefined' && (window as any).setGuidedRailStock) {
-                (window as any).setGuidedRailStock(gsData.railStock);
-              }
-              if (window.updateDashboardExternal) window.updateDashboardExternal();
-              loadedFromBackend = true;
+        const fbData = await res.json();
+        if (fbData.success) {
+          const cleanRods = (fbData.rods || []).filter((r: any) => Number(r.diameterMm) !== 300);
+          const cleanLogs = (fbData.cutLogs || []).filter((l: any) => Number(l.diameterMm) !== 300);
+          const cleanRails = (fbData.railStock || []).filter((r: any) => (Number(r.quantity) || 0) > 0 && (Number(r.lengthMm) || 0) > 0);
+
+          window.__INITIAL_RODS__ = cleanRods;
+          window.__INITIAL_CUT_LOGS__ = cleanLogs;
+
+          // Dynamically extract rod names, rail brands, and rail models from Firebase database
+          const dbRodNames = Array.from(new Set(cleanRods.map((r: any) => String(r.category || r.name || '').trim()).filter(Boolean))) as string[];
+          const dbRailBrands = Array.from(new Set(cleanRails.map((r: any) => String(r.category || r.brand || '').trim().toUpperCase()).filter(Boolean))) as string[];
+
+          if (fbData.categories) {
+            const rodCats = Array.isArray(fbData.categories.rodSubcategories) && fbData.categories.rodSubcategories.length > 0
+              ? Array.from(new Set([...fbData.categories.rodSubcategories, ...dbRodNames])).filter(Boolean) as string[]
+              : (dbRodNames.length > 0 ? dbRodNames : ['Chrome Rod', 'Hard Chrome Rod']);
+            const railCats = Array.isArray(fbData.categories.railSubcategories) && fbData.categories.railSubcategories.length > 0
+              ? Array.from(new Set([...fbData.categories.railSubcategories, ...dbRailBrands])).filter(Boolean) as string[]
+              : (dbRailBrands.length > 0 ? dbRailBrands : ['HIWIN', 'PMI', 'THK']);
+            setRodSubcategories(rodCats);
+            setRailSubcategories(railCats);
+            setAvailableRodNames(rodCats);
+            setAvailableRailBrands(railCats);
+            if (typeof window !== 'undefined') {
+              window.__ROD_SUBCATEGORIES__ = rodCats;
+              window.__RAIL_SUBCATEGORIES__ = railCats;
+              if (window.updateRodNamesDropdown) window.updateRodNamesDropdown(rodCats);
+              if (window.updateRailBrandsDropdown) window.updateRailBrandsDropdown(railCats);
             }
           } else {
-            setSheetsStatus('disconnected');
+            if (dbRodNames.length > 0) {
+              setAvailableRodNames(dbRodNames.sort());
+              setRodSubcategories(dbRodNames.sort());
+            }
+            if (dbRailBrands.length > 0) {
+              setAvailableRailBrands(dbRailBrands.sort());
+              setRailSubcategories(dbRailBrands.sort());
+            }
           }
-      } else {
-        setSheetsStatus('disconnected');
+
+          const activeRodsForDia = (selectedRodCategory && selectedRodCategory !== 'all' && selectedRodCategory !== 'ALL')
+            ? cleanRods.filter((r: any) => String(r.category || r.name || '').toLowerCase() === selectedRodCategory.toLowerCase())
+            : cleanRods;
+          const dbDiameters = (Array.from(new Set(
+            activeRodsForDia
+              .map((r: any) => r.diameterMm !== undefined && r.diameterMm !== null ? String(r.diameterMm).trim() : '')
+              .filter((d: string) => d.length > 0 && d !== '300')
+          )) as string[]).sort((a: string, b: string) => {
+            const numA = parseFloat(a) || 0;
+            const numB = parseFloat(b) || 0;
+            if (numA !== numB) return numA - numB;
+            return a.localeCompare(b);
+          });
+          setAvailableRodDiameters(dbDiameters);
+
+          const dbRailModelsMap = new Map<string, number>();
+          if (Array.isArray(fbData.railModels)) {
+            fbData.railModels.forEach((m: any) => {
+              const mName = String(m.modelName || '').trim().toUpperCase();
+              if (mName && !dbRailModelsMap.has(mName)) {
+                dbRailModelsMap.set(mName, Number(m.pitchMm) || 60);
+              }
+            });
+          }
+          cleanRails.forEach((r: any) => {
+            const mName = String(r.modelName || '').trim().toUpperCase();
+            if (mName && !dbRailModelsMap.has(mName)) {
+              dbRailModelsMap.set(mName, Number(r.pitchMm) || 60);
+            }
+          });
+          if (dbRailModelsMap.size > 0) {
+            const modelsList = Array.from(dbRailModelsMap.entries()).map(([modelName, pitchMm]) => ({ modelName, pitchMm }));
+            modelsList.sort((a, b) => a.modelName.localeCompare(b.modelName));
+            setAvailableRailModels(modelsList);
+          }
+
+          // Pure Firebase database mode: purge any legacy local cache keys
+          if (typeof window !== 'undefined') {
+            localStorage.removeItem('rod_stock_inventory_v1');
+            localStorage.removeItem('rod_stock_cut_logs_v1');
+            localStorage.removeItem('guided_rail_stock_inventory_v1');
+          }
+          if (window.setVanillaRods) window.setVanillaRods(cleanRods);
+          if (window.setVanillaCutLogs) window.setVanillaCutLogs(cleanLogs);
+          if (typeof window !== 'undefined' && (window as any).setGuidedRailStock) {
+            (window as any).setGuidedRailStock(cleanRails);
+          }
+          if (window.updateDashboardExternal) window.updateDashboardExternal();
+          loadedFromFirebase = true;
+          setFirebaseStatus('connected');
+        }
       }
     } catch (err: unknown) {
-      console.warn('GSheets read failed or not configured', err);
-      setSheetsStatus('disconnected');
+      console.warn('Firebase API sync failed, checking client SDK', err);
     }
 
-    // 2. Fallback to Firebase
-    try {
-      if (!loadedFromBackend && process.env.NEXT_PUBLIC_FIREBASE_API_KEY) {
+    // 2. Direct Firestore SDK read if API was offline
+    if (!loadedFromFirebase && db) {
+      try {
         const docRef = doc(db, 'inventory', 'main');
         const snap = await getDoc(docRef);
         if (snap.exists()) {
           const data = snap.data();
-          window.__INITIAL_RODS__ = data.rods || [];
-          window.__INITIAL_CUT_LOGS__ = data.cutLogs || [];
-          if (window.setVanillaRods) window.setVanillaRods(data.rods || []);
-          if (window.setVanillaCutLogs) window.setVanillaCutLogs(data.cutLogs || []);
+          const cleanRods = (data.rods || []).filter((r: any) => Number(r.diameterMm) !== 300);
+          const cleanLogs = (data.cutLogs || []).filter((l: any) => Number(l.diameterMm) !== 300);
+          const cleanRails = (data.railStock || []).filter((r: any) => (Number(r.quantity) || 0) > 0 && (Number(r.lengthMm) || 0) > 0);
+          window.__INITIAL_RODS__ = cleanRods;
+          window.__INITIAL_CUT_LOGS__ = cleanLogs;
+
+          const dbRodNames = Array.from(new Set(cleanRods.map((r: any) => String(r.category || r.name || '').trim()).filter(Boolean))) as string[];
+          if (dbRodNames.length > 0) setAvailableRodNames(dbRodNames.sort());
+
+          const activeRodsForDia = (selectedRodCategory && selectedRodCategory !== 'all' && selectedRodCategory !== 'ALL')
+            ? cleanRods.filter((r: any) => String(r.category || r.name || '').toLowerCase() === selectedRodCategory.toLowerCase())
+            : cleanRods;
+          const dbDiameters = (Array.from(new Set(
+            activeRodsForDia
+              .map((r: any) => r.diameterMm !== undefined && r.diameterMm !== null ? String(r.diameterMm).trim() : '')
+              .filter((d: string) => d.length > 0 && d !== '300')
+          )) as string[]).sort((a: string, b: string) => {
+            const numA = parseFloat(a) || 0;
+            const numB = parseFloat(b) || 0;
+            if (numA !== numB) return numA - numB;
+            return a.localeCompare(b);
+          });
+          setAvailableRodDiameters(dbDiameters);
+
+          const dbRailBrands = Array.from(new Set(cleanRails.map((r: any) => String(r.category || r.brand || '').trim().toUpperCase()).filter(Boolean))) as string[];
+          if (dbRailBrands.length > 0) setAvailableRailBrands(dbRailBrands.sort());
+
+          const dbRailModelsMap = new Map<string, number>();
+          if (Array.isArray(data.railModels)) {
+            data.railModels.forEach((m: any) => {
+              const mName = String(m.modelName || '').trim().toUpperCase();
+              if (mName && !dbRailModelsMap.has(mName)) {
+                dbRailModelsMap.set(mName, Number(m.pitchMm) || 60);
+              }
+            });
+          }
+          cleanRails.forEach((r: any) => {
+            const mName = String(r.modelName || '').trim().toUpperCase();
+            if (mName && !dbRailModelsMap.has(mName)) {
+              dbRailModelsMap.set(mName, Number(r.pitchMm) || 60);
+            }
+          });
+          if (dbRailModelsMap.size > 0) {
+            const modelsList = Array.from(dbRailModelsMap.entries()).map(([modelName, pitchMm]) => ({ modelName, pitchMm }));
+            modelsList.sort((a, b) => a.modelName.localeCompare(b.modelName));
+            setAvailableRailModels(modelsList);
+          }
+
+          if (typeof window !== 'undefined') {
+            localStorage.removeItem('rod_stock_inventory_v1');
+            localStorage.removeItem('rod_stock_cut_logs_v1');
+            localStorage.removeItem('guided_rail_stock_inventory_v1');
+            if ((window as any).setGuidedRailStock) {
+              (window as any).setGuidedRailStock(cleanRails);
+            }
+          }
+          if (window.setVanillaRods) window.setVanillaRods(cleanRods);
+          if (window.setVanillaCutLogs) window.setVanillaCutLogs(cleanLogs);
           if (window.updateDashboardExternal) window.updateDashboardExternal();
+          setFirebaseStatus('connected');
+          loadedFromFirebase = true;
         }
+      } catch (e: unknown) {
+        console.warn('Firestore client direct read error:', e);
       }
-    } catch (e: unknown) {
-      console.warn('Firebase error, fallback to local defaults', e);
-    } finally {
-      if (window.initVanillaApp) {
-        window.initVanillaApp();
-      }
-      setIsInitializing(false);
     }
+
+    setFirebaseStatus('connected');
+    if (window.initVanillaApp) {
+      window.initVanillaApp();
+    }
+    setIsInitializing(false);
   };
 
   useEffect(() => {
     // Compulsory Async Authentication Check
     const verifyAuth = async () => {
       try {
-        if (typeof document !== 'undefined') {
-          const hasAuthCookie = document.cookie
-            .split(';')
-            .some((c) => c.trim().startsWith('auth=true'));
+        const res = await fetch('/api/auth/session');
+        const data = await res.json();
+        if (!data.authenticated) {
+          router.replace('/login');
+          return;
+        }
+        const profile: UserRoleProfile = data.profile || getUserRoleProfile(data.user || '');
+        setUserProfile(profile);
 
-          if (!hasAuthCookie) {
-            router.replace('/login');
-            return;
-          }
-
-          // Cache current user from cookie immediately
-          const userCookieMatch = document.cookie.match(/(?:^|;\s*)rodsync_user=([^;]+)/);
-          if (userCookieMatch && userCookieMatch[1]) {
-            try {
-              const decoded = decodeURIComponent(userCookieMatch[1]);
-              localStorage.setItem('rodsync_user_email', decoded);
-              (window as any).rodsyncCurrentUserEmail = decoded;
-            } catch {}
-          }
-
-          // Asynchronously verify active session via API
+        if (data.user && typeof window !== 'undefined') {
+          (window as any).rodsyncCurrentUserEmail = data.user;
+          (window as any).rodsyncUserProfile = profile;
+          (window as any).rodsyncIsAdmin = profile.isAdmin;
           try {
-            const res = await fetch('/api/auth/session');
-            if (!res.ok) {
-              router.replace('/login');
-              return;
+            localStorage.setItem('rodsync_user_email', data.user);
+          } catch {}
+          // Determine friendly display name
+          const formattedName = profile.displayName || 'Operator';
+          ['grPlanCreatedByInput', 'cutCreatedByInput', 'planCreatedByInput', 'grCutAssignBy'].forEach(id => {
+            const el = document.getElementById(id) as HTMLInputElement;
+            if (el) {
+              el.value = formattedName;
+              el.readOnly = true;
             }
-            const data = await res.json();
-            if (data?.user) {
-              try {
-                localStorage.setItem('rodsync_user_email', data.user);
-                (window as any).rodsyncCurrentUserEmail = data.user;
-              } catch {}
-            }
-          } catch {
-            // Keep going if network is temporarily unreachable
-          }
+          });
         }
         setIsCheckingAuth(false);
       } catch (err) {
@@ -760,100 +715,69 @@ export default function Home() {
     verifyAuth();
 
     if (typeof window !== 'undefined') {
-      const savedScriptUrl = localStorage.getItem('rodsync_gsheets_script_url');
-      if (savedScriptUrl && savedScriptUrl.includes('AKfycbzrJc_1Ohm4BC61Bo3ElhXjxqWPfv1Je0CM_nh2-7AgvClHiVkJ4IXxIOPyHpJU06v8')) {
-        localStorage.removeItem('rodsync_gsheets_script_url');
-      }
-    }
-    const defaultUrl = process.env.NEXT_PUBLIC_GOOGLE_SCRIPT_URL || '';
-    if (typeof window !== 'undefined' && !localStorage.getItem('rodsync_gsheets_script_url') && defaultUrl) {
-      localStorage.setItem('rodsync_gsheets_script_url', defaultUrl);
+      localStorage.removeItem('rod_stock_inventory_v1');
+      localStorage.removeItem('guided_rail_stock_inventory_v1');
+      localStorage.removeItem('rod_stock_cut_logs_v1');
+      localStorage.removeItem('rodsync_gsheets_script_url');
+      localStorage.removeItem('rodsync_stock_cleared_v1');
     }
 
     syncInventoryData(false);
 
     const handleSyncRods = async (e: Event) => {
       const customEvent = e as CustomEvent<unknown[]>;
-      const scriptUrl = localStorage.getItem('rodsync_gsheets_script_url') || process.env.NEXT_PUBLIC_GOOGLE_SCRIPT_URL || '';
-      // 1. Sync to Google Sheets
-      fetch('/api/gsheets-sync', {
+      const rods = customEvent.detail;
+      fetch('/api/firebase-sync', {
         method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          ...(scriptUrl ? { 'x-google-script-url': scriptUrl } : {})
-        },
-        body: JSON.stringify({ rods: customEvent.detail, scriptUrl })
-      }).then(async res => {
-        if (res.ok) {
-          const data = await res.json();
-          if (data.syncedToGoogleSheets) {
-            setSheetsStatus('connected');
-          } else {
-            setSheetsStatus(scriptUrl ? 'connected' : 'unconfigured');
-          }
-        }
-      }).catch(err => {
-        console.warn('GSheets sync failed:', err);
-      });
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ rods })
+      }).catch(err => console.warn('Firebase sync failed:', err));
 
-      // 2. Sync to Firebase
-      if (process.env.NEXT_PUBLIC_FIREBASE_API_KEY) {
+      if (db) {
         try {
-          await setDoc(doc(db, 'inventory', 'main'), { rods: customEvent.detail }, { merge: true });
-        } catch (error: unknown) {
-          console.error("Firebase Sync Error (Rods):", error);
-        }
+          await setDoc(doc(db, 'inventory', 'main'), { rods }, { merge: true });
+          setFirebaseStatus('connected');
+        } catch { }
       }
     };
 
     const handleSyncLogs = async (e: Event) => {
       const customEvent = e as CustomEvent<unknown[]>;
-      const scriptUrl = localStorage.getItem('rodsync_gsheets_script_url') || process.env.NEXT_PUBLIC_GOOGLE_SCRIPT_URL || '';
-      // 1. Sync to Google Sheets
-      fetch('/api/gsheets-sync', {
+      const cutLogs = customEvent.detail;
+      fetch('/api/firebase-sync', {
         method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          ...(scriptUrl ? { 'x-google-script-url': scriptUrl } : {})
-        },
-        body: JSON.stringify({ cutLogs: customEvent.detail, scriptUrl })
-      }).then(res => {
-        if (res.ok) setSheetsStatus('connected');
-      }).catch(err => {
-        console.warn('GSheets sync failed:', err);
-      });
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ cutLogs })
+      }).catch(err => console.warn('Firebase sync failed:', err));
 
-      // 2. Sync to Firebase
-      if (process.env.NEXT_PUBLIC_FIREBASE_API_KEY) {
+      if (db) {
         try {
-          await setDoc(doc(db, 'inventory', 'main'), { cutLogs: customEvent.detail }, { merge: true });
-        } catch (error: unknown) {
-          console.error("Firebase Sync Error (Cut Logs):", error);
-        }
+          await setDoc(doc(db, 'inventory', 'main'), { cutLogs }, { merge: true });
+          setFirebaseStatus('connected');
+        } catch { }
       }
     };
 
     const handleSyncRailStock = async (e: Event) => {
       const customEvent = e as CustomEvent<unknown[]>;
-      const scriptUrl = localStorage.getItem('rodsync_gsheets_script_url') || process.env.NEXT_PUBLIC_GOOGLE_SCRIPT_URL || '';
-      fetch('/api/gsheets-sync', {
+      const railStock = customEvent.detail;
+      fetch('/api/firebase-sync', {
         method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          ...(scriptUrl ? { 'x-google-script-url': scriptUrl } : {})
-        },
-        body: JSON.stringify({ railStock: customEvent.detail, scriptUrl })
-      }).then(res => {
-        if (res.ok) setSheetsStatus('connected');
-      }).catch(err => {
-        console.warn('GSheets rail sync failed:', err);
-      });
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ railStock })
+      }).catch(err => console.warn('Firebase rail sync failed:', err));
+
+      if (db) {
+        try {
+          await setDoc(doc(db, 'inventory', 'main'), { railStock }, { merge: true });
+          setFirebaseStatus('connected');
+        } catch { }
+      }
     };
 
     const handleSyncBoth = async (e: Event) => {
       const customEvent = e as CustomEvent<{ rods?: unknown[]; cutLogs?: unknown[]; railStock?: unknown[] }>;
-      const scriptUrl = localStorage.getItem('rodsync_gsheets_script_url') || process.env.NEXT_PUBLIC_GOOGLE_SCRIPT_URL || '';
-      const payload: Record<string, unknown> = { scriptUrl };
+      const payload: Record<string, unknown> = {};
       if (customEvent.detail?.rods) payload.rods = customEvent.detail.rods;
       if (customEvent.detail?.cutLogs) payload.cutLogs = customEvent.detail.cutLogs;
       if (customEvent.detail?.railStock) {
@@ -862,59 +786,383 @@ export default function Home() {
         payload.railStock = (window as any).getGuidedRailStock();
       }
 
-      // 1. Sync combined payload to Google Sheets
-      fetch('/api/gsheets-sync', {
+      fetch('/api/firebase-sync', {
         method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          ...(scriptUrl ? { 'x-google-script-url': scriptUrl } : {})
-        },
+        headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(payload)
-      }).then(res => {
-        if (res.ok) setSheetsStatus('connected');
-      }).catch(err => {
-        console.warn('GSheets combined sync failed:', err);
-      });
+      }).catch(err => console.warn('Firebase combined sync failed:', err));
 
-      // 2. Sync combined payload to Firebase
-      if (process.env.NEXT_PUBLIC_FIREBASE_API_KEY) {
+      if (db) {
         try {
-          const updateData: Record<string, unknown> = {};
-          if (customEvent.detail?.rods) updateData.rods = customEvent.detail.rods;
-          if (customEvent.detail?.cutLogs) updateData.cutLogs = customEvent.detail.cutLogs;
-          await setDoc(doc(db, 'inventory', 'main'), updateData, { merge: true });
-        } catch (error: unknown) {
-          console.error("Firebase Combined Sync Error:", error);
-        }
+          await setDoc(doc(db, 'inventory', 'main'), payload, { merge: true });
+          setFirebaseStatus('connected');
+        } catch { }
       }
     };
 
     window.addEventListener('syncRodsToFirebase', handleSyncRods);
+    window.addEventListener('syncRodsToBackend', handleSyncRods);
     window.addEventListener('syncCutLogsToFirebase', handleSyncLogs);
+    window.addEventListener('syncLogsToBackend', handleSyncLogs);
     window.addEventListener('syncRailStockToBackend', handleSyncRailStock);
     window.addEventListener('syncBothToBackend', handleSyncBoth);
 
     return () => {
       window.removeEventListener('syncRodsToFirebase', handleSyncRods);
+      window.removeEventListener('syncRodsToBackend', handleSyncRods);
       window.removeEventListener('syncCutLogsToFirebase', handleSyncLogs);
+      window.removeEventListener('syncLogsToBackend', handleSyncLogs);
       window.removeEventListener('syncRailStockToBackend', handleSyncRailStock);
       window.removeEventListener('syncBothToBackend', handleSyncBoth);
     };
   }, [router]);
 
+  // Real-time Firestore Sync for Categories (Strict 2-Category Model: Rod & Rail)
   useEffect(() => {
-    if (!isCheckingAuth && typeof window !== 'undefined') {
-      const timer = setTimeout(() => {
-        if (window.initVanillaApp) {
-          window.initVanillaApp();
-        }
-        if (window.initGuidedRail) {
-          window.initGuidedRail();
-        }
-      }, 50);
-      return () => clearTimeout(timer);
+    let unsubscribe: (() => void) | undefined;
+    try {
+      if (db) {
+        const mainRef = doc(db, 'inventory', 'main');
+        unsubscribe = onSnapshot(mainRef, (snap) => {
+          if (snap.exists()) {
+            const data = snap.data();
+            if (data.categories) {
+              const rodCats: string[] = Array.isArray(data.categories.rodSubcategories) && data.categories.rodSubcategories.length > 0
+                ? data.categories.rodSubcategories
+                : ['Chrome Rod', 'Hard Chrome Rod'];
+              const railCats: string[] = Array.isArray(data.categories.railSubcategories) && data.categories.railSubcategories.length > 0
+                ? data.categories.railSubcategories
+                : ['HIWIN', 'PMI', 'THK'];
+              
+              setRodSubcategories(rodCats);
+              setRailSubcategories(railCats);
+              setAvailableRodNames(rodCats);
+              setAvailableRailBrands(railCats);
+
+              if (typeof window !== 'undefined') {
+                window.__ROD_SUBCATEGORIES__ = rodCats;
+                window.__RAIL_SUBCATEGORIES__ = railCats;
+                if (window.updateRodNamesDropdown) window.updateRodNamesDropdown(rodCats);
+                if (window.updateRailBrandsDropdown) window.updateRailBrandsDropdown(railCats);
+              }
+            }
+          }
+        }, (err) => {
+          console.warn('[Firestore] Live category listener warning:', err);
+        });
+      }
+    } catch (err) {
+      console.warn('[Firestore] Live listener subscription error:', err);
     }
-  }, [isCheckingAuth]);
+    return () => {
+      if (unsubscribe) unsubscribe();
+    };
+  }, []);
+
+  // Category Management Handlers
+  const handleAddSubcat = async (type: 'rod' | 'rail') => {
+    const rawName = type === 'rod' ? newRodSubcat : newRailSubcat;
+    const name = rawName.trim();
+    if (!name) return;
+
+    // Check duplicate
+    const currentList = type === 'rod' ? rodSubcategories : railSubcategories;
+    if (currentList.some(s => s.toLowerCase() === name.toLowerCase())) {
+      alert(`Subcategory "${name}" already exists in ${type === 'rod' ? 'Rod' : 'Rail'}!`);
+      return;
+    }
+
+    setIsSavingCategory(true);
+    try {
+      const res = await fetch('/api/categories', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action: 'add', type, name })
+      });
+      const data = await res.json();
+      if (data.success && data.categories) {
+        if (type === 'rod') {
+          setRodSubcategories(data.categories.rodSubcategories);
+          setAvailableRodNames(data.categories.rodSubcategories);
+          setNewRodSubcat('');
+          if (typeof window !== 'undefined') {
+            window.__ROD_SUBCATEGORIES__ = data.categories.rodSubcategories;
+            if (window.updateRodNamesDropdown) window.updateRodNamesDropdown(data.categories.rodSubcategories);
+          }
+        } else {
+          setRailSubcategories(data.categories.railSubcategories);
+          setAvailableRailBrands(data.categories.railSubcategories);
+          setNewRailSubcat('');
+          if (typeof window !== 'undefined') {
+            window.__RAIL_SUBCATEGORIES__ = data.categories.railSubcategories;
+            if (window.updateRailBrandsDropdown) window.updateRailBrandsDropdown(data.categories.railSubcategories);
+          }
+        }
+        if (typeof window !== 'undefined' && window.initAllCustomDropdowns) {
+          window.initAllCustomDropdowns();
+        }
+      } else {
+        alert(data.message || 'Failed to add subcategory');
+      }
+    } catch (err) {
+      console.error('Error adding subcategory:', err);
+      alert('Network error while adding subcategory.');
+    } finally {
+      setIsSavingCategory(false);
+    }
+  };
+
+  const handleStartEditSubcat = (type: 'rod' | 'rail', oldName: string) => {
+    setEditingSubcat({ type, oldName, value: oldName });
+  };
+
+  const handleSaveEditSubcat = async () => {
+    if (!editingSubcat || !editingSubcat.value.trim()) return;
+    const { type, oldName, value } = editingSubcat;
+    const newName = value.trim();
+    if (newName.toLowerCase() === oldName.toLowerCase()) {
+      setEditingSubcat(null);
+      return;
+    }
+
+    setIsSavingCategory(true);
+    try {
+      const res = await fetch('/api/categories', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action: 'edit', type, oldName, newName })
+      });
+      const data = await res.json();
+      if (data.success && data.categories) {
+        if (type === 'rod') {
+          setRodSubcategories(data.categories.rodSubcategories);
+          setAvailableRodNames(data.categories.rodSubcategories);
+          if (typeof window !== 'undefined') {
+            window.__ROD_SUBCATEGORIES__ = data.categories.rodSubcategories;
+            if (window.updateRodNamesDropdown) window.updateRodNamesDropdown(data.categories.rodSubcategories);
+          }
+        } else {
+          setRailSubcategories(data.categories.railSubcategories);
+          setAvailableRailBrands(data.categories.railSubcategories);
+          if (typeof window !== 'undefined') {
+            window.__RAIL_SUBCATEGORIES__ = data.categories.railSubcategories;
+            if (window.updateRailBrandsDropdown) window.updateRailBrandsDropdown(data.categories.railSubcategories);
+          }
+        }
+        if (typeof window !== 'undefined' && window.initAllCustomDropdowns) {
+          window.initAllCustomDropdowns();
+        }
+        setEditingSubcat(null);
+      } else {
+        alert(data.message || 'Failed to edit subcategory');
+      }
+    } catch (err) {
+      console.error('Error editing subcategory:', err);
+      alert('Network error while editing subcategory.');
+    } finally {
+      setIsSavingCategory(false);
+    }
+  };
+
+  const handleDeleteSubcat = async (type: 'rod' | 'rail', name: string) => {
+    if (!confirm(`Are you sure you want to delete subcategory "${name}" from ${type === 'rod' ? 'Rod' : 'Rail'}?`)) {
+      return;
+    }
+
+    setIsSavingCategory(true);
+    try {
+      const res = await fetch('/api/categories', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action: 'delete', type, name })
+      });
+      const data = await res.json();
+      if (data.success && data.categories) {
+        if (type === 'rod') {
+          setRodSubcategories(data.categories.rodSubcategories);
+          setAvailableRodNames(data.categories.rodSubcategories);
+          if (typeof window !== 'undefined') {
+            window.__ROD_SUBCATEGORIES__ = data.categories.rodSubcategories;
+            if (window.updateRodNamesDropdown) window.updateRodNamesDropdown(data.categories.rodSubcategories);
+          }
+        } else {
+          setRailSubcategories(data.categories.railSubcategories);
+          setAvailableRailBrands(data.categories.railSubcategories);
+          if (typeof window !== 'undefined') {
+            window.__RAIL_SUBCATEGORIES__ = data.categories.railSubcategories;
+            if (window.updateRailBrandsDropdown) window.updateRailBrandsDropdown(data.categories.railSubcategories);
+          }
+        }
+        if (typeof window !== 'undefined' && window.initAllCustomDropdowns) {
+          window.initAllCustomDropdowns();
+        }
+      } else {
+        alert(data.message || 'Failed to delete subcategory');
+      }
+    } catch (err) {
+      console.error('Error deleting subcategory:', err);
+      alert('Network error while deleting subcategory.');
+    } finally {
+      setIsSavingCategory(false);
+    }
+  };
+
+  // Searchable Diameter Dropdown Hooks & Synchronization (strictly derived from database)
+  useEffect(() => {
+    const onDiametersUpdated = (e: any) => {
+      if (e.detail && Array.isArray(e.detail.diameters)) {
+        const dias = e.detail.diameters
+          .map((d: any) => String(d).trim())
+          .filter((d: string) => d.length > 0 && d !== '300')
+          .sort((a: string, b: string) => {
+            const numA = parseFloat(a) || 0;
+            const numB = parseFloat(b) || 0;
+            if (numA !== numB) return numA - numB;
+            return a.localeCompare(b);
+          });
+        setAvailableRodDiameters(dias);
+        setSelectedDiameter((prev) => {
+          let nextDia = '';
+          if (dias.length > 0) {
+            nextDia = (prev && dias.some((d: any) => String(d).toLowerCase() === String(prev).toLowerCase())) ? prev : String(dias[0]);
+          }
+          const inp = document.getElementById('searchDiameterInput') as HTMLInputElement | null;
+          if (inp && inp.value !== nextDia) {
+            inp.value = nextDia;
+            inp.dispatchEvent(new Event('input', { bubbles: true }));
+            inp.dispatchEvent(new Event('change', { bubbles: true }));
+          }
+          return nextDia;
+        });
+      }
+    };
+    window.addEventListener('rodsyncDiametersUpdated', onDiametersUpdated);
+    if (typeof window !== 'undefined' && Array.isArray((window as any).__AVAILABLE_DIAMETERS__)) {
+      const initDias = (window as any).__AVAILABLE_DIAMETERS__
+        .map((d: any) => String(d).trim())
+        .filter((d: string) => d.length > 0 && d !== '300')
+        .sort((a: string, b: string) => {
+          const numA = parseFloat(a) || 0;
+          const numB = parseFloat(b) || 0;
+          if (numA !== numB) return numA - numB;
+          return a.localeCompare(b);
+        });
+      setAvailableRodDiameters(initDias);
+      if (initDias.length > 0 && !selectedDiameter) {
+        setSelectedDiameter(String(initDias[0]));
+      }
+    }
+
+    const onCatSelected = (e: any) => {
+      if (e.detail && e.detail.category && e.detail.category !== selectedRodCategory) {
+        handleSelectRodCategory(e.detail.category);
+      }
+    };
+    window.addEventListener('rodsyncCategorySelected', onCatSelected);
+
+    return () => {
+      window.removeEventListener('rodsyncDiametersUpdated', onDiametersUpdated);
+      window.removeEventListener('rodsyncCategorySelected', onCatSelected);
+    };
+  }, [selectedRodCategory, selectedDiameter]);
+
+  useEffect(() => {
+    const handleClickOutside = (e: MouseEvent) => {
+      if (diaDropdownRef.current && !diaDropdownRef.current.contains(e.target as Node)) {
+        setIsDiaDropdownOpen(false);
+      }
+    };
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, []);
+
+  useEffect(() => {
+    const inp = document.getElementById('searchDiameterInput') as HTMLInputElement | null;
+    const resetBtn = document.getElementById('btnResetSmartSearch');
+
+    const onInput = () => {
+      if (inp) setSelectedDiameter(inp.value);
+    };
+    const onReset = () => {
+      setSelectedDiameter('');
+      setDiaSearchQuery('');
+    };
+
+    if (inp) {
+      inp.addEventListener('input', onInput);
+      inp.addEventListener('change', onInput);
+    }
+    if (resetBtn) {
+      resetBtn.addEventListener('click', onReset);
+    }
+
+    const interval = setInterval(() => {
+      if (inp && inp.value !== selectedDiameter) {
+        setSelectedDiameter(inp.value);
+      }
+    }, 250);
+
+    return () => {
+      clearInterval(interval);
+      if (inp) {
+        inp.removeEventListener('input', onInput);
+        inp.removeEventListener('change', onInput);
+      }
+      if (resetBtn) {
+        resetBtn.removeEventListener('click', onReset);
+      }
+    };
+  }, [selectedDiameter]);
+
+  const handleSelectDiameter = (d: number | string) => {
+    setSelectedDiameter(String(d));
+    setIsDiaDropdownOpen(false);
+    setDiaSearchQuery('');
+    const inp = document.getElementById('searchDiameterInput') as HTMLInputElement | null;
+    if (inp) {
+      inp.value = String(d);
+      inp.dispatchEvent(new Event('input', { bubbles: true }));
+      inp.dispatchEvent(new Event('change', { bubbles: true }));
+    }
+  };
+
+  const filteredDiameters = availableRodDiameters.filter((d) => {
+    if (!diaSearchQuery.trim()) return true;
+    return `${d} mm`.toLowerCase().includes(diaSearchQuery.toLowerCase()) || String(d).includes(diaSearchQuery);
+  });
+
+  const filteredAdminRods = adminRods.filter((r: any) => {
+    if (adminSelectedCat !== 'all') {
+      const cat = String(r.category || r.name || '').toLowerCase();
+      if (cat !== adminSelectedCat.toLowerCase()) return false;
+    }
+    if (!adminSearchQuery.trim()) return true;
+    const q = adminSearchQuery.toLowerCase();
+    return (
+      String(r.category || r.name || '').toLowerCase().includes(q) ||
+      String(r.sku || '').toLowerCase().includes(q) ||
+      String(r.diameterMm || '').includes(q) ||
+      String(r.lengthIn || r.lengthFt || '').includes(q) ||
+      String(r.notes || '').toLowerCase().includes(q)
+    );
+  });
+
+  const filteredAdminRails = adminRails.filter((s: any) => {
+    if (adminSelectedCat !== 'all') {
+      const brand = String(s.category || s.brand || '').toLowerCase();
+      if (brand !== adminSelectedCat.toLowerCase()) return false;
+    }
+    if (!adminSearchQuery.trim()) return true;
+    const q = adminSearchQuery.toLowerCase();
+    return (
+      String(s.category || s.brand || '').toLowerCase().includes(q) ||
+      String(s.modelName || '').toLowerCase().includes(q) ||
+      String(s.sku || '').toLowerCase().includes(q) ||
+      String(s.pitchMm || '').includes(q) ||
+      String(s.lengthMm || '').includes(q) ||
+      String(s.notes || '').toLowerCase().includes(q)
+    );
+  });
 
   if (isCheckingAuth) {
     return (
@@ -968,43 +1216,182 @@ export default function Home() {
           <div style={{
             width: '44px',
             height: '44px',
-            border: '4px solid rgba(0, 113, 227, 0.15)',
-            borderTopColor: '#0071e3',
+            border: '4px solid rgba(20, 184, 166, 0.15)',
+            borderTopColor: '#14b8a6',
             borderRadius: '50%',
             animation: 'rodsync-spin 0.8s linear infinite'
           }}></div>
           <div style={{ textAlign: 'center' }}>
-            <h3 style={{ margin: '0 0 6px 0', fontSize: '1.15rem', fontWeight: 700 }}>Connecting to RodSync</h3>
-            <p style={{ margin: 0, fontSize: '0.875rem', color: '#64748b' }}>Syncing rod inventory from Google Sheets...</p>
+            <h3 style={{ margin: '0 0 6px 0', fontSize: '1.15rem', fontWeight: 700 }}>Connecting to BroCutPro</h3>
+            <p style={{ margin: 0, fontSize: '0.875rem', color: '#64748b' }}>Syncing inventory from Firebase Cloud Database...</p>
           </div>
           <style>{`@keyframes rodsync-spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }`}</style>
         </div>
       )}
 
-      {/*  Ambient Vibrant Wallpaper & Glass Canvas  */}
+      {/* Ambient Vibrant Wallpaper & Glass Canvas */}
       <div className="bg-ambient-canvas" aria-hidden="true">
         <div className="bg-overlay-white"></div>
       </div>
 
-      {/*  Header / Navigation Bar  */}
-      <header className="navbar">
-        <div className="nav-container">
-          <div className="brand-group">
-            <div className="brand-logo" title="RodSync">
-              <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
-                <line x1="4" y1="20" x2="20" y2="4"></line>
-                <circle cx="8" cy="8" r="3"></circle>
-                <circle cx="16" cy="16" r="3"></circle>
+      {/* Floating Top-Left Back Button on Category & Portal Screens */}
+      {portalView !== 'main' && (
+        <div style={{ position: 'fixed', top: '1.25rem', left: '1.5rem', zIndex: 60 }}>
+          {portalView === 'category' ? (
+            visitedMain ? (
+              <button
+                type="button"
+                className="btn-beautiful-back"
+                onClick={() => handleSetPortalView('main')}
+                title="Return to active inventory workspace"
+              >
+                <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+                  <path d="M19 12H5M12 19l-7-7 7-7" />
+                </svg>
+                <span>Back to Workspace</span>
+              </button>
+            ) : null
+          ) : (
+            <button
+              type="button"
+              className="btn-beautiful-back"
+              onClick={() => handleSetPortalView('category')}
+              title="Return to Category selection"
+            >
+              <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+                <path d="M19 12H5M12 19l-7-7 7-7" />
               </svg>
+              <span>Back to Category</span>
+            </button>
+          )}
+        </div>
+      )}
+
+      {/* Floating Logout on Category/Portal Screens */}
+      {portalView !== 'main' && (
+        <div className="portal-floating-top" style={{ display: 'flex', alignItems: 'center', gap: '0.65rem' }}>
+          {userProfile && (
+            <div
+              style={{
+                display: 'inline-flex',
+                alignItems: 'center',
+                gap: '0.35rem',
+                padding: '0.35rem 0.75rem',
+                borderRadius: '9999px',
+                fontSize: '0.78rem',
+                fontWeight: 600,
+                background: 'rgba(20, 184, 166, 0.12)',
+                color: '#0d9488',
+                border: '1px solid rgba(20, 184, 166, 0.3)',
+                boxShadow: '0 2px 8px rgba(0,0,0,0.04)',
+                userSelect: 'none'
+              }}
+              title={userProfile.isAdmin ? 'Administrator (Full Access)' : 'Authorized Cutting Operator'}
+            >
+              <span>{userProfile.isAdmin ? '👑' : '👤'}</span>
+              <span>{userProfile.displayName}</span>
+              <span
+                style={{
+                  fontSize: '0.65rem',
+                  padding: '0.1rem 0.35rem',
+                  borderRadius: '4px',
+                  background: '#0d9488',
+                  color: '#fff',
+                  fontWeight: 700,
+                  textTransform: 'uppercase'
+                }}
+              >
+                {userProfile.isAdmin ? 'Admin' : 'Operator'}
+              </span>
             </div>
+          )}
+          {userProfile?.isAdmin && (
+            <button
+              type="button"
+              className="btn-portal-ghost"
+              title="Admin Panel: View & Delete Rods and Rails (dipanshu@pvtchopra.com)"
+              onClick={() => {
+                refreshAdminInventory();
+                setAdminTab(systemMode === 'guided-rail' ? 'rail' : 'rod');
+                setIsAdminManageOpen(true);
+              }}
+              style={{
+                color: '#0d9488',
+                border: '1px solid rgba(20, 184, 166, 0.35)',
+                background: 'rgba(20, 184, 166, 0.08)',
+                fontWeight: 600,
+                display: 'inline-flex',
+                alignItems: 'center',
+                gap: '0.35rem'
+              }}
+            >
+              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+                <polyline points="3 6 5 6 21 6"></polyline>
+                <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path>
+                <line x1="10" y1="11" x2="10" y2="17"></line>
+                <line x1="14" y1="11" x2="14" y2="17"></line>
+              </svg>
+              <span>Delete Rod/Rail</span>
+            </button>
+          )}
+          <button
+            type="button"
+            onClick={handleLogout}
+            className="btn-portal-ghost"
+            title="Log Out of BroCutPro"
+          >
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"></path>
+              <polyline points="16 17 21 12 16 7"></polyline>
+              <line x1="21" y1="12" x2="9" y2="12"></line>
+            </svg>
+            <span>Logout</span>
+          </button>
+        </div>
+      )}
+
+      {/* Header / Navigation Bar (Hidden on Category & Portal Selection Pages) */}
+      <header className="navbar" style={{ display: portalView === 'main' ? undefined : 'none' }}>
+        <div className="nav-container">
+          <div className="brand-group" style={{ display: 'flex', alignItems: 'center', gap: '0.85rem' }}>
+            {/* Beautiful Back Button in Main Navbar */}
+            <button
+              type="button"
+              className="btn-beautiful-back btn-navbar-back"
+              onClick={handleGoBack}
+              title="Return to Category / Subcategory Selection"
+            >
+              <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+                <path d="M19 12H5M12 19l-7-7 7-7" />
+              </svg>
+              <span>Back</span>
+            </button>
+
             <div className="brand-text-wrap">
-              <h1 className="brand-title" style={{ margin: 0 }}>Rod<span className="brand-accent">Sync</span></h1>
+              <h1 className="brand-title" style={{ margin: 0, fontWeight: 800 }}>BroCut<span className="brand-accent">Pro</span></h1>
             </div>
           </div>
 
           <div className="nav-actions">
-            {/* System Switcher (Toggle between Chrome Rod and Guided Rail) */}
-            <div className="system-switcher-wrap" role="tablist" aria-label="Product Category Switcher">
+            {/* Category Portal Navigation Button */}
+            <button
+              type="button"
+              className={`btn btn-sm btn-nav-pill ${portalView === 'category' ? 'btn-primary' : 'btn-outline'}`}
+              onClick={() => handleSetPortalView('category')}
+              title="Return to Category Selection"
+              style={{ display: 'inline-flex', alignItems: 'center', gap: '0.4rem', fontWeight: 600, fontSize: '0.82rem' }}
+            >
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+                <rect x="3" y="3" width="7" height="7"></rect>
+                <rect x="14" y="3" width="7" height="7"></rect>
+                <rect x="14" y="14" width="7" height="7"></rect>
+                <rect x="3" y="14" width="7" height="7"></rect>
+              </svg>
+              <span>Categories</span>
+            </button>
+
+            {/* System Switcher (Toggle between Chrome Rod and Guided Rail - Hidden from frontend per user request) */}
+            <div className="system-switcher-wrap" role="tablist" aria-label="Product Category Switcher" style={{ display: 'none' }}>
               <button
                 type="button"
                 role="tab"
@@ -1019,7 +1406,7 @@ export default function Home() {
                   <circle cx="8" cy="8" r="3"></circle>
                   <circle cx="16" cy="16" r="3"></circle>
                 </svg>
-                <span>Chrome Rod</span>
+                <span>Rod</span>
               </button>
               <button
                 type="button"
@@ -1037,7 +1424,8 @@ export default function Home() {
               </button>
             </div>
 
-            <button onClick={toggleTheme} className="btn btn-secondary btn-sm btn-nav-pill" title="Toggle Dark/Light Mode" style={{ transition: 'all 0.3s ease' }}>
+            {/* Theme Toggle - Hidden from frontend per user request */}
+            <button onClick={toggleTheme} className="btn btn-secondary btn-sm btn-nav-pill" title="Toggle Dark/Light Mode" style={{ display: 'none' }}>
               <div style={{ position: 'relative', width: '15px', height: '15px', overflow: 'hidden', flexShrink: 0 }}>
                 <div style={{
                   position: 'absolute', top: 0, left: 0,
@@ -1069,52 +1457,22 @@ export default function Home() {
               <span className="btn-nav-text">Theme</span>
             </button>
 
-            {/* Google Sheets Live Sync Button & Status Indicator */}
-            <button
-              type="button"
-              className={`btn btn-sm btn-nav-pill ${sheetsStatus === 'connected' ? 'btn-success-subtle' : 'btn-warning-subtle'}`}
-              onClick={() => setIsSheetsModalOpen(true)}
-              title={sheetsStatus === 'connected' ? 'Google Sheets Live Write Connected' : 'Google Sheets (Read-Only) - Click to connect live writing'}
-              style={{
-                display: 'inline-flex',
-                alignItems: 'center',
-                gap: '5px',
-                border: sheetsStatus === 'connected' ? '1px solid rgba(16, 185, 129, 0.4)' : '1px solid rgba(245, 158, 11, 0.4)',
-                background: sheetsStatus === 'connected' ? 'rgba(16, 185, 129, 0.12)' : 'rgba(245, 158, 11, 0.12)',
-                color: sheetsStatus === 'connected' ? '#059669' : '#b45309',
-                fontWeight: 600,
-                cursor: 'pointer'
-              }}
-            >
-              <span style={{
-                width: '7px',
-                height: '7px',
-                borderRadius: '50%',
-                background: sheetsStatus === 'connected' ? '#10b981' : '#f59e0b',
-                boxShadow: sheetsStatus === 'connected' ? '0 0 5px #10b981' : '0 0 5px #f59e0b',
-                display: 'inline-block'
-              }}></span>
-              <span className="btn-nav-text">
-                {sheetsStatus === 'connected' ? 'Live Sync' : 'Read Only'}
-              </span>
-            </button>
-
-            {/* Chrome Rod specific header actions */}
+            {/* Firebase Cloud Console Link */}
             <a
-              id="btnOpenGoogleSheets"
+              id="btnOpenFirebaseConsole"
               className="btn btn-secondary btn-sm btn-nav-pill"
-              href="https://docs.google.com/spreadsheets/d/1_rDLZvfHCD4Tzmzk7XHBqK2qHtxOjSP32wOLUOABkMQ/edit"
+              href="https://console.firebase.google.com/project/rodsync-cc8d4/firestore"
               target="_blank"
               rel="noopener noreferrer"
-              title="Open Connected Google Sheet (1_rDLZvfHCD4Tzmzk7XHBqK2qHtxOjSP32wOLUOABkMQ)"
-              style={{ display: systemMode === 'chrome-rod' ? 'inline-flex' : 'none', textDecoration: 'none', alignItems: 'center' }}
+              title="Open Firebase Cloud Console (rodsync-cc8d4)"
+              style={{ display: 'none' }}
             >
               <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                 <path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"></path>
                 <polyline points="15 3 21 3 21 9"></polyline>
                 <line x1="10" y1="14" x2="21" y2="3"></line>
               </svg>
-              <span className="btn-nav-text">Sheet ↗</span>
+              <span className="btn-nav-text">Console ↗</span>
             </a>
 
             <button
@@ -1131,19 +1489,21 @@ export default function Home() {
               <span className="btn-nav-text">Export</span>
             </button>
 
-            <button
-              className="btn btn-secondary btn-sm btn-nav-pill"
-              title="Import inventory from CSV"
-              onClick={() => setIsImportModalOpen(true)}
-              style={{ display: systemMode === 'chrome-rod' ? undefined : 'none' }}
-            >
-              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
-                <polyline points="17 8 12 3 7 8"></polyline>
-                <line x1="12" y1="3" x2="12" y2="15"></line>
-              </svg>
-              <span className="btn-nav-text">Import</span>
-            </button>
+            {userProfile?.canBulkImport !== false && (
+              <button
+                className="btn btn-secondary btn-sm btn-nav-pill"
+                title="Import inventory from CSV or Excel"
+                onClick={() => setIsImportModalOpen(true)}
+                style={{ display: systemMode === 'chrome-rod' ? undefined : 'none' }}
+              >
+                <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                  <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
+                  <polyline points="17 8 12 3 7 8"></polyline>
+                  <line x1="12" y1="3" x2="12" y2="15"></line>
+                </svg>
+                <span className="btn-nav-text">Import</span>
+              </button>
+            )}
 
             <button
               id="btnOpenCutLogsModal"
@@ -1162,27 +1522,29 @@ export default function Home() {
               <span className="badge badge-pill badge-primary" id="cutLogsBadge" style={{ marginLeft: '3px', fontSize: '0.65rem', padding: '0.08rem 0.35rem' }}>0</span>
             </button>
 
-            <button
-              id="btnOpenAddModal"
-              className="btn btn-primary btn-sm btn-add-main btn-nav-pill"
-              title="Add New Rod Stock to Inventory"
-              style={{ display: systemMode === 'chrome-rod' ? undefined : 'none' }}
-              onClick={() => {
-                if (typeof window !== 'undefined') {
-                  if ((window as any).openAddRodModal) {
-                    (window as any).openAddRodModal();
-                  } else if ((window as any).openAddModal) {
-                    (window as any).openAddModal();
+            {userProfile?.canAddInventory !== false && (
+              <button
+                id="btnOpenAddModal"
+                className="btn btn-primary btn-sm btn-add-main btn-nav-pill"
+                title="Add New Rod Stock to Inventory"
+                style={{ display: systemMode === 'chrome-rod' ? undefined : 'none' }}
+                onClick={() => {
+                  if (typeof window !== 'undefined') {
+                    if ((window as any).openAddRodModal) {
+                      (window as any).openAddRodModal();
+                    } else if ((window as any).openAddModal) {
+                      (window as any).openAddModal();
+                    }
                   }
-                }
-              }}
-            >
-              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
-                <line x1="12" y1="5" x2="12" y2="19"></line>
-                <line x1="5" y1="12" x2="19" y2="12"></line>
-              </svg>
-              <span className="btn-nav-text">+ Add Rod</span>
-            </button>
+                }}
+              >
+                <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+                  <line x1="12" y1="5" x2="12" y2="19"></line>
+                  <line x1="5" y1="12" x2="19" y2="12"></line>
+                </svg>
+                <span className="btn-nav-text">+ Add Rod</span>
+              </button>
+            )}
 
             {/* Guided Rail specific header actions */}
             <button
@@ -1199,7 +1561,7 @@ export default function Home() {
                 <line x1="8.12" y1="8.12" x2="12" y2="12"></line>
               </svg>
               <span className="btn-nav-text">Cut Logs</span>
-              <span className="badge badge-pill badge-primary" id="grCutLogsBadge" style={{ marginLeft: '3px', fontSize: '0.65rem', padding: '0.08rem 0.35rem', background: '#7c3aed' }}>0</span>
+              <span className="badge badge-pill badge-primary" id="grCutLogsBadge" style={{ marginLeft: '3px', fontSize: '0.65rem', padding: '0.08rem 0.35rem', background: '#6b8e23' }}>0</span>
             </button>
 
             <button
@@ -1217,67 +1579,138 @@ export default function Home() {
             </button>
 
             <a
-              id="btnGrOpenGoogleSheets"
+              id="btnGrOpenFirebaseConsole"
               className="btn btn-secondary btn-sm btn-nav-pill"
-              href="https://docs.google.com/spreadsheets/d/1_rDLZvfHCD4Tzmzk7XHBqK2qHtxOjSP32wOLUOABkMQ/edit"
+              href="https://console.firebase.google.com/project/rodsync-cc8d4/firestore"
               target="_blank"
               rel="noopener noreferrer"
-              title="Open Connected Google Sheet (1_rDLZvfHCD4Tzmzk7XHBqK2qHtxOjSP32wOLUOABkMQ)"
-              style={{ display: systemMode === 'guided-rail' ? 'inline-flex' : 'none', textDecoration: 'none', alignItems: 'center' }}
+              title="Open Firebase Cloud Console (rodsync-cc8d4)"
+              style={{ display: 'none' }}
             >
               <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                 <path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"></path>
                 <polyline points="15 3 21 3 21 9"></polyline>
                 <line x1="10" y1="14" x2="21" y2="3"></line>
               </svg>
-              <span className="btn-nav-text">Sheet ↗</span>
+              <span className="btn-nav-text">Console ↗</span>
             </a>
 
-            <button
-              id="btnGrImportCsv"
-              className="btn btn-secondary btn-sm btn-nav-pill"
-              title="Import Guided Rail inventory from CSV"
-              onClick={() => setIsGrImportModalOpen(true)}
-              style={{ display: systemMode === 'guided-rail' ? 'inline-flex' : 'none' }}
-            >
-              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
-                <polyline points="17 8 12 3 7 8"></polyline>
-                <line x1="12" y1="3" x2="12" y2="15"></line>
-              </svg>
-              <span className="btn-nav-text">Import</span>
-            </button>
+            {userProfile?.canBulkImport !== false && (
+              <button
+                id="btnGrImportCsv"
+                className="btn btn-secondary btn-sm btn-nav-pill"
+                title="Import Guided Rail inventory from CSV or Excel"
+                onClick={() => setIsGrImportModalOpen(true)}
+                style={{ display: systemMode === 'guided-rail' ? 'inline-flex' : 'none' }}
+              >
+                <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                  <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
+                  <polyline points="17 8 12 3 7 8"></polyline>
+                  <line x1="12" y1="3" x2="12" y2="15"></line>
+                </svg>
+                <span className="btn-nav-text">Import</span>
+              </button>
+            )}
 
-            <button
-              id="btnOpenAddRailModal"
-              className="btn btn-primary btn-sm btn-nav-pill"
-              title="Add Guided Rail stock to storage inventory"
-              style={{
-                display: systemMode === 'guided-rail' ? 'inline-flex' : 'none',
-                background: 'linear-gradient(135deg, #7c3aed, #6d28d9)',
-                borderColor: '#6d28d9',
-                color: '#fff'
-              }}
-              onClick={() => {
-                if (typeof window !== 'undefined' && (window as any).openAddRailStockModal) {
-                  const sel = document.getElementById('grModelSelect') as HTMLSelectElement | null;
-                  (window as any).openAddRailStockModal(sel?.value);
-                }
-              }}
-            >
-              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
-                <line x1="12" y1="5" x2="12" y2="19"></line>
-                <line x1="5" y1="12" x2="19" y2="12"></line>
-              </svg>
-              <span className="btn-nav-text">+ Add Rail</span>
-            </button>
+            {userProfile?.canAddInventory !== false && (
+              <button
+                id="btnOpenAddRailModal"
+                className="btn btn-primary btn-sm btn-nav-pill"
+                title="Add Guided Rail stock to storage inventory"
+                style={{
+                  display: systemMode === 'guided-rail' ? 'inline-flex' : 'none',
+                  background: 'linear-gradient(135deg, #6b8e23, #55731c)',
+                  borderColor: '#55731c',
+                  color: '#fff'
+                }}
+                onClick={() => {
+                  if (typeof window !== 'undefined' && (window as any).openAddRailStockModal) {
+                    const sel = document.getElementById('grModelSelect') as HTMLSelectElement | null;
+                    (window as any).openAddRailStockModal(sel?.value);
+                  }
+                }}
+              >
+                <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+                  <line x1="12" y1="5" x2="12" y2="19"></line>
+                  <line x1="5" y1="12" x2="19" y2="12"></line>
+                </svg>
+                <span className="btn-nav-text">+ Add Rail</span>
+              </button>
+            )}
+
+            {/* Admin Delete Rod/Rail Action Button (Admin dipanshu@pvtchopra.com only) */}
+            {userProfile?.isAdmin && (
+              <button
+                id="btnOpenAdminDeleteModal"
+                className="btn btn-secondary btn-sm btn-nav-pill"
+                title="Admin Management Panel: View & Delete Rods and Rails"
+                onClick={() => {
+                  refreshAdminInventory();
+                  setAdminTab(systemMode === 'guided-rail' ? 'rail' : 'rod');
+                  setIsAdminManageOpen(true);
+                }}
+                style={{
+                  color: systemMode === 'guided-rail' ? '#6b8e23' : '#0d9488',
+                  borderColor: systemMode === 'guided-rail' ? 'rgba(107, 142, 35, 0.35)' : 'rgba(20, 184, 166, 0.35)',
+                  background: systemMode === 'guided-rail' ? 'rgba(107, 142, 35, 0.08)' : 'rgba(20, 184, 166, 0.08)',
+                  fontWeight: 600,
+                  display: 'inline-flex',
+                  alignItems: 'center',
+                  gap: '0.35rem'
+                }}
+              >
+                <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+                  <polyline points="3 6 5 6 21 6"></polyline>
+                  <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path>
+                  <line x1="10" y1="11" x2="10" y2="17"></line>
+                  <line x1="14" y1="11" x2="14" y2="17"></line>
+                </svg>
+                <span className="btn-nav-text">Delete Rod/Rail</span>
+              </button>
+            )}
+
+            {/* User Profile Badge (Unified global color scheme for all users including admin) */}
+            {userProfile && (
+              <div
+                style={{
+                  display: 'inline-flex',
+                  alignItems: 'center',
+                  gap: '0.35rem',
+                  padding: '0.25rem 0.6rem',
+                  borderRadius: '9999px',
+                  fontSize: '0.75rem',
+                  fontWeight: 600,
+                  background: systemMode === 'guided-rail' ? 'rgba(107, 142, 35, 0.12)' : 'rgba(20, 184, 166, 0.12)',
+                  color: systemMode === 'guided-rail' ? '#6b8e23' : '#0d9488',
+                  border: `1px solid ${systemMode === 'guided-rail' ? 'rgba(107, 142, 35, 0.3)' : 'rgba(20, 184, 166, 0.3)'}`,
+                  userSelect: 'none'
+                }}
+                title={userProfile.isAdmin ? 'Administrator (Full Access)' : 'Authorized Cutting Operator'}
+              >
+                <span>{userProfile.isAdmin ? '👑' : '👤'}</span>
+                <span>{userProfile.displayName}</span>
+                <span
+                  style={{
+                    fontSize: '0.62rem',
+                    padding: '0.08rem 0.32rem',
+                    borderRadius: '4px',
+                    background: systemMode === 'guided-rail' ? '#6b8e23' : '#0d9488',
+                    color: '#fff',
+                    fontWeight: 700,
+                    textTransform: 'uppercase'
+                  }}
+                >
+                  {userProfile.isAdmin ? 'Admin' : 'Operator'}
+                </span>
+              </div>
+            )}
 
             {/* Log Out Button */}
             <button
               type="button"
               id="btnLogoutHeader"
               className="btn btn-secondary btn-sm btn-nav-pill btn-logout-nav"
-              title="Log Out of RodSync"
+              title="Log Out of BroCutPro"
               onClick={handleLogout}
             >
               <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
@@ -1291,8 +1724,526 @@ export default function Home() {
         </div>
       </header>
 
+      {/* ════════════════════════════════════════════════════════════════
+          PORTAL SCREEN 1: CATEGORY SELECTION (Matching User Mockup)
+          ════════════════════════════════════════════════════════════════ */}
+      {portalView === 'category' && (
+        <div className="portal-overlay-container">
+          <div className="portal-content-wrap">
+            {/* Top Stacked Layers Icon Badge */}
+            <div className="portal-category-badge-icon" aria-hidden="true">
+              <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#14b8a6" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+                <polygon points="12 2 2 7 12 12 22 7 12 2"></polygon>
+                <polyline points="2 17 12 22 22 17"></polyline>
+                <polyline points="2 12 12 17 22 12"></polyline>
+              </svg>
+            </div>
+
+            {/* Main Heading & Orange Underline Pill */}
+            <h2 className="portal-category-title-modern">Select Category</h2>
+            <div className="portal-category-pill-underline"></div>
+
+            {/* 2 Main Category Cards: Rod & Rail */}
+            <div className="portal-category-cards-grid">
+              {/* Rod Card */}
+              <button
+                type="button"
+                className="cat-select-card cat-select-card-rod"
+                onClick={() => {
+                  handleSwitchSystem('chrome-rod');
+                  handleSetPortalView('rod');
+                }}
+                title="Select Rod Category"
+              >
+                <div className="cat-card-left">
+                  <div className="cat-card-badge-icon cat-badge-rod">
+                    <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#ffffff" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+                      <path d="M4 14a2 2 0 1 0 0-4 2 2 0 0 0 0 4z"></path>
+                      <path d="M4 10l12-6a2 2 0 1 1 2 3.46L6 13.46"></path>
+                      <path d="M4 20a2 2 0 1 0 0-4 2 2 0 0 0 0 4z"></path>
+                      <path d="M4 16l12-6a2 2 0 1 1 2 3.46L6 19.46"></path>
+                      <circle cx="10" cy="12" r="2"></circle>
+                    </svg>
+                  </div>
+                  <span className="cat-card-title-text">Rod</span>
+                  <div className="cat-card-arrow-circle cat-arrow-rod">
+                    <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round">
+                      <line x1="5" y1="12" x2="19" y2="12"></line>
+                      <polyline points="12 5 19 12 12 19"></polyline>
+                    </svg>
+                  </div>
+                </div>
+                <div className="cat-card-right">
+                  <img src="/images/rods-3d.png" alt="Chrome Rod" className="cat-card-3d-img cat-card-3d-rod" />
+                </div>
+              </button>
+
+              {/* Rail Card */}
+              <button
+                type="button"
+                className="cat-select-card cat-select-card-rail"
+                onClick={() => {
+                  handleSwitchSystem('guided-rail');
+                  handleSetPortalView('rail');
+                }}
+                title="Select Rail Category"
+              >
+                <div className="cat-card-left">
+                  <div className="cat-card-badge-icon cat-badge-rail">
+                    <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#ffffff" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+                      <path d="M5 4h14v3h-4v10h4v3H5v-3h4V7H5V4z"></path>
+                    </svg>
+                  </div>
+                  <span className="cat-card-title-text">Rail</span>
+                  <div className="cat-card-arrow-circle cat-arrow-rail">
+                    <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round">
+                      <line x1="5" y1="12" x2="19" y2="12"></line>
+                      <polyline points="12 5 19 12 12 19"></polyline>
+                    </svg>
+                  </div>
+                </div>
+                <div className="cat-card-right">
+                  <img src="/images/rail-3d.png" alt="Guided Rail" className="cat-card-3d-img cat-card-3d-rail" />
+                </div>
+              </button>
+            </div>
+
+            {/* ════════════════════════════════════════════════════════════════
+                CATEGORY MANAGEMENT: RAIL & ROD SUBCATEGORIES
+                Strictly enforced: Only 2 Main Categories (Rod & Rail)
+                ADMIN ONLY: dipanshu@pvtchopra.com (Hidden from regular users)
+                ════════════════════════════════════════════════════════════════ */}
+            {userProfile?.isAdmin && (
+            <div className="cat-mgmt-container">
+              <div className="cat-mgmt-header">
+                <div className="cat-mgmt-badge-row">
+                  <span className="cat-mgmt-badge">
+                    <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
+                      <rect x="3" y="3" width="7" height="7"></rect>
+                      <rect x="14" y="3" width="7" height="7"></rect>
+                      <rect x="14" y="14" width="7" height="7"></rect>
+                      <rect x="3" y="14" width="7" height="7"></rect>
+                    </svg>
+                    Two Main Categories: Rod &amp; Rail
+                  </span>
+                  <span className="cat-mgmt-sync-status">
+                    <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
+                      <path d="M20 6L9 17l-5-5"></path>
+                    </svg>
+                    Firebase Firestore Real-Time Sync
+                  </span>
+                </div>
+                <h3 className="cat-mgmt-title">Category Management</h3>
+                <p className="cat-mgmt-desc">
+                  Rail and Rod are the only two main categories. Manage subcategories below — any added, edited, or removed subcategory immediately propagates across the entire site in real-time.
+                </p>
+              </div>
+
+              <div className="cat-mgmt-columns">
+                {/* Rod Subcategories Column */}
+                <div className="cat-mgmt-card cat-mgmt-card-rod">
+                  <div className="cat-card-header">
+                    <div className="cat-card-title-group">
+                      <div className="cat-card-icon cat-card-icon-rod">
+                        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2">
+                          <line x1="4" y1="20" x2="20" y2="4"></line>
+                          <circle cx="8" cy="8" r="3"></circle>
+                          <circle cx="16" cy="16" r="3"></circle>
+                        </svg>
+                      </div>
+                      <div>
+                        <h4 className="cat-card-title">Rod Subcategories</h4>
+                      </div>
+                    </div>
+                    <span className="cat-card-count">{rodSubcategories.length} Subcategories</span>
+                  </div>
+
+                  {/* Add Rod Subcategory Input */}
+                  {userProfile?.canManageCategories !== false ? (
+                    <form
+                      className="cat-card-add-row"
+                      onSubmit={(e) => {
+                        e.preventDefault();
+                        handleAddSubcat('rod');
+                      }}
+                    >
+                      <input
+                        type="text"
+                        className="cat-card-input"
+                        placeholder="e.g. Hard Chrome Rod..."
+                        value={newRodSubcat}
+                        onChange={(e) => setNewRodSubcat(e.target.value)}
+                        disabled={isSavingCategory}
+                      />
+                      <button
+                        type="submit"
+                        className="cat-card-btn-add cat-card-btn-add-rod"
+                        disabled={isSavingCategory || !newRodSubcat.trim()}
+                        title="Add new subcategory under Rod"
+                      >
+                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
+                          <line x1="12" y1="5" x2="12" y2="19"></line>
+                          <line x1="5" y1="12" x2="19" y2="12"></line>
+                        </svg>
+                        <span>Add to Rod</span>
+                      </button>
+                    </form>
+                  ) : (
+                    <div style={{ padding: '0.5rem 0.75rem', fontSize: '0.75rem', color: 'var(--text-muted)', fontStyle: 'italic' }}>
+                      🔒 Subcategory creation restricted to Admin
+                    </div>
+                  )}
+
+                  {/* Rod Subcategories List */}
+                  <div className="cat-subcat-list">
+                    {rodSubcategories.length === 0 ? (
+                      <div className="cat-subcat-empty">No subcategories defined for Rod yet.</div>
+                    ) : (
+                      rodSubcategories.map((subcat) => {
+                        const isEditingThis = editingSubcat?.type === 'rod' && editingSubcat?.oldName === subcat;
+                        return (
+                          <div key={subcat} className="cat-subcat-item">
+                            <div className="cat-subcat-name-wrap">
+                              <span className="cat-subcat-tag cat-subcat-tag-rod">Rod</span>
+                              {isEditingThis ? (
+                                <input
+                                  type="text"
+                                  className="cat-subcat-edit-input"
+                                  value={editingSubcat.value}
+                                  onChange={(e) => setEditingSubcat({ ...editingSubcat, value: e.target.value })}
+                                  onKeyDown={(e) => {
+                                    if (e.key === 'Enter') handleSaveEditSubcat();
+                                    if (e.key === 'Escape') setEditingSubcat(null);
+                                  }}
+                                  autoFocus
+                                />
+                              ) : (
+                                <span className="cat-subcat-name" title={subcat}>{subcat}</span>
+                              )}
+                            </div>
+
+                            <div className="cat-subcat-actions">
+                              {userProfile?.canManageCategories !== false ? (
+                                isEditingThis ? (
+                                  <>
+                                    <button
+                                      type="button"
+                                      className="cat-action-btn cat-action-btn-save"
+                                      title="Save changes"
+                                      onClick={handleSaveEditSubcat}
+                                      disabled={isSavingCategory}
+                                    >
+                                      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
+                                        <polyline points="20 6 9 17 4 12"></polyline>
+                                      </svg>
+                                    </button>
+                                    <button
+                                      type="button"
+                                      className="cat-action-btn cat-action-btn-cancel"
+                                      title="Cancel"
+                                      onClick={() => setEditingSubcat(null)}
+                                    >
+                                      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
+                                        <line x1="18" y1="6" x2="6" y2="18"></line>
+                                        <line x1="6" y1="6" x2="18" y2="18"></line>
+                                      </svg>
+                                    </button>
+                                  </>
+                                ) : (
+                                  <>
+                                    <button
+                                      type="button"
+                                      className="cat-action-btn"
+                                      title="Edit subcategory name"
+                                      onClick={() => handleStartEditSubcat('rod', subcat)}
+                                    >
+                                      <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2">
+                                        <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"></path>
+                                        <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"></path>
+                                      </svg>
+                                    </button>
+                                    <button
+                                      type="button"
+                                      className="cat-action-btn cat-action-btn-delete"
+                                      title="Delete subcategory"
+                                      onClick={() => handleDeleteSubcat('rod', subcat)}
+                                      disabled={rodSubcategories.length <= 1}
+                                    >
+                                      <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2">
+                                        <polyline points="3 6 5 6 21 6"></polyline>
+                                        <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path>
+                                      </svg>
+                                    </button>
+                                  </>
+                                )
+                              ) : null}
+                            </div>
+                          </div>
+                        );
+                      })
+                    )}
+                  </div>
+                </div>
+
+                {/* Rail Subcategories Column */}
+                <div className="cat-mgmt-card cat-mgmt-card-rail">
+                  <div className="cat-card-header">
+                    <div className="cat-card-title-group">
+                      <div className="cat-card-icon cat-card-icon-rail">
+                        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2">
+                          <path d="M3 5h18M3 12h18M3 19h18" />
+                        </svg>
+                      </div>
+                      <div>
+                        <h4 className="cat-card-title">Rail Subcategories</h4>
+                      </div>
+                    </div>
+                    <span className="cat-card-count">{railSubcategories.length} Subcategories</span>
+                  </div>
+
+                  {/* Add Rail Subcategory Input */}
+                  {userProfile?.canManageCategories !== false ? (
+                    <form
+                      className="cat-card-add-row"
+                      onSubmit={(e) => {
+                        e.preventDefault();
+                        handleAddSubcat('rail');
+                      }}
+                    >
+                      <input
+                        type="text"
+                        className="cat-card-input"
+                        placeholder="e.g. HIWIN, PMI, THK..."
+                        value={newRailSubcat}
+                        onChange={(e) => setNewRailSubcat(e.target.value)}
+                        disabled={isSavingCategory}
+                      />
+                      <button
+                        type="submit"
+                        className="cat-card-btn-add cat-card-btn-add-rail"
+                        disabled={isSavingCategory || !newRailSubcat.trim()}
+                        title="Add new subcategory under Rail"
+                      >
+                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
+                          <line x1="12" y1="5" x2="12" y2="19"></line>
+                          <line x1="5" y1="12" x2="19" y2="12"></line>
+                        </svg>
+                        <span>Add to Rail</span>
+                      </button>
+                    </form>
+                  ) : (
+                    <div style={{ padding: '0.5rem 0.75rem', fontSize: '0.75rem', color: 'var(--text-muted)', fontStyle: 'italic' }}>
+                      🔒 Subcategory creation restricted to Admin
+                    </div>
+                  )}
+
+                  {/* Rail Subcategories List */}
+                  <div className="cat-subcat-list">
+                    {railSubcategories.length === 0 ? (
+                      <div className="cat-subcat-empty">No subcategories defined for Rail yet.</div>
+                    ) : (
+                      railSubcategories.map((subcat) => {
+                        const isEditingThis = editingSubcat?.type === 'rail' && editingSubcat?.oldName === subcat;
+                        return (
+                          <div key={subcat} className="cat-subcat-item">
+                            <div className="cat-subcat-name-wrap">
+                              <span className="cat-subcat-tag cat-subcat-tag-rail">Rail</span>
+                              {isEditingThis ? (
+                                <input
+                                  type="text"
+                                  className="cat-subcat-edit-input"
+                                  value={editingSubcat.value}
+                                  onChange={(e) => setEditingSubcat({ ...editingSubcat, value: e.target.value })}
+                                  onKeyDown={(e) => {
+                                    if (e.key === 'Enter') handleSaveEditSubcat();
+                                    if (e.key === 'Escape') setEditingSubcat(null);
+                                  }}
+                                  autoFocus
+                                />
+                              ) : (
+                                <span className="cat-subcat-name" title={subcat}>{subcat}</span>
+                              )}
+                            </div>
+
+                            <div className="cat-subcat-actions">
+                              {userProfile?.canManageCategories !== false ? (
+                                isEditingThis ? (
+                                  <>
+                                    <button
+                                      type="button"
+                                      className="cat-action-btn cat-action-btn-save"
+                                      title="Save changes"
+                                      onClick={handleSaveEditSubcat}
+                                      disabled={isSavingCategory}
+                                    >
+                                      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
+                                        <polyline points="20 6 9 17 4 12"></polyline>
+                                      </svg>
+                                    </button>
+                                    <button
+                                      type="button"
+                                      className="cat-action-btn cat-action-btn-cancel"
+                                      title="Cancel"
+                                      onClick={() => setEditingSubcat(null)}
+                                    >
+                                      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
+                                        <line x1="18" y1="6" x2="6" y2="18"></line>
+                                        <line x1="6" y1="6" x2="18" y2="18"></line>
+                                      </svg>
+                                    </button>
+                                  </>
+                                ) : (
+                                  <>
+                                    <button
+                                      type="button"
+                                      className="cat-action-btn"
+                                      title="Edit subcategory name"
+                                      onClick={() => handleStartEditSubcat('rail', subcat)}
+                                    >
+                                      <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2">
+                                        <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"></path>
+                                        <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"></path>
+                                      </svg>
+                                    </button>
+                                    <button
+                                      type="button"
+                                      className="cat-action-btn cat-action-btn-delete"
+                                      title="Delete subcategory"
+                                      onClick={() => handleDeleteSubcat('rail', subcat)}
+                                      disabled={railSubcategories.length <= 1}
+                                    >
+                                      <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2">
+                                        <polyline points="3 6 5 6 21 6"></polyline>
+                                        <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path>
+                                      </svg>
+                                    </button>
+                                  </>
+                                )
+                              ) : null}
+                            </div>
+                          </div>
+                        );
+                      })
+                    )}
+                  </div>
+                </div>
+              </div>
+            </div>
+            )}
+          </div>
+        </div>
+      )}
+
+      {/* ════════════════════════════════════════════════════════════════
+          PORTAL SCREEN 2: ROD CATAGORIES (Image 2)
+          ════════════════════════════════════════════════════════════════ */}
+      {portalView === 'rod' && (
+        <div className="portal-overlay-container">
+          <div className="portal-content-wrap">
+            <div className="portal-nav-back-row">
+              <button
+                type="button"
+                className="btn-beautiful-back btn-portal-back"
+                onClick={() => handleSetPortalView('category')}
+                title="Return to Category selection"
+              >
+                <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+                  <path d="M19 12H5M12 19l-7-7 7-7" />
+                </svg>
+                <span>Back to Category</span>
+              </button>
+            </div>
+
+            <h2 className="portal-rod-title">ROD</h2>
+            <p className="portal-category-subtitle">Select rod category to open catalog and cutting optimizer</p>
+
+            <div className="portal-rod-pills-row">
+              {(rodSubcategories.length > 0 ? rodSubcategories : availableRodNames).map((name) => (
+                <button
+                  key={name}
+                  type="button"
+                  className="portal-rod-pill"
+                  onClick={() => {
+                    handleSelectRodCategory(name);
+                    handleSetPortalView('main');
+                  }}
+                >
+                  {name}
+                </button>
+              ))}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ════════════════════════════════════════════════════════════════
+          PORTAL SCREEN 3: RAIL CATAGORIES (Identical UI/UX to Rod Screen)
+          ════════════════════════════════════════════════════════════════ */}
+      {portalView === 'rail' && (
+        <div className="portal-overlay-container">
+          <div className="portal-content-wrap">
+            <div className="portal-nav-back-row">
+              <button
+                type="button"
+                className="btn-beautiful-back btn-portal-back"
+                onClick={() => handleSetPortalView('category')}
+                title="Return to Category selection"
+              >
+                <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+                  <path d="M19 12H5M12 19l-7-7 7-7" />
+                </svg>
+                <span>Back to Category</span>
+              </button>
+            </div>
+
+            <h2 className="portal-rod-title">RAIL</h2>
+            <p className="portal-category-subtitle">Select guided rail category to open catalog and cut validator</p>
+
+            <div className="portal-rod-pills-row">
+              {(railSubcategories.length > 0 ? railSubcategories : availableRailBrands).map((brand) => (
+                <button
+                  key={brand}
+                  type="button"
+                  className="portal-rod-pill portal-rail-pill"
+                  onClick={() => {
+                    handleSelectRailBrand(brand);
+                    handleSetPortalView('main');
+                  }}
+                >
+                  {brand}
+                </button>
+              ))}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Category & Brand Sub-Navigation Bar (Hidden from frontend per user request) */}
+      <div className="category-subnav-bar" style={{ display: 'none' }}>
+        <div className="category-subnav-container">
+          <button
+            type="button"
+            className="cat-pill-btn btn-nav-back-category"
+            onClick={() => handleSetPortalView('category')}
+            title="Return to Category selection page"
+            style={{ display: 'inline-flex', alignItems: 'center', gap: '0.35rem', fontWeight: 700 }}
+          >
+            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round">
+              <path d="M19 12H5M12 19l-7-7 7-7" />
+            </svg>
+            <span>Categories</span>
+          </button>
+          <div style={{ width: '1px', height: '18px', background: 'var(--border-subtle)', margin: '0 0.35rem' }} />
+          {systemMode === 'chrome-rod' ? (
+            <div className="category-pills-group" id="rodCategoryPillsGroup" role="tablist" aria-label="Rod Categories" suppressHydrationWarning></div>
+          ) : (
+            <div className="category-pills-group" id="railBrandPillsGroup" role="tablist" aria-label="Guided Rail Catagories" suppressHydrationWarning></div>
+          )}
+        </div>
+      </div>
+
       {/*  Main Container  */}
-      <main className="main-container">
+      <main className="main-container" style={{ display: portalView === 'main' ? undefined : 'none' }}>
         {/*  Top KPI Summary Cards  */}
         <section className="kpi-grid" aria-label="Inventory Metrics Summary" style={{ display: systemMode === 'chrome-rod' ? undefined : 'none' }}>
           <div className="kpi-card card-blue" data-kpi-filter="all" title="Click to view all catalog rod stock">
@@ -1370,13 +2321,40 @@ export default function Home() {
               </div>
               <div>
                 <h2 className="section-title">Smart Rod Match &amp; Cut Optimizer</h2>
-                <p className="section-desc">Search for an exact diameter and minimum required length. The system automatically surfaces and highlights the most efficient rod with minimal cutting waste.</p>
+                <p className="section-desc" style={{ display: 'none' }}>Search for an exact diameter and minimum required length. The system automatically surfaces and highlights the most efficient rod with minimal cutting waste.</p>
               </div>
             </div>
           </div>
 
           <form id="smartSearchForm" className="smart-search-form" autoComplete="off">
             <div className="search-inputs-grid">
+              {/* Rod Catagorie Selection */}
+              <div className="input-field-group">
+                <div className="field-label-row">
+                  <label htmlFor="searchRodCategorySelect" className="field-label">
+                    <span>Rod Catagorie</span>
+                  </label>
+                </div>
+                <div className="input-with-icon">
+                  <select
+                    id="searchRodCategorySelect"
+                    className="input-control font-semibold"
+                    suppressHydrationWarning
+                    value={selectedRodCategory}
+                    onChange={(e) => handleSelectRodCategory(e.target.value)}
+                  >
+                    {(rodSubcategories.length > 0 ? rodSubcategories : availableRodNames).map(cat => (
+                      <option key={cat} value={cat}>{cat}</option>
+                    ))}
+                  </select>
+                </div>
+                <div className="quick-dia-chips-row" style={{ display: 'none' }}>
+                  <span className="chips-mini-label">Catagorie:</span>
+                  <div className="chips-mini-scroll" id="rodQuickCategoryChips" suppressHydrationWarning></div>
+                </div>
+                <div className="field-hint" style={{ display: 'none' }}>Select rod catagorie</div>
+              </div>
+
               <div className="input-field-group">
                 <div className="field-label-row">
                   <label htmlFor="searchDiameterInput" className="field-label">
@@ -1384,22 +2362,109 @@ export default function Home() {
                     <span className="field-unit">(mm)</span>
                   </label>
                 </div>
-                <div className="input-with-icon">
-                  <input type="number" id="searchDiameterInput" className="input-control" placeholder="e.g. 12" step="0.1" min="0.1" required />
-                  <span className="input-addon">mm</span>
+                <div className="custom-dia-select-wrap" ref={diaDropdownRef}>
+                  <button
+                    type="button"
+                    className={`custom-dia-trigger ${isDiaDropdownOpen ? 'active' : ''}`}
+                    onClick={() => setIsDiaDropdownOpen(!isDiaDropdownOpen)}
+                    aria-haspopup="listbox"
+                    aria-expanded={isDiaDropdownOpen}
+                    title="Select required diameter (from database inventory)"
+                  >
+                    <span>{selectedDiameter ? `${selectedDiameter} mm` : (availableRodDiameters.length > 0 ? 'Select diameter' : 'No diameters in DB')}</span>
+                    <svg
+                      className={`custom-dia-chevron ${isDiaDropdownOpen ? 'open' : ''}`}
+                      viewBox="0 0 24 24"
+                      fill="none"
+                      stroke="currentColor"
+                      strokeWidth="2.4"
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                    >
+                      <polyline points="6 9 12 15 18 9"></polyline>
+                    </svg>
+                  </button>
+
+                  {/* Hidden native input for script.js and form requirements */}
+                  <input
+                    type="text"
+                    id="searchDiameterInput"
+                    className="hidden-dia-input"
+                    style={{ position: 'absolute', opacity: 0, pointerEvents: 'none', width: '1px', height: '1px', padding: 0, margin: 0, border: 'none' }}
+                    value={selectedDiameter}
+                    onChange={(e) => setSelectedDiameter(e.target.value)}
+                    required
+                  />
+
+                  {isDiaDropdownOpen && (
+                    <div className="custom-dia-menu" role="listbox">
+                      <div className="custom-dia-search-wrap">
+                        <svg
+                          className="custom-dia-search-icon"
+                          viewBox="0 0 24 24"
+                          fill="none"
+                          stroke="currentColor"
+                          strokeWidth="2"
+                          strokeLinecap="round"
+                          strokeLinejoin="round"
+                        >
+                          <circle cx="11" cy="11" r="8"></circle>
+                          <line x1="21" y1="21" x2="16.65" y2="16.65"></line>
+                        </svg>
+                        <input
+                          type="text"
+                          className="custom-dia-search-input"
+                          placeholder="Search diameter..."
+                          value={diaSearchQuery}
+                          onChange={(e) => setDiaSearchQuery(e.target.value)}
+                          autoFocus
+                          onClick={(e) => e.stopPropagation()}
+                        />
+                      </div>
+
+                      <div className="custom-dia-options-list">
+                        {filteredDiameters.map((d) => {
+                          const isSelected = String(selectedDiameter) === String(d);
+                          return (
+                            <div
+                              key={d}
+                              className={`custom-dia-option ${isSelected ? 'selected' : ''}`}
+                              onClick={() => handleSelectDiameter(d)}
+                              role="option"
+                              aria-selected={isSelected}
+                            >
+                              <div className="custom-dia-option-left">
+                                <span className={`custom-dia-radio-ring ${isSelected ? 'checked' : ''}`}></span>
+                                <span className="custom-dia-option-label">{d} mm</span>
+                              </div>
+                              {isSelected && (
+                                <svg
+                                  className="custom-dia-check-icon"
+                                  viewBox="0 0 24 24"
+                                  fill="none"
+                                  stroke="#0d9488"
+                                  strokeWidth="2.5"
+                                  strokeLinecap="round"
+                                  strokeLinejoin="round"
+                                >
+                                  <polyline points="20 6 9 17 4 12"></polyline>
+                                </svg>
+                              )}
+                            </div>
+                          );
+                        })}
+
+                        {filteredDiameters.length === 0 && (
+                          <div className="custom-dia-no-results" style={{ padding: '0.85rem 1rem', textAlign: 'center', color: 'var(--text-muted)' }}>
+                            <span style={{ fontSize: '0.8rem', display: 'block', fontWeight: 600 }}>No diameters in database</span>
+                            <span style={{ fontSize: '0.72rem', display: 'block', marginTop: '0.2rem' }}>Only diameters available in stock are shown.</span>
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  )}
                 </div>
-                <div className="quick-dia-chips-row">
-                  <span className="chips-mini-label">Quick:</span>
-                  <div className="chips-mini-scroll">
-                    <button type="button" className="btn-dia-preset" data-dia="8">8mm</button>
-                    <button type="button" className="btn-dia-preset" data-dia="10">10mm</button>
-                    <button type="button" className="btn-dia-preset" data-dia="12">12mm</button>
-                    <button type="button" className="btn-dia-preset" data-dia="16">16mm</button>
-                    <button type="button" className="btn-dia-preset" data-dia="20">20mm</button>
-                    <button type="button" className="btn-dia-preset" data-dia="25">25mm</button>
-                  </div>
-                </div>
-                <div className="field-hint">Exact match required</div>
+                <div className="field-hint" style={{ display: 'none' }}>Exact match required</div>
               </div>
 
               <div className="input-field-group">
@@ -1408,7 +2473,7 @@ export default function Home() {
                     <span>Required Length</span>
                     <span className="field-unit" id="searchLengthUnitBadge">(In)</span>
                   </label>
-                  <div className="unit-selector-pills" role="radiogroup" aria-label="Length Unit Selector">
+                  <div className="unit-selector-pills" role="radiogroup" aria-label="Length Unit Selector" style={{ display: 'none' }}>
                     <button
                       type="button"
                       className="unit-pill active"
@@ -1446,6 +2511,7 @@ export default function Home() {
                     placeholder="e.g. 4.0"
                     step="any"
                     min="0.01"
+                    autoComplete="off"
                     required
                   />
                   <select
@@ -1458,7 +2524,7 @@ export default function Home() {
                     <option value="m">M</option>
                   </select>
                 </div>
-                <div className="quick-dia-chips-row">
+                <div className="quick-dia-chips-row" style={{ display: 'none' }}>
                   <span className="chips-mini-label">Quick:</span>
                   <div className="chips-mini-scroll" id="quickLengthChipsScroll">
                     <button type="button" className="btn-len-preset" data-len="1">1</button>
@@ -1469,7 +2535,7 @@ export default function Home() {
                     <button type="button" className="btn-len-preset" data-len="10">10</button>
                   </div>
                 </div>
-                <div className="field-hint" id="searchLengthHint">Cut piece length</div>
+                <div className="field-hint" id="searchLengthHint" style={{ display: 'none' }}>Cut piece length</div>
               </div>
 
               <div className="input-field-group input-field-pieces">
@@ -1493,7 +2559,7 @@ export default function Home() {
                   />
                   <button type="button" className="btn-step-mini" id="btnSearchPiecesInc" aria-label="Increase Pieces">+</button>
                 </div>
-                <div className="quick-dia-chips-row">
+                <div className="quick-dia-chips-row" style={{ display: 'none' }}>
                   <span className="chips-mini-label">Quick:</span>
                   <div className="chips-mini-scroll">
                     <button type="button" className="btn-pcs-preset active" data-pcs="1">1 pc</button>
@@ -1502,7 +2568,7 @@ export default function Home() {
                     <button type="button" className="btn-pcs-preset" data-pcs="10">10 pcs</button>
                   </div>
                 </div>
-                <div className="field-hint" id="searchTotalCutHint">Total cut: 1 pc</div>
+                <div className="field-hint" id="searchTotalCutHint" style={{ display: 'none' }}>Total cut: 1 pc</div>
               </div>
 
               <div className="input-field-group input-field-actions">
@@ -1602,8 +2668,8 @@ export default function Home() {
                   <tr>
                     <th className="smart-col-fit hide-mobile">Fit Priority</th>
                     <th className="smart-col-rod">
-                      <span className="desktop-only">Rod Name / Type</span>
-                      <span className="mobile-only">Rod &amp; Fit</span>
+                      <span className="desktop-only">Rod Catagorie</span>
+                      <span className="mobile-only">Catagorie &amp; Fit</span>
                     </th>
                     <th className="smart-col-dia hide-mobile text-right">Diameter (mm)</th>
                     <th className="smart-col-len hide-mobile text-right"><span id="smartThLengthTitle">Length (In)</span></th>
@@ -1638,19 +2704,91 @@ export default function Home() {
         </section>
 
         {/* ════════════════════════════════════════════════════════════════
+            TOP KPI SUMMARY CARDS: GUIDED RAIL
+            ════════════════════════════════════════════════════════════════ */}
+        <section
+          className="kpi-grid"
+          id="grKpiGrid"
+          aria-label="Guided Rail Inventory Metrics Summary"
+          style={{ display: systemMode === 'guided-rail' ? undefined : 'none', marginBottom: '1.25rem' }}
+        >
+          <div className="kpi-card card-blue" data-gr-kpi-filter="all" title="Click to view all guided rail variants">
+            <div className="kpi-icon-wrap" style={{ background: 'rgba(107, 142, 35, 0.12)', color: '#6b8e23', borderColor: 'rgba(107, 142, 35, 0.25)' }}>
+              <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                <path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"></path>
+                <polyline points="3.27 6.96 12 12.01 20.73 6.96"></polyline>
+                <line x1="12" y1="22.08" x2="12" y2="12"></line>
+              </svg>
+            </div>
+            <div className="kpi-content">
+              <span className="kpi-label">Total Rail Types</span>
+              <div className="kpi-value" id="statGrTotalTypes">0</div>
+              <span className="kpi-subtext">Distinct catalog variants</span>
+            </div>
+          </div>
+
+          <div className="kpi-card card-indigo" data-gr-kpi-filter="stock" title="Click to view total rail bars in storage">
+            <div className="kpi-icon-wrap" style={{ background: 'rgba(94, 92, 230, 0.12)', color: '#5e5ce6', borderColor: 'rgba(94, 92, 230, 0.25)' }}>
+              <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                <line x1="8" y1="6" x2="21" y2="6"></line>
+                <line x1="8" y1="12" x2="21" y2="12"></line>
+                <line x1="8" y1="18" x2="21" y2="18"></line>
+                <line x1="3" y1="6" x2="3.01" y2="6"></line>
+                <line x1="3" y1="12" x2="3.01" y2="12"></line>
+                <line x1="3" y1="18" x2="3.01" y2="18"></line>
+              </svg>
+            </div>
+            <div className="kpi-content">
+              <span className="kpi-label">Total Stock Quantity</span>
+              <div className="kpi-value" id="statGrTotalQuantity">0</div>
+              <span className="kpi-subtext">Bars / rails in storage</span>
+            </div>
+          </div>
+
+          <div className="kpi-card card-emerald" data-gr-kpi-filter="in_stock" title="Click to filter by available in-stock rails">
+            <div className="kpi-icon-wrap" style={{ background: 'rgba(52, 199, 89, 0.14)', color: '#34c759', borderColor: 'rgba(52, 199, 89, 0.25)' }}>
+              <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                <path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"></path>
+                <polyline points="22 4 12 14.01 9 11.01"></polyline>
+              </svg>
+            </div>
+            <div className="kpi-content">
+              <span className="kpi-label">Available Rail Types</span>
+              <div className="kpi-value" id="statGrInStockTypes">0</div>
+              <span className="kpi-subtext">Items with Qty &gt; 0</span>
+            </div>
+          </div>
+
+          <div className="kpi-card card-amber" data-gr-kpi-filter="low_stock" title="Click to filter low stock rails (≤ 5 units)">
+            <div className="kpi-icon-wrap" style={{ background: 'rgba(255, 149, 0, 0.14)', color: '#ff9500', borderColor: 'rgba(255, 149, 0, 0.25)' }}>
+              <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                <path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"></path>
+                <line x1="12" y1="9" x2="12" y2="13"></line>
+                <line x1="12" y1="17" x2="12.01" y2="17"></line>
+              </svg>
+            </div>
+            <div className="kpi-content">
+              <span className="kpi-label">Low Stock Items</span>
+              <div className="kpi-value" id="statGrLowStockCount">0</div>
+              <span className="kpi-subtext">5 units or below</span>
+            </div>
+          </div>
+        </section>
+
+        {/* ════════════════════════════════════════════════════════════════
             SECTION: GUIDED RAIL — SEARCH & CUTTING VALIDATOR
             ════════════════════════════════════════════════════════════════ */}
         <section className="card guided-rail-card" id="guidedRailSection" style={{ display: systemMode === 'guided-rail' ? undefined : 'none' }}>
           <div className="section-header">
             <div className="section-title-wrap">
-              <div className="badge-icon badge-accent" style={{ background: 'rgba(124,58,237,0.1)', color: '#7c3aed', border: '1px solid rgba(124,58,237,0.2)' }}>
+              <div className="badge-icon badge-accent" style={{ background: 'rgba(107, 142, 35, 0.12)', color: '#6b8e23', border: '1px solid rgba(107, 142, 35, 0.25)' }}>
                 <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
                   <path d="M3 5h18M3 12h18M3 19h18" />
                 </svg>
               </div>
               <div>
                 <h2 className="section-title">Guided Rail — Model Search &amp; Cut Validator</h2>
-                <p className="section-desc">Select an HGR guided rail model, enter required cutting length and piece quantity, and validate hole spacing and end margins.</p>
+                <p className="section-desc" style={{ display: 'none' }}>Select an HGR guided rail model, enter required cutting length and piece quantity, and validate hole spacing and end margins.</p>
               </div>
             </div>
             <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', flexWrap: 'wrap' }}>
@@ -1658,7 +2796,7 @@ export default function Home() {
                 type="button"
                 className="btn btn-sm btn-primary"
                 id="btnOpenAddRailFromSection"
-                style={{ background: 'linear-gradient(135deg, #7c3aed, #6d28d9)', borderColor: '#6d28d9', gap: '0.4rem', borderRadius: '9999px', fontSize: '0.8rem', padding: '0.35rem 0.85rem' }}
+                style={{ background: 'linear-gradient(135deg, #6b8e23, #55731c)', borderColor: '#55731c', gap: '0.4rem', borderRadius: '9999px', fontSize: '0.8rem', padding: '0.35rem 0.85rem' }}
                 title="Add new Guided Rail stock to storage inventory"
                 onClick={() => {
                   if (typeof window !== 'undefined' && (window as any).openAddRailStockModal) {
@@ -1667,64 +2805,65 @@ export default function Home() {
                   }
                 }}
               >
-                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><line x1="12" y1="5" x2="12" y2="19" /><line x1="5" y1="12" x2="19" y2="12" /></svg>
                 + Add Rail Stock
               </button>
-              <a href="/guided-rail/admin" className="gr-admin-link" title="Manage Guided Rail Models & Standard Sizes">
-                <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
-                  <circle cx="12" cy="12" r="3" /><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83-2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z" />
-                </svg>
-                Standard Size Master &amp; Admin
-              </a>
             </div>
           </div>
 
           <form id="grValidateForm" className="smart-search-form" autoComplete="off">
             <div className="search-inputs-grid">
 
+              {/* 0. Rail Category Selection */}
+              <div className="input-field-group">
+                <div className="field-label-row">
+                  <label htmlFor="grBrandSelect" className="field-label">
+                    <span>Rail Catagorie</span>
+                  </label>
+                </div>
+                <div className="input-with-icon">
+                  <select id="grBrandSelect" className="input-control font-semibold" suppressHydrationWarning>
+                    {(railSubcategories.length > 0 ? railSubcategories : availableRailBrands).map(brand => (
+                      <option key={brand} value={brand}>{brand}</option>
+                    ))}
+                  </select>
+                </div>
+                <div className="quick-dia-chips-row" style={{ display: 'none' }}>
+                  <span className="chips-mini-label">Catagorie:</span>
+                  <div className="chips-mini-scroll" id="grQuickBrandChips" suppressHydrationWarning></div>
+                </div>
+                <div className="field-hint" style={{ display: 'none' }}>Select rail catagorie</div>
+              </div>
+
               {/* 1. Rail Model */}
               <div className="input-field-group">
                 <div className="field-label-row">
                   <label htmlFor="grModelSelect" className="field-label">
                     <span>Rail Model</span>
-                    <span className="field-unit">(HGR)</span>
+                    <span className="field-unit" id="grModelUnitPill"></span>
                   </label>
                 </div>
                 <div className="input-with-icon">
-                  <select id="grModelSelect" className="input-control font-mono" required>
+                  <select id="grModelSelect" className="input-control font-mono" required suppressHydrationWarning>
                     <option value="">— Select Model —</option>
-                    <option value="HGR15" data-model-name="HGR15" data-pitch="60">HGR15</option>
-                    <option value="HGR20" data-model-name="HGR20" data-pitch="60">HGR20</option>
-                    <option value="HGR25" data-model-name="HGR25" data-pitch="60">HGR25</option>
-                    <option value="HGR30" data-model-name="HGR30" data-pitch="80">HGR30</option>
-                    <option value="HGR35" data-model-name="HGR35" data-pitch="80">HGR35</option>
-                    <option value="HGR45" data-model-name="HGR45" data-pitch="105">HGR45</option>
-                    <option value="HGR55" data-model-name="HGR55" data-pitch="120">HGR55</option>
-                    <option value="HGR65" data-model-name="HGR65" data-pitch="150">HGR65</option>
                   </select>
                 </div>
 
-                {/* Selected Model Spec Pill */}
-                <div id="grModelSpecCard" className="gr-spec-summary-pill hidden">
-                  <span className="gr-spec-badge-tag" id="grSpecBadgeName">HGR</span>
+                {/* Selected Model Spec Pill (Hidden per user request) */}
+                <div id="grModelSpecCard" className="gr-spec-summary-pill hidden" style={{ display: 'none' }}>
+                  <span className="gr-spec-badge-tag" id="grSpecBadgeName"></span>
                   <span className="gr-spec-detail" id="grSpecBadgeDetails"></span>
                 </div>
 
-                <div className="quick-dia-chips-row">
+                <div className="quick-dia-chips-row" style={{ display: 'none' }}>
                   <span className="chips-mini-label">Quick:</span>
-                  <div className="chips-mini-scroll" id="grQuickChipsTrack">
-                    <button type="button" className="btn-dia-preset" data-model-id="HGR15" data-model-name="HGR15">HGR15</button>
-                    <button type="button" className="btn-dia-preset" data-model-id="HGR20" data-model-name="HGR20">HGR20</button>
-                    <button type="button" className="btn-dia-preset" data-model-id="HGR25" data-model-name="HGR25">HGR25</button>
-                    <button type="button" className="btn-dia-preset" data-model-id="HGR30" data-model-name="HGR30">HGR30</button>
-                    <button type="button" className="btn-dia-preset" data-model-id="HGR35" data-model-name="HGR35">HGR35</button>
-                    <button type="button" className="btn-dia-preset" data-model-id="HGR45" data-model-name="HGR45">HGR45</button>
-                    <button type="button" className="btn-dia-preset" data-model-id="HGR55" data-model-name="HGR55">HGR55</button>
-                    <button type="button" className="btn-dia-preset" data-model-id="HGR65" data-model-name="HGR65">HGR65</button>
-                  </div>
+                  <div className="chips-mini-scroll" id="grQuickChipsTrack"></div>
                 </div>
-                <div className="field-hint" id="grModelHint">Select HGR rail model</div>
+                <div className="field-hint" id="grModelHint" style={{ display: 'none' }}>Select HGR rail model</div>
               </div>
+
+              {/* Hidden preserved input for background PCC calculation */}
+              <input type="hidden" id="grPccInput" />
 
               {/* 2. Required Cutting Length */}
               <div className="input-field-group input-field-gr-length">
@@ -1733,7 +2872,7 @@ export default function Home() {
                     <span className="gr-label-full">Required Cutting Length</span>
                     <span className="gr-label-short">Cut Length</span>
                   </label>
-                  <div className="unit-selector-pills gr-unit-selector-pills" role="radiogroup" aria-label="Rail Cutting Length Unit Selector">
+                  <div className="unit-selector-pills gr-unit-selector-pills" role="radiogroup" aria-label="Rail Cutting Length Unit Selector" style={{ display: 'none' }}>
                     <button
                       type="button"
                       className="unit-pill active"
@@ -1783,7 +2922,7 @@ export default function Home() {
                     <option value="ft">Ft</option>
                   </select>
                 </div>
-                <div className="quick-dia-chips-row">
+                <div className="quick-dia-chips-row" style={{ display: 'none' }}>
                   <span className="chips-mini-label">Quick:</span>
                   <div className="chips-mini-scroll" id="grQuickLengthChips">
                     <button type="button" className="btn-len-preset" data-grlen="60">60 mm</button>
@@ -1794,7 +2933,7 @@ export default function Home() {
                     <button type="button" className="btn-len-preset" data-grlen="500">500 mm</button>
                   </div>
                 </div>
-                <div className="field-hint" id="grLengthHint">Cut piece length per rail</div>
+                <div className="field-hint" id="grLengthHint" style={{ display: 'none' }}>Cut piece length per rail</div>
               </div>
 
               {/* 3. Required No of Pieces */}
@@ -1819,7 +2958,7 @@ export default function Home() {
                   />
                   <button type="button" className="btn-step-mini" id="btnGrPiecesInc" aria-label="Increase Pieces">+</button>
                 </div>
-                <div className="quick-dia-chips-row">
+                <div className="quick-dia-chips-row" style={{ display: 'none' }}>
                   <span className="chips-mini-label">Quick:</span>
                   <div className="chips-mini-scroll" id="grPiecesChipsTrack">
                     <button type="button" className="btn-pcs-preset active" data-pcs="1">1 pc</button>
@@ -1828,28 +2967,18 @@ export default function Home() {
                     <button type="button" className="btn-pcs-preset" data-pcs="10">10 pcs</button>
                   </div>
                 </div>
-                <div className="field-hint" id="grTotalPiecesHint">Total cut: 1 pc</div>
+                <div className="field-hint" id="grTotalPiecesHint" style={{ display: 'none' }}>Total cut: 1 pc</div>
               </div>
 
               {/* Action Buttons */}
               <div className="input-field-group input-field-actions">
                 <div className="field-label-row field-label-empty" aria-hidden="true">&nbsp;</div>
                 <div className="search-action-group">
-                  <button type="submit" className="btn btn-primary btn-search" id="btnGrValidate" style={{ background: 'linear-gradient(135deg, #7c3aed, #6d28d9)', borderColor: '#6d28d9' }}>
+                  <button type="submit" className="btn btn-primary btn-search" id="btnGrValidate" style={{ background: 'linear-gradient(135deg, #6b8e23, #55731c)', borderColor: '#55731c' }}>
                     <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
                       <path d="M22 11.08V12a10 10 0 1 1-5.93-9.14" /><polyline points="22 4 12 14.01 9 11.01" />
                     </svg>
                     Validate Length
-                  </button>
-                  <button type="button" className="btn btn-primary btn-search" id="btnGrCutAction" style={{ background: 'linear-gradient(135deg, #7c3aed, #6d28d9)', borderColor: '#6d28d9' }} title="Cut rail piece(s) from matching storage stock">
-                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
-                      <circle cx="6" cy="6" r="3"></circle>
-                      <circle cx="6" cy="18" r="3"></circle>
-                      <line x1="20" y1="4" x2="8.12" y2="15.88"></line>
-                      <line x1="14.47" y1="14.48" x2="20" y2="20"></line>
-                      <line x1="8.12" y1="8.12" x2="12" y2="12"></line>
-                    </svg>
-                    <span>Cut Rail</span>
                   </button>
                   <button type="button" className="btn btn-outline" id="grResetBtn">
                     <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
@@ -1863,20 +2992,55 @@ export default function Home() {
             </div>
           </form>
 
+          {/* Valid Length Suggestions Box (when length is invalid: show valid lengths before and after) */}
+          <div id="grLengthSuggestionsBox" className="gr-length-suggestions-box" style={{ display: 'none' }} suppressHydrationWarning></div>
+
           {/* Validation Result Box */}
           <div id="grValidationResult" className="gr-validation-result hidden"></div>
 
           {/* ════════════════════════════════════════════════════════════════
               GUIDED RAIL STOCK INVENTORY TABLE
               ════════════════════════════════════════════════════════════════ */}
-          <div className="gr-stock-card" id="grStockInventoryCard" style={{ marginTop: '1.5rem', borderTop: '1px solid var(--border-subtle)', paddingTop: '1.25rem' }}>
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1rem', flexWrap: 'wrap', gap: '0.75rem' }}>
-              <div>
-                <div style={{ display: 'flex', alignItems: 'center', gap: '0.6rem' }}>
-                  <h3 style={{ margin: 0, fontSize: '1.05rem', fontWeight: 700 }}>Guided Rail Stock Inventory</h3>
-                  <span className="badge badge-pill badge-primary" id="grTotalStockBarsBadge" style={{ background: '#7c3aed', color: '#fff', fontSize: '0.75rem' }}>0 bars</span>
-                </div>
-                <p style={{ margin: '3px 0 0', fontSize: '0.8rem', color: 'var(--text-muted)' }}>Storage inventory of linear guided rail raw stock bars ready for cutting</p>
+          <div className="gr-stock-card" id="grStockInventoryCard" style={{ marginTop: '1rem', borderTop: '1px solid var(--border-subtle)', paddingTop: '0.85rem' }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.65rem', flexWrap: 'wrap', gap: '0.5rem' }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '0.6rem' }}>
+                <h3 id="railInventorySectionTitle" style={{ margin: 0, fontSize: '0.98rem', fontWeight: 700 }}>
+                  {selectedRailBrand && selectedRailBrand !== 'all' && selectedRailBrand !== 'ALL'
+                    ? `${selectedRailBrand} Stock Inventory`
+                    : 'Rail Stock Inventory'}
+                </h3>
+                <span className="badge badge-pill badge-primary" id="grTotalStockBarsBadge" style={{ background: '#6b8e23', color: '#fff', fontSize: '0.72rem' }}>0 bars</span>
+                {userProfile?.isAdmin && (
+                  <button
+                    type="button"
+                    className="btn btn-xs"
+                    title="Admin Delete Rails (dipanshu@pvtchopra.com)"
+                    onClick={() => {
+                      refreshAdminInventory();
+                      setAdminTab('rail');
+                      setIsAdminManageOpen(true);
+                    }}
+                    style={{
+                      background: 'rgba(107, 142, 35, 0.1)',
+                      color: '#6b8e23',
+                      border: '1px solid rgba(107, 142, 35, 0.35)',
+                      borderRadius: '9999px',
+                      padding: '0.15rem 0.5rem',
+                      fontSize: '0.72rem',
+                      fontWeight: 600,
+                      display: 'inline-flex',
+                      alignItems: 'center',
+                      gap: '0.25rem',
+                      cursor: 'pointer'
+                    }}
+                  >
+                    <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2">
+                      <polyline points="3 6 5 6 21 6"></polyline>
+                      <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path>
+                    </svg>
+                    <span>Delete Rails</span>
+                  </button>
+                )}
               </div>
 
               <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', flexWrap: 'wrap' }}>
@@ -1884,27 +3048,13 @@ export default function Home() {
                   type="text"
                   id="grStockSearchInput"
                   className="input-control"
-                  placeholder="Search rail stock (HGR, rack...)"
-                  style={{ width: '200px', height: '36px', fontSize: '0.82rem' }}
+                  placeholder="Search rail stock..."
+                  style={{ width: '180px', height: '32px', fontSize: '0.78rem' }}
                 />
-                <button
-                  type="button"
-                  className="btn btn-sm btn-primary"
-                  id="btnOpenAddRailFromTable"
-                  style={{ background: 'linear-gradient(135deg, #7c3aed, #6d28d9)', borderColor: '#6d28d9', fontSize: '0.8rem', padding: '0.35rem 0.85rem', borderRadius: '9999px' }}
-                  onClick={() => {
-                    if (typeof window !== 'undefined' && (window as any).openAddRailStockModal) {
-                      const sel = document.getElementById('grModelSelect') as HTMLSelectElement | null;
-                      (window as any).openAddRailStockModal(sel?.value);
-                    }
-                  }}
-                >
-                  + Add Rail Stock
-                </button>
               </div>
             </div>
 
-            <div className="table-responsive">
+            <div className="table-responsive" id="grStockTableContainer">
               <table className="data-table" id="grStockTable">
                 <thead>
                   <tr>
@@ -1912,8 +3062,7 @@ export default function Home() {
                     <th className="text-center">Pitch (P)</th>
                     <th className="text-right">Stock Bar Length (In / mm)</th>
                     <th className="text-right">Available Qty</th>
-                    <th>Storage Rack / Notes</th>
-                    <th className="text-center" style={{ width: '170px' }}>Actions</th>
+                    <th className="text-center" style={{ width: '100px' }}>Actions</th>
                   </tr>
                 </thead>
                 <tbody id="grStockTableBody">
@@ -1926,155 +3075,108 @@ export default function Home() {
 
         {/*  SECTION: COMPLETE INVENTORY REPOSITORY  */}
         <section className="card inventory-card" id="inventorySection" style={{ display: systemMode === 'chrome-rod' ? undefined : 'none' }}>
-          {/* Connected Google Sheet Sync Banner */}
-          <div style={{
-            margin: '12px 1.5rem 6px 1.5rem',
-            padding: '10px 14px',
-            borderRadius: '8px',
-            background: 'rgba(16, 185, 129, 0.08)',
-            border: '1px solid rgba(16, 185, 129, 0.25)',
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'space-between',
-            flexWrap: 'wrap',
-            gap: '10px',
-            fontSize: '0.835rem'
-          }}>
-            <div style={{ display: 'flex', alignItems: 'center', gap: '8px', color: '#065f46' }}>
-              <span style={{ fontSize: '1.15rem' }}>📄</span>
-              <span>
-                <strong>Connected Google Sheet:</strong> 177 Chrome Rods loaded directly from your spreadsheet (<code style={{ background: 'rgba(16, 185, 129, 0.15)', padding: '2px 5px', borderRadius: '4px' }}>Chrome rod inventory</code>).
-              </span>
-            </div>
-            <div style={{ display: 'flex', gap: '8px' }}>
-              <a
-                href="https://docs.google.com/spreadsheets/d/1_rDLZvfHCD4Tzmzk7XHBqK2qHtxOjSP32wOLUOABkMQ/edit"
-                target="_blank"
-                rel="noopener noreferrer"
-                className="btn btn-primary btn-sm"
-                style={{ fontSize: '0.78rem', padding: '5px 12px', background: 'linear-gradient(135deg, #10b981, #059669)', borderColor: '#059669', color: '#fff', fontWeight: 600, textDecoration: 'none', display: 'inline-flex', alignItems: 'center', gap: '4px' }}
-              >
-                <span>Open Google Sheet ↗</span>
-              </a>
-              <button
-                type="button"
-                className="btn btn-secondary btn-sm"
-                style={{ fontSize: '0.78rem', padding: '5px 12px' }}
-                onClick={() => syncInventoryData(true)}
-              >
-                🔄 Refresh From Sheet
-              </button>
-            </div>
-          </div>
-
-          <div className="quick-chips-bar" id="quickChipsBar">
-            <span className="chips-title">Quick Sizes:</span>
-            <div className="chips-scroll-track" id="quickDiameterChipsTrack">
-              {/*  Dynamically populated via script.js  */}
-            </div>
-          </div>
-
-          <div className="inventory-toolbar">
-            <div className="toolbar-left">
-              <div>
-                <h2 className="section-title">Rod Stock Inventory</h2>
-                <p className="section-desc">Manage, edit, monitor and filter your metal rods catalog</p>
-              </div>
-            </div>
-
-            <div className="toolbar-right">
-              <div className="inventory-filters">
-                {/*  Text Search Filter  */}
-                <div className="search-input-wrapper">
-                  <svg className="search-icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                    <circle cx="11" cy="11" r="8"></circle>
-                    <line x1="21" y1="21" x2="16.65" y2="16.65"></line>
-                  </svg>
-                  <input type="text" id="filterKeyword" className="input-control filter-search" placeholder="Search by name, SKU, notes..." />
-                  <button type="button" id="btnClearFilterKeyword" className="search-clear-btn hidden" aria-label="Clear search" title="Clear search">✕</button>
-                </div>
-
-                {/*  Row 2: Diameter & Status Dropdowns in ONE LINE on mobile  */}
-                <div className="filter-dropdowns-row">
-                  <select id="filterDiameter" className="input-control filter-select" aria-label="Filter by diameter">
-                    <option value="all">All Diameters</option>
-                  </select>
-
-
-                </div>
-
-                {/*  Display Options: Length Round Off Toggle & View Switcher  */}
-                <div className="filter-actions-row">
+          <div style={{ padding: '1.25rem 1.5rem 0.75rem 1.5rem' }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.65rem', flexWrap: 'wrap', gap: '0.5rem' }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '0.6rem' }}>
+                <h3 id="rodInventorySectionTitle" style={{ margin: 0, fontSize: '0.98rem', fontWeight: 700 }}>
+                  {selectedRodCategory && selectedRodCategory !== 'all' && selectedRodCategory !== 'ALL'
+                    ? `${selectedRodCategory} Stock Inventory`
+                    : 'Rod Stock Inventory'}
+                </h3>
+                <span className="badge badge-pill badge-primary" id="crTotalStockBarsBadge" style={{ background: '#0284c7', color: '#fff', fontSize: '0.72rem' }}>0 bars</span>
+                {userProfile?.isAdmin && (
                   <button
                     type="button"
-                    className={`btn-length-toggle ${isRoundLength ? 'active' : ''}`}
-                    id="btnToggleRoundLength"
-                    role="switch"
-                    aria-checked={isRoundLength ? 'true' : 'false'}
-                    title={isRoundLength ? 'Lengths shown in Round Off (≈). Click for Decimal (.0).' : 'Lengths shown in Decimal (.0). Click for Round Off (≈).'}
-                    onClick={handleToggleRoundLength}
+                    className="btn btn-xs"
+                    title="Admin Delete Rods (dipanshu@pvtchopra.com)"
+                    onClick={() => {
+                      refreshAdminInventory();
+                      setAdminTab('rod');
+                      setIsAdminManageOpen(true);
+                    }}
+                    style={{
+                      background: 'rgba(20, 184, 166, 0.1)',
+                      color: '#0d9488',
+                      border: '1px solid rgba(20, 184, 166, 0.35)',
+                      borderRadius: '9999px',
+                      padding: '0.15rem 0.5rem',
+                      fontSize: '0.72rem',
+                      fontWeight: 600,
+                      display: 'inline-flex',
+                      alignItems: 'center',
+                      gap: '0.25rem',
+                      cursor: 'pointer'
+                    }}
                   >
-                    <span className="length-toggle-switch">
-                      <span className="length-toggle-knob"></span>
-                    </span>
-                    <span>Round</span>
+                    <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2">
+                      <polyline points="3 6 5 6 21 6"></polyline>
+                      <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path>
+                    </svg>
+                    <span>Delete Rods</span>
                   </button>
+                )}
+              </div>
 
-                  {/*  View Switcher (Row View vs Cards View)  */}
-                  <div className="view-toggle-group" id="viewToggleGroup" role="group" aria-label="Display View">
-                    <button type="button" className="view-toggle-btn active" id="btnViewRow" title="Single-line row view">
-                      <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><line x1="8" y1="6" x2="21" y2="6"></line><line x1="8" y1="12" x2="21" y2="12"></line><line x1="8" y1="18" x2="21" y2="18"></line><line x1="3" y1="6" x2="3.01" y2="6"></line><line x1="3" y1="12" x2="3.01" y2="12"></line><line x1="3" y1="18" x2="3.01" y2="18"></line></svg>
-                      <span>Row</span>
-                    </button>
-                    <button type="button" className="view-toggle-btn" id="btnViewCards" title="Card grid view">
-                      <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><rect x="3" y="3" width="7" height="7"></rect><rect x="14" y="3" width="7" height="7"></rect><rect x="14" y="14" width="7" height="7"></rect><rect x="3" y="14" width="7" height="7"></rect></svg>
-                      <span>Cards</span>
-                    </button>
-                  </div>
-                </div>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', flexWrap: 'wrap' }}>
+                <input
+                  type="text"
+                  id="filterKeyword"
+                  className="input-control filter-search"
+                  placeholder="Search rod stock..."
+                  style={{ width: '180px', height: '32px', fontSize: '0.78rem', borderRadius: '9999px' }}
+                />
               </div>
             </div>
-          </div>
 
-          {/*  Inventory Data Table  */}
-          <div className="table-responsive" id="inventoryTableContainer">
-            <table className="data-table" id="inventoryTable">
-              <thead>
-                <tr>
-
-                  <th className="col-name sortable" data-sort="name">ROD NAME / MATERIAL</th>
-                  <th className="col-diameter hide-mobile sortable text-center" data-sort="diameterMm">DIAMETER (MM)</th>
-                  <th className="col-length hide-mobile sortable text-center" data-sort="lengthIn"><span id="thLengthTitle">LENGTH (IN)</span></th>
-                  <th className="col-size mobile-only text-right" data-sort="diameterMm">Size</th>
-                  <th className="col-qty sortable text-center" data-sort="quantity">STOCK</th>
-
-
-                  <th className="col-actions text-center">MANAGE</th>
-                </tr>
-              </thead>
-              <tbody id="inventoryTableBody">
-                {/*  Dynamically populated  */}
-              </tbody>
-            </table>
-          </div>
-
-          {/*  Inventory Empty State  */}
-          <div id="inventoryEmptyState" className="empty-state hidden">
-            <div className="empty-icon-box">
-              <svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8">
-                <rect x="2" y="7" width="20" height="14" rx="2" ry="2"></rect>
-                <path d="M16 21V5a2 2 0 0 0-2-2h-4a2 2 0 0 0-2 2v16"></path>
-              </svg>
+            {/* Hidden preserved DOM elements for backward compatibility with filter helpers */}
+            <div style={{ display: 'none' }}>
+              <select id="filterDiameter" aria-label="Filter by diameter">
+                <option value="all">All Diameters</option>
+              </select>
+              <div id="quickChipsBar">
+                <div id="quickDiameterChipsTrack"></div>
+              </div>
+              <button id="btnToggleRoundLength" type="button"></button>
+              <button id="btnViewRow" type="button"></button>
+              <button id="btnViewCards" type="button"></button>
             </div>
-            <h4 className="empty-title">No Rods Found</h4>
-            <p className="empty-desc">No rod records match your current filters. Try resetting filters or adding a new rod.</p>
-            <button className="btn btn-secondary btn-sm" id="btnResetInventoryFilters">Reset Filters</button>
-          </div>
 
-          {/*  Inventory Footer / Batch Actions  */}
-          <div className="inventory-footer">
-            <div className="footer-count" id="inventoryCountSummary">
-              Showing 0 of 0 records
+            {/*  Inventory Data Table  */}
+            <div className="table-responsive" id="inventoryTableContainer">
+              <table className="data-table" id="inventoryTable">
+                <thead>
+                  <tr>
+                    <th>Rod Model</th>
+                    <th className="text-center">Diameter (mm)</th>
+                    <th className="text-right">Stock Bar Length (In / mm)</th>
+                    <th className="text-right">Available Qty</th>
+                    <th className="text-center" style={{ width: '100px' }}>Actions</th>
+                  </tr>
+                </thead>
+                <tbody id="inventoryTableBody">
+                  {/*  Dynamically populated  */}
+                </tbody>
+              </table>
+            </div>
+
+            {/*  Inventory Empty State  */}
+            <div id="inventoryEmptyState" className="empty-state hidden">
+              <div className="empty-icon-box">
+                <svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8">
+                  <rect x="2" y="7" width="20" height="14" rx="2" ry="2"></rect>
+                  <path d="M16 21V5a2 2 0 0 0-2-2h-4a2 2 0 0 0-2 2v16"></path>
+                </svg>
+              </div>
+              <h4 className="empty-title">No Rods Found</h4>
+              <p className="empty-desc">No rod records match your current filters. Try resetting filters or adding a new rod.</p>
+              <button className="btn btn-secondary btn-sm" id="btnResetInventoryFilters">Reset Filters</button>
+            </div>
+
+            {/*  Inventory Footer / Batch Actions  */}
+            <div className="inventory-footer">
+              <div className="footer-count" id="inventoryCountSummary">
+                Showing 0 of 0 records
+              </div>
             </div>
           </div>
         </section>
@@ -2088,29 +3190,29 @@ export default function Home() {
             <h3 className="modal-title">Bulk Import Inventory</h3>
             <button type="button" className="modal-close-btn" onClick={() => setIsImportModalOpen(false)} aria-label="Close dialog">&times;</button>
           </div>
-          <p className="modal-subtitle" style={{ marginBottom: '1.5rem' }}>Download the template to format your data correctly, or upload your completed file.</p>
+          <p className="modal-subtitle" style={{ marginBottom: '1.5rem' }}>Download the template (Format: <strong>Rod name, Diameter(mm), length(inch), quantity</strong>), or upload your completed .xlsx / .csv file.</p>
 
           <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
             <button
               className="btn btn-secondary"
               onClick={() => {
-                const csvContent = "data:text/csv;charset=utf-8,Rod Name or Material Type,Diameter (mm),Length (In),Quantity Available\nExample Steel Rebar,12,6.0,15";
+                const csvContent = "data:text/csv;charset=utf-8,Rod name,Diameter(mm),length(inch),quantity\nHard Chrome Rod,20,10.5,5\nHard Chrome Rod,25,12,8\nHard Chrome Rod,30,15.5,10";
                 const encodedUri = encodeURI(csvContent);
                 const link = document.createElement("a");
                 link.setAttribute("href", encodedUri);
-                link.setAttribute("download", "rodsync_template.csv");
+                link.setAttribute("download", "Rod_Inventory_Template.csv");
                 document.body.appendChild(link);
                 link.click();
                 link.remove();
               }}
             >
               <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" style={{ marginRight: '8px' }}><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path><polyline points="7 10 12 15 17 10"></polyline><line x1="12" y1="15" x2="12" y2="3"></line></svg>
-              Download Template
+              Download Template (.csv)
             </button>
             <label className="btn btn-primary" style={{ textAlign: 'center', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" style={{ marginRight: '8px' }}><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path><polyline points="17 8 12 3 7 8"></polyline><line x1="12" y1="3" x2="12" y2="15"></line></svg>
-              Upload Bulk Products (.csv)
-              <input type="file" id="csvFileInput" accept=".csv" className="hidden-input" onChange={() => setIsImportModalOpen(false)} />
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" style={{ marginRight: '8px' }}><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path><polyline points="17 8 12 3 7 8"></polyline><line x1="12" y1="15" x2="12" y2="3"></line></svg>
+              Upload Bulk Rods (.csv, .xlsx)
+              <input type="file" id="csvFileInput" accept=".csv,.xlsx,.xls" className="hidden-input" onChange={() => setIsImportModalOpen(false)} />
             </label>
           </div>
         </div>
@@ -2121,7 +3223,7 @@ export default function Home() {
         <div className="modal-card modal-card-sm" style={{ padding: '2rem' }}>
           <div className="modal-header">
             <div style={{ display: 'flex', alignItems: 'center', gap: '0.6rem' }}>
-              <div className="modal-icon-badge" style={{ background: 'rgba(124, 58, 237, 0.12)', color: '#7c3aed' }}>
+              <div className="modal-icon-badge" style={{ background: 'rgba(107, 142, 35, 0.12)', color: '#6b8e23' }}>
                 <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                   <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
                   <polyline points="17 8 12 3 7 8"></polyline>
@@ -2130,12 +3232,12 @@ export default function Home() {
               </div>
               <div>
                 <h3 className="modal-title">Bulk Import Guided Rail Stock</h3>
-                <p className="modal-subtitle" style={{ margin: 0 }}>Import linear rail raw stock inventory from CSV</p>
+                <p className="modal-subtitle" style={{ margin: 0 }}>Import linear rail raw stock inventory from CSV or Excel</p>
               </div>
             </div>
             <button type="button" className="modal-close-btn" onClick={() => setIsGrImportModalOpen(false)} aria-label="Close dialog">&times;</button>
           </div>
-          <p className="modal-subtitle" style={{ margin: '1rem 0 1.5rem' }}>Download the template to format your guided rail data correctly, or upload your completed .csv file.</p>
+          <p className="modal-subtitle" style={{ margin: '1rem 0 1.5rem' }}>Download the template (Format: <strong>Sub Category, Diameter (mm), Length (in), Pieces, PCC</strong>), or upload your completed .xlsx / .csv file.</p>
 
           <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
             <button
@@ -2147,14 +3249,565 @@ export default function Home() {
               <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path><polyline points="7 10 12 15 17 10"></polyline><line x1="12" y1="15" x2="12" y2="3"></line></svg>
               Download Guided Rail Template (.csv)
             </button>
-            <label className="btn btn-primary" style={{ textAlign: 'center', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '0.5rem', background: 'linear-gradient(135deg, #7c3aed, #6d28d9)', borderColor: '#6d28d9' }}>
+            <label className="btn btn-primary" style={{ textAlign: 'center', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '0.5rem', background: 'linear-gradient(135deg, #6b8e23, #55731c)', borderColor: '#55731c' }}>
               <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path><polyline points="17 8 12 3 7 8"></polyline><line x1="12" y1="3" x2="12" y2="15"></line></svg>
-              Upload Bulk Guided Rail (.csv)
-              <input type="file" id="grCsvFileInput" accept=".csv" className="hidden-input" onChange={() => setIsGrImportModalOpen(false)} />
+              Upload Bulk Guided Rail (.csv, .xlsx)
+              <input type="file" id="grCsvFileInput" accept=".csv,.xlsx,.xls" className="hidden-input" onChange={() => setIsGrImportModalOpen(false)} />
             </label>
           </div>
         </div>
       </div>
+
+      {/* ════════════════════════════════════════════════════════════════
+          ADMIN MANAGEMENT PANEL: VIEW & DELETE RODS AND RAILS (Admin Only)
+          ════════════════════════════════════════════════════════════════ */}
+      {userProfile?.isAdmin && (
+        <div className={`modal-overlay ${isAdminManageOpen ? '' : 'hidden'}`} style={{ zIndex: 120 }}>
+          <div className="modal-card admin-delete-modal">
+            {/* Header */}
+            <div className="admin-delete-header">
+              <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
+                <div style={{
+                  width: '38px',
+                  height: '38px',
+                  borderRadius: '10px',
+                  background: adminTab === 'rail' ? 'rgba(107, 142, 35, 0.12)' : 'rgba(20, 184, 166, 0.12)',
+                  color: adminTab === 'rail' ? '#6b8e23' : '#0d9488',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  fontSize: '1.2rem'
+                }}>
+                  🛡️
+                </div>
+                <div>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                    <h3 style={{ margin: 0, fontSize: '1.05rem', fontWeight: 700 }}>
+                      Admin Inventory Management
+                    </h3>
+                    <span style={{
+                      background: adminTab === 'rail' ? 'rgba(107, 142, 35, 0.12)' : 'rgba(20, 184, 166, 0.12)',
+                      color: adminTab === 'rail' ? '#6b8e23' : '#0d9488',
+                      border: `1px solid ${adminTab === 'rail' ? 'rgba(107, 142, 35, 0.3)' : 'rgba(20, 184, 166, 0.3)'}`,
+                      fontSize: '0.68rem',
+                      fontWeight: 700,
+                      padding: '0.1rem 0.45rem',
+                      borderRadius: '9999px'
+                    }}>
+                      👑 Dipanshu (Admin)
+                    </span>
+                  </div>
+                  <p style={{ margin: 0, fontSize: '0.78rem', color: 'var(--text-muted, #64748b)' }}>
+                    View all active rods &amp; rails, filter, and permanently delete selected inventory records.
+                  </p>
+                </div>
+              </div>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '0.65rem' }}>
+                <button
+                  type="button"
+                  className="btn-beautiful-back"
+                  onClick={() => {
+                    setIsAdminManageOpen(false);
+                    setSelectedDeleteIds(new Set());
+                  }}
+                  title="Back to Inventory"
+                  style={{ padding: '0.35rem 0.85rem', fontSize: '0.8rem' }}
+                >
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+                    <path d="M19 12H5M12 19l-7-7 7-7" />
+                  </svg>
+                  <span>Back</span>
+                </button>
+                <button
+                  type="button"
+                  className="modal-close-btn"
+                  onClick={() => {
+                    setIsAdminManageOpen(false);
+                    setSelectedDeleteIds(new Set());
+                  }}
+                  aria-label="Close dialog"
+                >
+                  &times;
+                </button>
+              </div>
+            </div>
+
+            {/* Navigation Tabs */}
+            <div className="admin-delete-tabs">
+              <button
+                type="button"
+                className={`admin-tab-btn rod ${adminTab === 'rod' ? 'active' : ''}`}
+                onClick={() => {
+                  setAdminTab('rod');
+                  setAdminSelectedCat('all');
+                  setSelectedDeleteIds(new Set());
+                }}
+              >
+                <span>🥢</span>
+                <span>Rod Stock ({adminRods.length} items • {adminRods.reduce((s, r) => s + (Number(r.quantity) || 0), 0)} bars)</span>
+              </button>
+              <button
+                type="button"
+                className={`admin-tab-btn rail ${adminTab === 'rail' ? 'active' : ''}`}
+                onClick={() => {
+                  setAdminTab('rail');
+                  setAdminSelectedCat('all');
+                  setSelectedDeleteIds(new Set());
+                }}
+              >
+                <span>🛤️</span>
+                <span>Rail Stock ({adminRails.length} items • {adminRails.reduce((s, r) => s + (Number(r.quantity) || 0), 0)} bars)</span>
+              </button>
+            </div>
+
+            {/* Filter Toolbar */}
+            <div className="admin-delete-toolbar">
+              <div style={{ display: 'flex', alignItems: 'center', gap: '0.6rem', flex: 1, minWidth: '240px' }}>
+                <input
+                  type="text"
+                  className="input-control"
+                  style={{ height: '36px', fontSize: '0.82rem', padding: '0 0.75rem', width: '100%', maxWidth: '320px' }}
+                  placeholder={`Search ${adminTab === 'rod' ? 'rods by name, SKU, diameter, length...' : 'rails by brand, model, SKU, length...'}`}
+                  value={adminSearchQuery}
+                  onChange={(e) => setAdminSearchQuery(e.target.value)}
+                />
+                <select
+                  className="input-control"
+                  style={{ height: '36px', fontSize: '0.82rem', padding: '0 0.6rem', width: 'auto', minWidth: '150px' }}
+                  value={adminSelectedCat}
+                  onChange={(e) => setAdminSelectedCat(e.target.value)}
+                >
+                  <option value="all">All {adminTab === 'rod' ? 'Sub Categories' : 'Brands'}</option>
+                  {(adminTab === 'rod' ? rodSubcategories : railSubcategories).map((cat) => (
+                    <option key={cat} value={cat}>{cat}</option>
+                  ))}
+                </select>
+              </div>
+
+              <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                <button
+                  type="button"
+                  className="btn btn-sm btn-secondary"
+                  onClick={selectAllFiltered}
+                  title="Select all currently filtered items"
+                  style={{ height: '34px', fontSize: '0.78rem' }}
+                >
+                  Select All ({(adminTab === 'rod' ? filteredAdminRods : filteredAdminRails).length})
+                </button>
+                {selectedDeleteIds.size > 0 && (
+                  <button
+                    type="button"
+                    className="btn btn-sm btn-secondary"
+                    onClick={deselectAll}
+                    style={{ height: '34px', fontSize: '0.78rem' }}
+                  >
+                    Deselect All
+                  </button>
+                )}
+                <button
+                  type="button"
+                  className="btn btn-sm"
+                  disabled={selectedDeleteIds.size === 0}
+                  onClick={initiateBulkDelete}
+                  style={{
+                    height: '34px',
+                    fontSize: '0.8rem',
+                    fontWeight: 700,
+                    background: selectedDeleteIds.size > 0 ? '#dc2626' : '#f1f5f9',
+                    color: selectedDeleteIds.size > 0 ? '#ffffff' : '#94a3b8',
+                    border: '1px solid',
+                    borderColor: selectedDeleteIds.size > 0 ? '#b91c1c' : '#cbd5e1',
+                    borderRadius: '8px',
+                    cursor: selectedDeleteIds.size > 0 ? 'pointer' : 'not-allowed',
+                    display: 'inline-flex',
+                    alignItems: 'center',
+                    gap: '0.35rem'
+                  }}
+                >
+                  <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+                    <polyline points="3 6 5 6 21 6"></polyline>
+                    <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path>
+                  </svg>
+                  <span>Delete Selected ({selectedDeleteIds.size})</span>
+                </button>
+              </div>
+            </div>
+
+            {/* Table Area */}
+            <div className="admin-delete-table-wrap">
+              {adminTab === 'rod' ? (
+                <table className="admin-delete-table">
+                  <thead>
+                    <tr>
+                      <th style={{ width: '42px', textAlign: 'center' }}>
+                        <input
+                          type="checkbox"
+                          checked={filteredAdminRods.length > 0 && filteredAdminRods.every((r: any) => selectedDeleteIds.has(String(r.id)))}
+                          onChange={(e) => {
+                            if (e.target.checked) selectAllFiltered();
+                            else deselectAll();
+                          }}
+                        />
+                      </th>
+                      <th>Sub Category</th>
+                      <th>SKU</th>
+                      <th>Diameter</th>
+                      <th>Length (in)</th>
+                      <th>Quantity</th>
+                      <th>Notes</th>
+                      <th style={{ width: '80px', textAlign: 'center' }}>Action</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {filteredAdminRods.length === 0 ? (
+                      <tr>
+                        <td colSpan={8} style={{ textAlign: 'center', padding: '3rem 1rem', color: 'var(--text-muted, #94a3b8)' }}>
+                          <div style={{ fontSize: '1.5rem', marginBottom: '0.3rem' }}>🔍</div>
+                          <div style={{ fontWeight: 600 }}>No rod stock records found</div>
+                          <div style={{ fontSize: '0.75rem', marginTop: '0.2rem' }}>No rods match the active filter or search keywords.</div>
+                        </td>
+                      </tr>
+                    ) : (
+                      filteredAdminRods.map((rod: any) => {
+                        const isSelected = selectedDeleteIds.has(String(rod.id));
+                        return (
+                          <tr key={rod.id} className={isSelected ? 'selected' : ''}>
+                            <td style={{ textAlign: 'center' }}>
+                              <input
+                                type="checkbox"
+                                checked={isSelected}
+                                onChange={() => toggleSelectDeleteItem(String(rod.id))}
+                              />
+                            </td>
+                            <td>
+                              <span style={{
+                                fontWeight: 700,
+                                color: '#0d9488',
+                                background: 'rgba(20, 184, 166, 0.1)',
+                                padding: '0.15rem 0.45rem',
+                                borderRadius: '4px',
+                                fontSize: '0.75rem'
+                              }}>
+                                {rod.category || rod.name || 'Chrome Rod'}
+                              </span>
+                            </td>
+                            <td style={{ fontFamily: 'monospace', fontSize: '0.75rem', color: '#64748b' }}>
+                              {rod.sku || '—'}
+                            </td>
+                            <td style={{ fontWeight: 700 }}>
+                              {rod.diameterMm} mm
+                            </td>
+                            <td>
+                              {rod.lengthIn || rod.lengthFt || 0} in
+                            </td>
+                            <td>
+                              <span style={{
+                                fontWeight: 700,
+                                background: 'rgba(14, 165, 233, 0.1)',
+                                color: '#0284c7',
+                                padding: '0.1rem 0.4rem',
+                                borderRadius: '4px'
+                              }}>
+                                {rod.quantity || 1} bars
+                              </span>
+                            </td>
+                            <td style={{ fontSize: '0.75rem', color: '#64748b', maxWidth: '180px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                              {rod.notes || '—'}
+                            </td>
+                            <td style={{ textAlign: 'center' }}>
+                              <button
+                                type="button"
+                                className="btn btn-xs"
+                                title="Delete this rod item"
+                                onClick={() => initiateSingleDelete(rod, 'rod')}
+                                style={{
+                                  background: 'rgba(239, 68, 68, 0.1)',
+                                  color: '#dc2626',
+                                  border: '1px solid rgba(239, 68, 68, 0.3)',
+                                  borderRadius: '6px',
+                                  padding: '0.2rem 0.5rem',
+                                  cursor: 'pointer'
+                                }}
+                              >
+                                🗑️ Delete
+                              </button>
+                            </td>
+                          </tr>
+                        );
+                      })
+                    )}
+                  </tbody>
+                </table>
+              ) : (
+                <table className="admin-delete-table">
+                  <thead>
+                    <tr>
+                      <th style={{ width: '42px', textAlign: 'center' }}>
+                        <input
+                          type="checkbox"
+                          checked={filteredAdminRails.length > 0 && filteredAdminRails.every((s: any) => selectedDeleteIds.has(String(s.id)))}
+                          onChange={(e) => {
+                            if (e.target.checked) selectAllFiltered();
+                            else deselectAll();
+                          }}
+                        />
+                      </th>
+                      <th>Brand / Sub Category</th>
+                      <th>Model</th>
+                      <th>SKU</th>
+                      <th>Pitch (PCC)</th>
+                      <th>Length (mm)</th>
+                      <th>Quantity</th>
+                      <th>Notes</th>
+                      <th style={{ width: '80px', textAlign: 'center' }}>Action</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {filteredAdminRails.length === 0 ? (
+                      <tr>
+                        <td colSpan={9} style={{ textAlign: 'center', padding: '3rem 1rem', color: 'var(--text-muted, #94a3b8)' }}>
+                          <div style={{ fontSize: '1.5rem', marginBottom: '0.3rem' }}>🔍</div>
+                          <div style={{ fontWeight: 600 }}>No guided rail stock records found</div>
+                          <div style={{ fontSize: '0.75rem', marginTop: '0.2rem' }}>No rails match the active filter or search keywords.</div>
+                        </td>
+                      </tr>
+                    ) : (
+                      filteredAdminRails.map((rail: any) => {
+                        const isSelected = selectedDeleteIds.has(String(rail.id));
+                        return (
+                          <tr key={rail.id} className={isSelected ? 'selected' : ''}>
+                            <td style={{ textAlign: 'center' }}>
+                              <input
+                                type="checkbox"
+                                checked={isSelected}
+                                onChange={() => toggleSelectDeleteItem(String(rail.id))}
+                              />
+                            </td>
+                            <td>
+                              <span style={{
+                                fontWeight: 700,
+                                color: '#6b8e23',
+                                background: 'rgba(107, 142, 35, 0.1)',
+                                padding: '0.15rem 0.45rem',
+                                borderRadius: '4px',
+                                fontSize: '0.75rem'
+                              }}>
+                                {rail.category || rail.brand || 'HIWIN'}
+                              </span>
+                            </td>
+                            <td style={{ fontWeight: 700 }}>
+                              {rail.modelName || '—'}
+                            </td>
+                            <td style={{ fontFamily: 'monospace', fontSize: '0.75rem', color: '#64748b' }}>
+                              {rail.sku || '—'}
+                            </td>
+                            <td>
+                              {rail.pitchMm || 60} mm
+                            </td>
+                            <td>
+                              {rail.lengthMm || 0} mm ({((rail.lengthMm || 0) / 25.4).toFixed(1)} in)
+                            </td>
+                            <td>
+                              <span style={{
+                                fontWeight: 700,
+                                background: 'rgba(107, 142, 35, 0.1)',
+                                color: '#55731c',
+                                padding: '0.1rem 0.4rem',
+                                borderRadius: '4px'
+                              }}>
+                                {rail.quantity || 1} bars
+                              </span>
+                            </td>
+                            <td style={{ fontSize: '0.75rem', color: '#64748b', maxWidth: '160px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                              {rail.notes || '—'}
+                            </td>
+                            <td style={{ textAlign: 'center' }}>
+                              <button
+                                type="button"
+                                className="btn btn-xs"
+                                title="Delete this rail item"
+                                onClick={() => initiateSingleDelete(rail, 'rail')}
+                                style={{
+                                  background: 'rgba(239, 68, 68, 0.1)',
+                                  color: '#dc2626',
+                                  border: '1px solid rgba(239, 68, 68, 0.3)',
+                                  borderRadius: '6px',
+                                  padding: '0.2rem 0.5rem',
+                                  cursor: 'pointer'
+                                }}
+                              >
+                                🗑️ Delete
+                              </button>
+                            </td>
+                          </tr>
+                        );
+                      })
+                    )}
+                  </tbody>
+                </table>
+              )}
+            </div>
+
+            {/* Footer Summary */}
+            <div className="admin-delete-footer">
+              <div style={{ fontSize: '0.8rem', color: 'var(--text-muted, #64748b)' }}>
+                Showing <strong>{(adminTab === 'rod' ? filteredAdminRods : filteredAdminRails).length}</strong> of{' '}
+                <strong>{(adminTab === 'rod' ? adminRods : adminRails).length}</strong> records •{' '}
+                <strong style={{ color: selectedDeleteIds.size > 0 ? '#dc2626' : undefined }}>
+                  {selectedDeleteIds.size} selected
+                </strong>
+              </div>
+              <div style={{ display: 'flex', gap: '0.5rem' }}>
+                <button
+                  type="button"
+                  className="btn btn-sm btn-secondary"
+                  onClick={() => setIsAdminManageOpen(false)}
+                >
+                  Close
+                </button>
+                {selectedDeleteIds.size > 0 && (
+                  <button
+                    type="button"
+                    className="btn btn-sm btn-danger"
+                    onClick={initiateBulkDelete}
+                    style={{ background: '#dc2626', borderColor: '#b91c1c', color: '#fff', fontWeight: 700 }}
+                  >
+                    🗑️ Delete Selected ({selectedDeleteIds.size})
+                  </button>
+                )}
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ════════════════════════════════════════════════════════════════
+          CONFIRMATION POPUP MODAL (Admin Only)
+          ════════════════════════════════════════════════════════════════ */}
+      {isConfirmDeleteOpen && (
+        <div className="modal-overlay" style={{ zIndex: 130 }}>
+          <div className="modal-card confirm-delete-card">
+            <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', marginBottom: '1rem' }}>
+              <div style={{
+                width: '42px',
+                height: '42px',
+                borderRadius: '50%',
+                background: 'rgba(239, 68, 68, 0.15)',
+                color: '#dc2626',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                fontSize: '1.4rem'
+              }}>
+                ⚠️
+              </div>
+              <div>
+                <h3 style={{ margin: 0, fontSize: '1.1rem', fontWeight: 700, color: '#dc2626' }}>
+                  Confirm Permanent Deletion
+                </h3>
+                <p style={{ margin: 0, fontSize: '0.78rem', color: 'var(--text-muted, #64748b)' }}>
+                  This action is irreversible and will delete records from the database.
+                </p>
+              </div>
+            </div>
+
+            <p style={{ fontSize: '0.85rem', color: 'var(--text-main, #1e293b)', marginBottom: '0.75rem' }}>
+              Are you sure you want to delete the following <strong>{itemsToConfirmDelete.length} item(s)</strong> (total{' '}
+              <strong>{itemsToConfirmDelete.reduce((s, i) => s + i.quantity, 0)} bars</strong>) from active inventory?
+            </p>
+
+            <div style={{
+              background: 'var(--bg-surface-subtle, #f8fafc)',
+              border: '1px solid var(--border-subtle, #e2e8f0)',
+              borderRadius: '8px',
+              padding: '0.75rem',
+              maxHeight: '180px',
+              overflowY: 'auto',
+              marginBottom: '1.25rem'
+            }}>
+              {itemsToConfirmDelete.map((item) => (
+                <div
+                  key={item.id}
+                  style={{
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'space-between',
+                    padding: '0.35rem 0',
+                    borderBottom: '1px dashed var(--border-subtle, #e2e8f0)',
+                    fontSize: '0.8rem'
+                  }}
+                >
+                  <div>
+                    <span style={{ fontWeight: 700, color: item.type === 'rod' ? '#0d9488' : '#6b8e23' }}>
+                      {item.title}
+                    </span>
+                    <span style={{ display: 'block', fontSize: '0.72rem', color: '#64748b' }}>
+                      {item.subtitle}
+                    </span>
+                  </div>
+                  <span style={{
+                    fontWeight: 700,
+                    background: 'rgba(239, 68, 68, 0.1)',
+                    color: '#dc2626',
+                    padding: '0.1rem 0.4rem',
+                    borderRadius: '4px',
+                    fontSize: '0.72rem'
+                  }}>
+                    {item.quantity} bar(s)
+                  </span>
+                </div>
+              ))}
+            </div>
+
+            <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '0.6rem' }}>
+              <button
+                type="button"
+                className="btn btn-secondary"
+                disabled={isDeletingItems}
+                onClick={() => {
+                  setIsConfirmDeleteOpen(false);
+                  setItemsToConfirmDelete([]);
+                }}
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                className="btn btn-danger"
+                disabled={isDeletingItems}
+                onClick={executeDeleteItems}
+                style={{
+                  background: '#dc2626',
+                  borderColor: '#b91c1c',
+                  color: '#ffffff',
+                  fontWeight: 700,
+                  display: 'inline-flex',
+                  alignItems: 'center',
+                  gap: '0.4rem'
+                }}
+              >
+                {isDeletingItems ? (
+                  <>
+                    <span style={{
+                      width: '14px',
+                      height: '14px',
+                      border: '2px solid rgba(255,255,255,0.3)',
+                      borderTopColor: '#fff',
+                      borderRadius: '50%',
+                      animation: 'rodsync-spin 0.8s linear infinite'
+                    }} />
+                    <span>Deleting...</span>
+                  </>
+                ) : (
+                  <>
+                    <span>🗑️ Yes, Delete Permanently</span>
+                  </>
+                )}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* ════════════════════════════════════════════════════════════════
           MODAL: ADD / EDIT GUIDED RAIL STOCK
@@ -2163,7 +3816,7 @@ export default function Home() {
         <div className="modal-card">
           <div className="modal-header">
             <div className="modal-title-group">
-              <div className="modal-icon-badge" style={{ background: 'rgba(124, 58, 237, 0.12)', color: '#7c3aed' }}>
+              <div className="modal-icon-badge" style={{ background: 'rgba(107, 142, 35, 0.12)', color: '#6b8e23' }}>
                 <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
                   <path d="M3 5h18M3 12h18M3 19h18" />
                 </svg>
@@ -2173,30 +3826,68 @@ export default function Home() {
                 <p className="modal-subtitle">Specify rail model, stock bar length, and quantity in storage</p>
               </div>
             </div>
-            <button type="button" className="modal-close-btn" id="btnCloseGrStockModal" aria-label="Close dialog">&times;</button>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '0.65rem' }}>
+              <button
+                type="button"
+                className="btn-beautiful-back"
+                id="btnGrStockHeaderBack"
+                onClick={() => {
+                  const overlay = document.getElementById('grStockModalOverlay');
+                  if (overlay) overlay.classList.add('hidden');
+                }}
+                title="Back to Stock"
+                style={{ padding: '0.35rem 0.85rem', fontSize: '0.8rem' }}
+              >
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+                  <path d="M19 12H5M12 19l-7-7 7-7" />
+                </svg>
+                <span>Back</span>
+              </button>
+              <button type="button" className="modal-close-btn" id="btnCloseGrStockModal" aria-label="Close dialog">&times;</button>
+            </div>
           </div>
 
           <form id="grStockForm" className="modal-form" autoComplete="off">
             <input type="hidden" id="grStockEditId" value="" />
 
-            {/* Model Selection */}
+            {/* Brand & Model & PCC Selection */}
             <div className="form-row">
-              <div className="form-group col-12">
+              <div className="form-group col-4">
+                <label htmlFor="formGrBrandSelect" className="field-label">
+                  Rail Catagorie <span className="required">*</span>
+                </label>
+                <select id="formGrBrandSelect" className="input-control font-semibold" required suppressHydrationWarning>
+                  <option value="">— Select Catagorie —</option>
+                </select>
+                <div className="field-hint">Catagorie from DB</div>
+              </div>
+
+              <div className="form-group col-4">
                 <label htmlFor="formGrModelSelect" className="field-label">
                   Guided Rail Model <span className="required">*</span>
                 </label>
-                <select id="formGrModelSelect" className="input-control font-mono" required>
+                <select id="formGrModelSelect" className="input-control font-mono" required suppressHydrationWarning>
                   <option value="">— Select Model —</option>
-                  <option value="HGR15" data-pitch="60">HGR15</option>
-                  <option value="HGR20" data-pitch="60">HGR20</option>
-                  <option value="HGR25" data-pitch="60">HGR25</option>
-                  <option value="HGR30" data-pitch="80">HGR30</option>
-                  <option value="HGR35" data-pitch="80">HGR35</option>
-                  <option value="HGR45" data-pitch="105">HGR45</option>
-                  <option value="HGR55" data-pitch="120">HGR55</option>
-                  <option value="HGR65" data-pitch="150">HGR65</option>
                 </select>
-                <div className="field-hint" id="formGrModelSpecHint">Select rail model to configure stock</div>
+                <div className="field-hint" id="formGrModelSpecHint">Select rail model</div>
+              </div>
+
+              <div className="form-group col-4">
+                <label htmlFor="formGrPcc" className="field-label">
+                  PCC (Pitch) <span className="field-unit">(mm)</span>
+                </label>
+                <div className="input-with-icon">
+                  <input
+                    type="number"
+                    id="formGrPcc"
+                    className="input-control font-mono font-semibold"
+                    placeholder="60"
+                    readOnly
+                    style={{ backgroundColor: 'var(--bg-card-subtle, rgba(124, 58, 237, 0.05))', cursor: 'default' }}
+                  />
+                  <span className="input-addon">mm</span>
+                </div>
+                <div className="field-hint" id="formGrPccHint">Database PCC</div>
               </div>
             </div>
 
@@ -2271,7 +3962,7 @@ export default function Home() {
 
             <div className="modal-footer">
               <button type="button" className="btn btn-secondary" id="btnCancelGrStockModal">Cancel</button>
-              <button type="submit" className="btn btn-primary" id="btnSaveGrStock" style={{ background: 'linear-gradient(135deg, #7c3aed, #6d28d9)', borderColor: '#6d28d9' }}>
+              <button type="submit" className="btn btn-primary" id="btnSaveGrStock" style={{ background: 'linear-gradient(135deg, #6b8e23, #55731c)', borderColor: '#55731c' }}>
                 <span id="btnSaveGrStockText">Save Rail to Stock</span>
               </button>
             </div>
@@ -2286,7 +3977,7 @@ export default function Home() {
         <div className="modal-card">
           <div className="modal-header">
             <div className="modal-title-group">
-              <div className="modal-icon-badge" style={{ background: 'rgba(124, 58, 237, 0.12)', color: '#7c3aed' }}>
+              <div className="modal-icon-badge" style={{ background: 'rgba(107, 142, 35, 0.12)', color: '#6b8e23' }}>
                 <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
                   <circle cx="6" cy="6" r="3"></circle>
                   <circle cx="6" cy="18" r="3"></circle>
@@ -2307,10 +3998,10 @@ export default function Home() {
             <input type="hidden" id="grCutStockId" value="" />
 
             {/* Source Bar Information Card */}
-            <div className="cut-source-card" style={{ borderColor: 'rgba(124, 58, 237, 0.25)', background: 'rgba(124, 58, 237, 0.05)', padding: '0.85rem 1rem', borderRadius: 'var(--radius-lg)', marginBottom: '1rem', border: '1px solid var(--border-subtle)' }}>
+            <div className="cut-source-card" style={{ borderColor: 'rgba(107, 142, 35, 0.25)', background: 'rgba(107, 142, 35, 0.05)', padding: '0.85rem 1rem', borderRadius: 'var(--radius-lg)', marginBottom: '1rem', border: '1px solid var(--border-subtle)' }}>
               <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-                <div className="cut-source-title font-mono" id="grCutSourceModel" style={{ color: '#7c3aed', fontWeight: 700, fontSize: '1.05rem' }}>HGR20</div>
-                <span className="badge badge-pill badge-primary" id="grCutSourceQty" style={{ background: '#7c3aed', fontSize: '0.75rem' }}>0 in stock</span>
+                <div className="cut-source-title font-mono" id="grCutSourceModel" style={{ color: '#6b8e23', fontWeight: 700, fontSize: '1.05rem' }}>HGR20</div>
+                <span className="badge badge-pill badge-primary" id="grCutSourceQty" style={{ background: '#6b8e23', fontSize: '0.75rem' }}>0 in stock</span>
               </div>
               <div className="cut-source-dims" style={{ marginTop: '5px', fontSize: '0.825rem', color: 'var(--text-secondary)' }}>
                 Stock Bar Length: <strong id="grCutSourceLength" className="font-mono" style={{ color: 'var(--text-main)' }}>—</strong> &bull; Hole Pitch: <strong id="grCutSourcePitch" className="font-mono" style={{ color: 'var(--text-main)' }}>—</strong>
@@ -2376,11 +4067,18 @@ export default function Home() {
               </div>
             </div>
 
-            {/* Operator & Assignment (Saved to Google Sheet Cut Logs) */}
+            {/* Operator & Assignment (Saved to Firebase Cut Logs) */}
             <div className="form-row">
               <div className="form-group col-6">
-                <label htmlFor="grCutAssignBy" className="field-label">Assigned By <span className="optional">(Optional)</span></label>
-                <input type="text" id="grCutAssignBy" className="input-control" placeholder="e.g. Supervisor" />
+                <label htmlFor="grCutAssignBy" className="field-label" id="grCutAssignByLabel">Assigned By <span className="optional">(Locked)</span></label>
+                <input
+                  type="text"
+                  id="grCutAssignBy"
+                  className="input-control"
+                  placeholder="e.g. Supervisor"
+                  readOnly
+                  style={{ backgroundColor: 'var(--bg-surface-subtle, #f1f5f9)', cursor: 'not-allowed', fontWeight: 600 }}
+                />
               </div>
               <div className="form-group col-6">
                 <label htmlFor="grCutAssignTo" className="field-label">Assigned To <span className="optional">(Optional)</span></label>
@@ -2399,10 +4097,209 @@ export default function Home() {
               </button>
               <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
                 <button type="button" className="btn btn-secondary" id="btnCancelGrCutModal">Cancel</button>
-                <button type="submit" className="btn btn-primary" id="btnConfirmGrCut" style={{ background: 'linear-gradient(135deg, #7c3aed, #6d28d9)', borderColor: '#6d28d9' }}>
+                <button type="submit" className="btn btn-primary" id="btnConfirmGrCut" style={{ background: 'linear-gradient(135deg, #6b8e23, #55731c)', borderColor: '#55731c' }}>
                   <span id="btnConfirmGrCutText">✂️ Confirm &amp; Execute Cut</span>
                 </button>
               </div>
+            </div>
+          </form>
+        </div>
+      </div>
+
+      {/* ════════════════════════════════════════════════════════════════
+          MODAL: CONFIRM & EXECUTE GUIDED RAIL MULTI-CUT PLAN
+          ════════════════════════════════════════════════════════════════ */}
+      <div className="modal-overlay hidden" id="executeGrPlanModalOverlay" role="dialog" aria-modal="true" aria-labelledby="executeGrPlanModalTitle">
+        <div className="modal-card" style={{ maxWidth: '580px', width: '95%', borderRadius: '20px', padding: '1.75rem 2rem', background: 'var(--bg-surface, #ffffff)', boxShadow: '0 25px 50px -12px rgba(0, 0, 0, 0.25)' }}>
+          <div className="modal-header" style={{ marginBottom: '1.25rem', paddingBottom: 0, borderBottom: 'none' }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
+              <div style={{
+                width: '40px',
+                height: '40px',
+                borderRadius: '12px',
+                background: '#f0f7e6',
+                color: '#6b8e23',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center'
+              }}>
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+                  <circle cx="6" cy="6" r="3"></circle>
+                  <circle cx="6" cy="18" r="3"></circle>
+                  <line x1="20" y1="4" x2="8.12" y2="15.88"></line>
+                  <line x1="14.47" y1="14.48" x2="20" y2="20"></line>
+                  <line x1="8.12" y1="8.12" x2="12" y2="12"></line>
+                </svg>
+              </div>
+              <h3 className="modal-title" id="executeGrPlanModalTitle" style={{ fontSize: '1.25rem', fontWeight: 700, margin: 0, color: 'var(--text-main, #0f172a)' }}>
+                Execute Cutting Plan
+              </h3>
+            </div>
+            <button type="button" className="modal-close-btn" id="btnCloseExecuteGrPlanModal" aria-label="Close dialog" style={{ fontSize: '1.35rem', color: '#94a3b8' }}>&times;</button>
+          </div>
+
+          <form id="executeGrPlanForm" className="modal-form" autoComplete="off">
+            <div id="executeGrPlanSummaryDetails" style={{ marginBottom: '1rem' }}>
+              {/* Populated dynamically via JS: Summary Banner & Step Cards */}
+            </div>
+
+            <div className="form-group" style={{ marginBottom: '1.1rem' }}>
+              <label style={{ display: 'flex', alignItems: 'center', gap: '0.65rem', cursor: 'pointer', userSelect: 'none' }}>
+                <input
+                  type="checkbox"
+                  id="grPlanAutoAddRemnants"
+                  defaultChecked
+                  style={{
+                    width: '18px',
+                    height: '18px',
+                    accentColor: '#6b8e23',
+                    cursor: 'pointer',
+                    borderRadius: '4px'
+                  }}
+                />
+                <span style={{ fontSize: '0.92rem', fontWeight: 600, color: 'var(--text-main, #0f172a)' }}>
+                  Add offcut to stock
+                </span>
+              </label>
+            </div>
+
+            <div className="form-group" style={{ marginBottom: '1.1rem' }}>
+              <label htmlFor="grPlanReasonInput" className="field-label" style={{ fontSize: '0.88rem', fontWeight: 700, color: 'var(--text-main, #0f172a)', marginBottom: '0.4rem', display: 'block' }}>
+                Work Order / Reference
+              </label>
+              <input
+                type="text"
+                id="grPlanReasonInput"
+                className="input-control"
+                placeholder="e.g. WO-2026-001"
+                style={{
+                  height: '42px',
+                  borderRadius: '10px',
+                  border: '1px solid var(--border-subtle, #e2e8f0)',
+                  fontSize: '0.88rem',
+                  padding: '0 0.85rem',
+                  background: 'var(--bg-surface, #ffffff)',
+                  color: 'var(--text-main, #0f172a)',
+                  width: '100%'
+                }}
+              />
+            </div>
+
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem', marginBottom: '1.5rem' }}>
+              <div>
+                <label htmlFor="grPlanCreatedBySelect" className="field-label" id="grPlanCreatedByLabel" style={{ fontSize: '0.88rem', fontWeight: 700, color: 'var(--text-main, #0f172a)', marginBottom: '0.4rem', display: 'block' }}>
+                  Created By
+                </label>
+                <div style={{ position: 'relative' }}>
+                  <span style={{ position: 'absolute', left: '12px', top: '50%', transform: 'translateY(-50%)', pointerEvents: 'none', fontSize: '0.9rem', color: '#64748b' }}>
+                    👤
+                  </span>
+                  <select
+                    id="grPlanCreatedBySelect"
+                    className="input-control font-semibold"
+                    style={{
+                      height: '42px',
+                      paddingLeft: '34px',
+                      borderRadius: '10px',
+                      border: '1px solid var(--border-subtle, #e2e8f0)',
+                      fontSize: '0.88rem',
+                      fontWeight: 600,
+                      background: 'var(--bg-surface, #ffffff)',
+                      color: 'var(--text-main, #0f172a)',
+                      width: '100%',
+                      cursor: 'pointer'
+                    }}
+                  >
+                    <option value="Dipanshu">Dipanshu</option>
+                    <option value="Bhawna">Bhawna</option>
+                    <option value="Roshini">Roshini</option>
+                    <option value="Suman">Suman</option>
+                    <option value="Rajwant">Rajwant</option>
+                  </select>
+                  <input type="hidden" id="grPlanCreatedByInput" />
+                </div>
+              </div>
+
+              <div>
+                <label htmlFor="grPlanAssignedBySelect" className="field-label" style={{ fontSize: '0.88rem', fontWeight: 700, color: 'var(--text-main, #0f172a)', marginBottom: '0.4rem', display: 'block' }}>
+                  Assigned To
+                </label>
+                <div style={{ position: 'relative' }}>
+                  <span style={{ position: 'absolute', left: '12px', top: '50%', transform: 'translateY(-50%)', pointerEvents: 'none', fontSize: '0.9rem', color: '#64748b' }}>
+                    👤
+                  </span>
+                  <select
+                    id="grPlanAssignedBySelect"
+                    className="input-control"
+                    style={{
+                      height: '42px',
+                      paddingLeft: '34px',
+                      borderRadius: '10px',
+                      border: '1px solid var(--border-subtle, #e2e8f0)',
+                      fontSize: '0.88rem',
+                      fontWeight: 500,
+                      background: 'var(--bg-surface, #ffffff)',
+                      color: 'var(--text-main, #0f172a)',
+                      width: '100%',
+                      cursor: 'pointer'
+                    }}
+                  >
+                    <option value="">Select user</option>
+                    <option value="Dipanshu">Dipanshu</option>
+                    <option value="Bhawna">Bhawna</option>
+                    <option value="Roshini">Roshini</option>
+                    <option value="Suman">Suman</option>
+                    <option value="Rajwant">Rajwant</option>
+                  </select>
+                  <input type="hidden" id="grPlanAssignedByInput" />
+                </div>
+              </div>
+            </div>
+
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'flex-end', gap: '0.85rem' }}>
+              <button
+                type="button"
+                className="btn"
+                id="btnCancelExecuteGrPlanModal"
+                style={{
+                  height: '42px',
+                  padding: '0 1.5rem',
+                  borderRadius: '9999px',
+                  border: '1px solid var(--border-subtle, #e2e8f0)',
+                  background: 'var(--bg-surface, #ffffff)',
+                  color: 'var(--text-main, #0f172a)',
+                  fontWeight: 600,
+                  fontSize: '0.88rem',
+                  cursor: 'pointer'
+                }}
+              >
+                Cancel
+              </button>
+              <button
+                type="submit"
+                className="btn btn-primary"
+                id="btnConfirmExecuteGrPlan"
+                style={{
+                  height: '42px',
+                  padding: '0 1.6rem',
+                  borderRadius: '9999px',
+                  background: '#6b8e23',
+                  borderColor: '#55731c',
+                  color: '#ffffff',
+                  fontWeight: 700,
+                  fontSize: '0.88rem',
+                  display: 'inline-flex',
+                  alignItems: 'center',
+                  gap: '0.45rem',
+                  cursor: 'pointer',
+                  boxShadow: '0 2px 6px rgba(107, 142, 35, 0.25)'
+                }}
+              >
+                <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                  <polyline points="20 6 9 17 4 12"></polyline>
+                </svg>
+                <span id="btnConfirmExecuteGrPlanText">Apply to Stock</span>
+              </button>
             </div>
           </form>
         </div>
@@ -2424,7 +4321,25 @@ export default function Home() {
                 <p className="modal-subtitle">Specify dimensions and initial quantity</p>
               </div>
             </div>
-            <button type="button" className="modal-close-btn" id="btnCloseRodModal" aria-label="Close dialog">&times;</button>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '0.65rem' }}>
+              <button
+                type="button"
+                className="btn-beautiful-back"
+                id="btnRodStockHeaderBack"
+                onClick={() => {
+                  const overlay = document.getElementById('rodModalOverlay');
+                  if (overlay) overlay.classList.add('hidden');
+                }}
+                title="Back to Stock"
+                style={{ padding: '0.35rem 0.85rem', fontSize: '0.8rem' }}
+              >
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+                  <path d="M19 12H5M12 19l-7-7 7-7" />
+                </svg>
+                <span>Back</span>
+              </button>
+              <button type="button" className="modal-close-btn" id="btnCloseRodModal" aria-label="Close dialog">&times;</button>
+            </div>
           </div>
 
           <form id="rodForm" className="modal-form" autoComplete="off">
@@ -2432,9 +4347,13 @@ export default function Home() {
 
             <div className="form-row">
               <div className="form-group col-12">
-                <label htmlFor="formRodName" className="field-label">Rod Name or Material Type <span className="required">*</span></label>
-                <input type="text" id="formRodName" className="input-control" placeholder="e.g. TMT Steel Rebar, Brass Rod, 304 Stainless" required />
-                <div className="field-hint">e.g. TMT Rebar Fe500D, Mild Steel Round Bar, Copper Rod</div>
+                <label htmlFor="formRodName" className="field-label">
+                  Rod Catagorie <span className="required">*</span>
+                </label>
+                <select id="formRodName" className="input-control font-semibold" required suppressHydrationWarning>
+                  <option value="Chrome Rod">Chrome Rod</option>
+                </select>
+                <div className="field-hint">Catagorie from DB</div>
               </div>
             </div>
 
@@ -2442,7 +4361,7 @@ export default function Home() {
               <div className="form-group col-6">
                 <label htmlFor="formDiameterMm" className="field-label">Diameter (mm) <span className="required">*</span></label>
                 <div className="input-with-icon">
-                  <input type="number" id="formDiameterMm" className="input-control" placeholder="12" step="0.1" min="0.1" required />
+                  <input type="text" id="formDiameterMm" className="input-control" placeholder="e.g. 12 or 100x100" required />
                   <span className="input-addon">mm</span>
                 </div>
               </div>
@@ -2557,7 +4476,25 @@ export default function Home() {
                 <p className="modal-subtitle">Deduct required length and automatically save the remaining offcut piece</p>
               </div>
             </div>
-            <button type="button" className="modal-close-btn" id="btnCloseCutModal" aria-label="Close dialog">&times;</button>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '0.65rem' }}>
+              <button
+                type="button"
+                className="btn-beautiful-back"
+                id="btnCutModalHeaderBack"
+                onClick={() => {
+                  const overlay = document.getElementById('cutModalOverlay');
+                  if (overlay) overlay.classList.add('hidden');
+                }}
+                title="Back to Stock"
+                style={{ padding: '0.35rem 0.85rem', fontSize: '0.8rem' }}
+              >
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+                  <path d="M19 12H5M12 19l-7-7 7-7" />
+                </svg>
+                <span>Back</span>
+              </button>
+              <button type="button" className="modal-close-btn" id="btnCloseCutModal" aria-label="Close dialog">&times;</button>
+            </div>
           </div>
 
           <form id="cutForm" className="modal-form" autoComplete="off">
@@ -2684,10 +4621,17 @@ export default function Home() {
 
             <div className="form-row">
               <div className="form-group col-6">
-                <label htmlFor="cutCreatedByInput" className="field-label">
-                  👤 Job Created By <span className="optional">(Optional)</span>
+                <label htmlFor="cutCreatedByInput" className="field-label" id="cutCreatedByLabel">
+                  👤 Job Created By <span className="optional">(Locked)</span>
                 </label>
-                <input type="text" id="cutCreatedByInput" className="input-control" placeholder="e.g. Ahmed, Supervisor" />
+                <input
+                  type="text"
+                  id="cutCreatedByInput"
+                  className="input-control"
+                  placeholder="e.g. Ahmed, Supervisor"
+                  readOnly
+                  style={{ backgroundColor: 'var(--bg-surface-subtle, #f1f5f9)', cursor: 'not-allowed', fontWeight: 600 }}
+                />
               </div>
               <div className="form-group col-6">
                 <label htmlFor="cutAssignedByInput" className="field-label">
@@ -2707,13 +4651,22 @@ export default function Home() {
         </div>
       </div>
 
-      {/*  MODAL: CONFIRM & EXECUTE MULTI-CUT OPTIMIZATION PLAN  */}
+      {/*  MODAL: CONFIRM & EXECUTE CUTTING PLAN (Exact Match to User Mockup)  */}
       <div className="modal-overlay hidden" id="executePlanModalOverlay" role="dialog" aria-modal="true" aria-labelledby="executePlanModalTitle">
-        <div className="modal-card modal-card-lg">
-          <div className="modal-header">
-            <div className="modal-title-group">
-              <div className="modal-icon-badge badge-scissors-icon">
-                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+        <div className="modal-card" style={{ maxWidth: '580px', width: '95%', borderRadius: '20px', padding: '1.75rem 2rem', background: 'var(--bg-surface, #ffffff)', boxShadow: '0 25px 50px -12px rgba(0, 0, 0, 0.25)' }}>
+          <div className="modal-header" style={{ marginBottom: '1.25rem', paddingBottom: 0, borderBottom: 'none' }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
+              <div style={{
+                width: '40px',
+                height: '40px',
+                borderRadius: '12px',
+                background: '#e0f7f6',
+                color: '#0d9488',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center'
+              }}>
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
                   <circle cx="6" cy="6" r="3"></circle>
                   <circle cx="6" cy="18" r="3"></circle>
                   <line x1="20" y1="4" x2="8.12" y2="15.88"></line>
@@ -2721,50 +4674,174 @@ export default function Home() {
                   <line x1="8.12" y1="8.12" x2="12" y2="12"></line>
                 </svg>
               </div>
-              <div>
-                <h3 className="modal-title" id="executePlanModalTitle">Execute Multi-Rod Cutting Plan</h3>
-                <p className="modal-subtitle">Review inventory deductions and offcut remnant additions before applying</p>
-              </div>
+              <h3 className="modal-title" id="executePlanModalTitle" style={{ fontSize: '1.25rem', fontWeight: 700, margin: 0, color: 'var(--text-main, #0f172a)' }}>
+                Execute Cutting Plan
+              </h3>
             </div>
-            <button type="button" className="modal-close-btn" id="btnCloseExecutePlanModal" aria-label="Close dialog">&times;</button>
+            <button type="button" className="modal-close-btn" id="btnCloseExecutePlanModal" aria-label="Close dialog" style={{ fontSize: '1.35rem', color: '#94a3b8' }}>&times;</button>
           </div>
 
           <form id="executePlanForm" className="modal-form" autoComplete="off">
-            <div className="plan-confirm-card" id="executePlanSummaryDetails">
-              {/*  Populated dynamically via JS  */}
+            <div id="executePlanSummaryDetails" style={{ marginBottom: '1rem' }}>
+              {/*  Populated dynamically via JS: Summary Banner & Step Cards  */}
             </div>
 
-            <div className="form-group">
-              <label className="checkbox-label">
-                <input type="checkbox" id="planAutoAddRemnants" defaultChecked />
-                <span>Automatically add all generated offcut remnant pieces back into stock inventory</span>
+            <div className="form-group" style={{ marginBottom: '1.1rem' }}>
+              <label style={{ display: 'flex', alignItems: 'center', gap: '0.65rem', cursor: 'pointer', userSelect: 'none' }}>
+                <input
+                  type="checkbox"
+                  id="planAutoAddRemnants"
+                  defaultChecked
+                  style={{
+                    width: '18px',
+                    height: '18px',
+                    accentColor: '#0d9488',
+                    cursor: 'pointer',
+                    borderRadius: '4px'
+                  }}
+                />
+                <span style={{ fontSize: '0.92rem', fontWeight: 600, color: 'var(--text-main, #0f172a)' }}>
+                  Add offcut to stock
+                </span>
               </label>
             </div>
 
-            <div className="form-group">
-              <label htmlFor="planReasonInput" className="field-label">Job / Work Order / Project Reference <span className="optional">(Optional)</span></label>
-              <input type="text" id="planReasonInput" className="input-control" placeholder="e.g. Work Order #2041, Frame Assembly Job" />
+            <div className="form-group" style={{ marginBottom: '1.1rem' }}>
+              <label htmlFor="planReasonInput" className="field-label" style={{ fontSize: '0.88rem', fontWeight: 700, color: 'var(--text-main, #0f172a)', marginBottom: '0.4rem', display: 'block' }}>
+                Work Order / Reference
+              </label>
+              <input
+                type="text"
+                id="planReasonInput"
+                className="input-control"
+                placeholder="e.g. WO-2026-001"
+                style={{
+                  height: '42px',
+                  borderRadius: '10px',
+                  border: '1px solid var(--border-subtle, #e2e8f0)',
+                  fontSize: '0.88rem',
+                  padding: '0 0.85rem',
+                  background: 'var(--bg-surface, #ffffff)',
+                  color: 'var(--text-main, #0f172a)',
+                  width: '100%'
+                }}
+              />
             </div>
 
-            <div className="form-row">
-              <div className="form-group col-6">
-                <label htmlFor="planCreatedByInput" className="field-label">
-                  👤 Job Created By <span className="optional">(Optional)</span>
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem', marginBottom: '1.5rem' }}>
+              <div>
+                <label htmlFor="planCreatedBySelect" className="field-label" id="planCreatedByLabel" style={{ fontSize: '0.88rem', fontWeight: 700, color: 'var(--text-main, #0f172a)', marginBottom: '0.4rem', display: 'block' }}>
+                  Created By
                 </label>
-                <input type="text" id="planCreatedByInput" className="input-control" placeholder="e.g. Ahmed, Supervisor" />
+                <div style={{ position: 'relative' }}>
+                  <span style={{ position: 'absolute', left: '12px', top: '50%', transform: 'translateY(-50%)', pointerEvents: 'none', fontSize: '0.9rem', color: '#64748b' }}>
+                    👤
+                  </span>
+                  <select
+                    id="planCreatedBySelect"
+                    className="input-control font-semibold"
+                    style={{
+                      height: '42px',
+                      paddingLeft: '34px',
+                      borderRadius: '10px',
+                      border: '1px solid var(--border-subtle, #e2e8f0)',
+                      fontSize: '0.88rem',
+                      fontWeight: 600,
+                      background: 'var(--bg-surface, #ffffff)',
+                      color: 'var(--text-main, #0f172a)',
+                      width: '100%',
+                      cursor: 'pointer'
+                    }}
+                  >
+                    <option value="Dipanshu">Dipanshu</option>
+                    <option value="Bhawna">Bhawna</option>
+                    <option value="Roshini">Roshini</option>
+                    <option value="Suman">Suman</option>
+                    <option value="Rajwant">Rajwant</option>
+                  </select>
+                  <input type="hidden" id="planCreatedByInput" />
+                </div>
               </div>
-              <div className="form-group col-6">
-                <label htmlFor="planAssignedByInput" className="field-label">
-                  🏷️ Job Assigned By <span className="optional">(Optional)</span>
+
+              <div>
+                <label htmlFor="planAssignedBySelect" className="field-label" style={{ fontSize: '0.88rem', fontWeight: 700, color: 'var(--text-main, #0f172a)', marginBottom: '0.4rem', display: 'block' }}>
+                  Assigned To
                 </label>
-                <input type="text" id="planAssignedByInput" className="input-control" placeholder="e.g. Manager Raza" />
+                <div style={{ position: 'relative' }}>
+                  <span style={{ position: 'absolute', left: '12px', top: '50%', transform: 'translateY(-50%)', pointerEvents: 'none', fontSize: '0.9rem', color: '#64748b' }}>
+                    👤
+                  </span>
+                  <select
+                    id="planAssignedBySelect"
+                    className="input-control"
+                    style={{
+                      height: '42px',
+                      paddingLeft: '34px',
+                      borderRadius: '10px',
+                      border: '1px solid var(--border-subtle, #e2e8f0)',
+                      fontSize: '0.88rem',
+                      fontWeight: 500,
+                      background: 'var(--bg-surface, #ffffff)',
+                      color: 'var(--text-main, #0f172a)',
+                      width: '100%',
+                      cursor: 'pointer'
+                    }}
+                  >
+                    <option value="">Select user</option>
+                    <option value="Dipanshu">Dipanshu</option>
+                    <option value="Bhawna">Bhawna</option>
+                    <option value="Roshini">Roshini</option>
+                    <option value="Suman">Suman</option>
+                    <option value="Rajwant">Rajwant</option>
+                  </select>
+                  <input type="hidden" id="planAssignedByInput" />
+                </div>
               </div>
             </div>
 
-            <div className="modal-footer">
-              <button type="button" className="btn btn-secondary" id="btnCancelExecutePlanModal">Cancel</button>
-              <button type="submit" className="btn btn-primary" id="btnConfirmExecutePlan">
-                ⚡ Confirm &amp; Apply Cuts to Stock
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'flex-end', gap: '0.85rem' }}>
+              <button
+                type="button"
+                className="btn"
+                id="btnCancelExecutePlanModal"
+                style={{
+                  height: '42px',
+                  padding: '0 1.5rem',
+                  borderRadius: '9999px',
+                  border: '1px solid var(--border-subtle, #e2e8f0)',
+                  background: 'var(--bg-surface, #ffffff)',
+                  color: 'var(--text-main, #0f172a)',
+                  fontWeight: 600,
+                  fontSize: '0.88rem',
+                  cursor: 'pointer'
+                }}
+              >
+                Cancel
+              </button>
+              <button
+                type="submit"
+                className="btn btn-primary"
+                id="btnConfirmExecutePlan"
+                style={{
+                  height: '42px',
+                  padding: '0 1.6rem',
+                  borderRadius: '9999px',
+                  background: '#0d9488',
+                  borderColor: '#0d9488',
+                  color: '#ffffff',
+                  fontWeight: 700,
+                  fontSize: '0.88rem',
+                  display: 'inline-flex',
+                  alignItems: 'center',
+                  gap: '0.45rem',
+                  cursor: 'pointer',
+                  boxShadow: '0 2px 6px rgba(13, 148, 136, 0.25)'
+                }}
+              >
+                <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                  <polyline points="20 6 9 17 4 12"></polyline>
+                </svg>
+                <span>Apply to Stock</span>
               </button>
             </div>
           </form>
@@ -2809,11 +4886,21 @@ export default function Home() {
 
       {/*  MODAL: CUT HISTORY AUDIT LOGS  */}
       <div className="modal-overlay hidden" id="cutLogsModalOverlay" role="dialog" aria-modal="true" aria-labelledby="cutLogsModalTitle">
-        <div className="modal-card" style={{ maxWidth: '920px' }}>
-          <div className="modal-header">
-            <div className="modal-title-group">
-              <div className="modal-icon-badge" style={{ background: '#f3e8ff', color: '#7e22ce' }}>
-                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+        <div className="modal-card" style={{ maxWidth: '1120px', width: '95vw', borderRadius: '24px', padding: '1.75rem 2rem', background: '#ffffff', boxShadow: '0 25px 50px -12px rgba(0, 0, 0, 0.25)' }}>
+          <div className="modal-header" style={{ marginBottom: '1.25rem', paddingBottom: 0, borderBottom: 'none', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '0.85rem' }}>
+              <div style={{
+                width: '42px',
+                height: '42px',
+                borderRadius: '12px',
+                background: '#e0f7f6',
+                color: '#0d9488',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                flexShrink: 0
+              }}>
+                <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
                   <circle cx="6" cy="6" r="3"></circle>
                   <circle cx="6" cy="18" r="3"></circle>
                   <line x1="20" y1="4" x2="8.12" y2="15.88"></line>
@@ -2822,34 +4909,101 @@ export default function Home() {
                 </svg>
               </div>
               <div>
-                <h3 className="modal-title" id="cutLogsModalTitle">Rod Cutting &amp; Offcut History</h3>
-                <p className="modal-subtitle">Log of all cuts, deducted sizes, and generated offcut remnants</p>
+                <h3 className="modal-title" id="cutLogsModalTitle" style={{ fontSize: '1.25rem', fontWeight: 800, margin: 0, color: '#0f172a' }}>
+                  Rod Cutting &amp; Offcut History
+                </h3>   
               </div>
             </div>
-            <button type="button" className="modal-close-btn" id="btnCloseCutLogsModal" aria-label="Close dialog">&times;</button>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '0.65rem' }}>
+              <button
+                type="button"
+                className="btn-beautiful-back"
+                id="btnCutLogsHeaderBack"
+                onClick={() => {
+                  const overlay = document.getElementById('cutLogsModalOverlay');
+                  if (overlay) overlay.classList.add('hidden');
+                }}
+                title="Back to Stock"
+                style={{ padding: '0.4rem 0.95rem', fontSize: '0.82rem' }}
+              >
+                <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+                  <path d="M19 12H5M12 19l-7-7 7-7" />
+                </svg>
+                <span>Back</span>
+              </button>
+              <button
+                type="button"
+                className="modal-close-btn"
+                id="btnCloseCutLogsModal"
+                aria-label="Close dialog"
+                style={{
+                  fontSize: '1.25rem',
+                  color: '#64748b',
+                  width: '36px',
+                  height: '36px',
+                  borderRadius: '50%',
+                  background: '#f1f5f9',
+                  border: 'none',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  cursor: 'pointer'
+                }}
+              >
+                &times;
+              </button>
+            </div>
           </div>
 
-          <div className="cut-logs-toolbar" style={{ padding: '1rem 1.5rem 0.5rem 1.5rem', display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: '0.75rem', flexWrap: 'wrap' }}>
-            <div className="search-input-wrapper" style={{ flex: '1', minWidth: '180px' }}>
-              <svg className="search-icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+          {/* Toolbar Row 1: Search, View Switch, Print Slip, Export (CSV) */}
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '0.85rem', flexWrap: 'wrap', marginBottom: '0.85rem' }}>
+            <div style={{ flex: '1', minWidth: '260px', position: 'relative' }}>
+              <svg style={{ position: 'absolute', left: '16px', top: '50%', transform: 'translateY(-50%)', color: '#94a3b8', pointerEvents: 'none' }} width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2">
                 <circle cx="11" cy="11" r="8"></circle>
                 <line x1="21" y1="21" x2="16.65" y2="16.65"></line>
               </svg>
-              <input type="text" id="filterCutLogsInput" className="input-control filter-search" placeholder="Search logs by rod name, diameter, job ref..." style={{ width: '100%' }} />
+              <input
+                type="text"
+                id="filterCutLogsInput"
+                className="input-control"
+                placeholder="Search by rod ID, diameter, job reference..."
+                style={{
+                  width: '100%',
+                  height: '42px',
+                  paddingLeft: '42px',
+                  paddingRight: '14px',
+                  borderRadius: '9999px',
+                  border: '1px solid #e2e8f0',
+                  background: '#ffffff',
+                  fontSize: '0.88rem',
+                  color: '#0f172a'
+                }}
+              />
             </div>
-            <div className="cut-logs-actions-row" style={{ display: 'flex', gap: '0.5rem', alignItems: 'center', flexWrap: 'wrap' }}>
-              <div className="view-toggle-group btn-group" id="cutLogsViewToggleGroup" style={{ display: 'inline-flex' }}>
-                <button type="button" className="btn btn-secondary btn-xs" id="btnCutLogsCards" title="Card View (Optimized for phone)">
-                  <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                    <rect x="3" y="3" width="7" height="7" rx="1"></rect>
-                    <rect x="14" y="3" width="7" height="7" rx="1"></rect>
-                    <rect x="14" y="14" width="7" height="7" rx="1"></rect>
-                    <rect x="3" y="14" width="7" height="7" rx="1"></rect>
-                  </svg>
-                  <span>Cards</span>
-                </button>
-                <button type="button" className="btn btn-secondary btn-xs" id="btnCutLogsTable" title="Table View">
-                  <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+
+            <div style={{ display: 'flex', alignItems: 'center', gap: '0.65rem', flexWrap: 'wrap' }}>
+              {/* View Toggle: List / Cards */}
+              <div id="cutLogsViewToggleGroup" style={{ display: 'inline-flex', background: '#f1f5f9', borderRadius: '9999px', padding: '3px', gap: '2px' }}>
+                <button
+                  type="button"
+                  id="btnCutLogsTable"
+                  className="btn btn-xs active"
+                  style={{
+                    borderRadius: '9999px',
+                    border: 'none',
+                    padding: '0.45rem 1.15rem',
+                    fontSize: '0.82rem',
+                    fontWeight: 700,
+                    display: 'inline-flex',
+                    alignItems: 'center',
+                    gap: '0.45rem',
+                    cursor: 'pointer',
+                    background: '#0d9488',
+                    color: '#ffffff'
+                  }}
+                  title="List Table View"
+                >
+                  <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
                     <line x1="8" y1="6" x2="21" y2="6"></line>
                     <line x1="8" y1="12" x2="21" y2="12"></line>
                     <line x1="8" y1="18" x2="21" y2="18"></line>
@@ -2857,120 +5011,188 @@ export default function Home() {
                     <line x1="3" y1="12" x2="3.01" y2="12"></line>
                     <line x1="3" y1="18" x2="3.01" y2="18"></line>
                   </svg>
-                  <span>Table</span>
+                  <span>List</span>
+                </button>
+                <button
+                  type="button"
+                  id="btnCutLogsCards"
+                  className="btn btn-xs"
+                  style={{
+                    borderRadius: '9999px',
+                    border: 'none',
+                    padding: '0.45rem 1.15rem',
+                    fontSize: '0.82rem',
+                    fontWeight: 600,
+                    display: 'inline-flex',
+                    alignItems: 'center',
+                    gap: '0.45rem',
+                    cursor: 'pointer',
+                    background: 'transparent',
+                    color: '#64748b'
+                  }}
+                  title="Cards View"
+                >
+                  <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+                    <rect x="3" y="3" width="7" height="7"></rect>
+                    <rect x="14" y="3" width="7" height="7"></rect>
+                    <rect x="14" y="14" width="7" height="7"></rect>
+                    <rect x="3" y="14" width="7" height="7"></rect>
+                  </svg>
+                  <span>Cards</span>
                 </button>
               </div>
-              <button id="btnPrintCombinedSlip" className="btn btn-primary btn-sm" title="Print a single slip containing 1 or many selected cutting logs">
-                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+
+              {/* Action: Print Slip */}
+              <button
+                type="button"
+                id="btnPrintCombinedSlip"
+                className="btn btn-secondary btn-sm"
+                title="Print slip for selected cuts"
+                style={{
+                  height: '40px',
+                  padding: '0 1.15rem',
+                  borderRadius: '9999px',
+                  border: '1px solid #e2e8f0',
+                  background: '#ffffff',
+                  color: '#0f172a',
+                  fontWeight: 600,
+                  fontSize: '0.85rem',
+                  display: 'inline-flex',
+                  alignItems: 'center',
+                  gap: '0.45rem',
+                  cursor: 'pointer'
+                }}
+              >
+                <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
                   <polyline points="6 9 6 2 18 2 18 9"></polyline>
                   <path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2"></path>
                   <rect x="6" y="14" width="12" height="8"></rect>
                 </svg>
-                <span>Print Slip (<span id="selectedLogsCount">0</span>)</span>
+                <span>Print Slip</span>
               </button>
-              <a
-                id="btnOpenCutLogsSheet"
-                href="https://docs.google.com/spreadsheets/d/1_rDLZvfHCD4Tzmzk7XHBqK2qHtxOjSP32wOLUOABkMQ/edit"
-                target="_blank"
-                rel="noopener noreferrer"
-                className="btn btn-primary btn-sm"
-                title="Open Chrome rod cutting logs tab in Google Sheet"
-                style={{ textDecoration: 'none', display: 'inline-flex', alignItems: 'center', gap: '0.35rem' }}
+
+              {/* Action: Export (CSV) */}
+              <button
+                type="button"
+                id="btnExportCutLogsCsv"
+                className="btn btn-secondary btn-sm"
+                title="Export cut history to CSV"
+                style={{
+                  height: '40px',
+                  padding: '0 1.15rem',
+                  borderRadius: '9999px',
+                  border: '1px solid #e2e8f0',
+                  background: '#ffffff',
+                  color: '#0f172a',
+                  fontWeight: 600,
+                  fontSize: '0.85rem',
+                  display: 'inline-flex',
+                  alignItems: 'center',
+                  gap: '0.45rem',
+                  cursor: 'pointer'
+                }}
               >
-                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                  <path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"></path>
-                  <polyline points="15 3 21 3 21 9"></polyline>
-                  <line x1="10" y1="14" x2="21" y2="3"></line>
-                </svg>
-                Open Google Sheet
-              </a>
-              <button id="btnExportCutLogsCsv" className="btn btn-secondary btn-sm" title="Export cut history to CSV">
-                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
                   <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
                   <polyline points="7 10 12 15 17 10"></polyline>
                   <line x1="12" y1="15" x2="12" y2="3"></line>
                 </svg>
-                Export Logs (CSV)
-              </button>
-              <button id="btnClearCutLogs" className="btn btn-ghost btn-sm text-danger" title="Clear all recorded cut history">
-                Clear Logs
+                <span>Export (CSV)</span>
               </button>
             </div>
           </div>
 
-          {/* Cut Logs Date Filter Bar */}
-          <div className="cut-logs-date-bar" id="cutLogsDateBar">
-            <div className="cut-logs-date-bar-left">
-              <span className="cut-logs-date-label">
-                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                  <rect x="3" y="4" width="18" height="18" rx="2" ry="2"></rect>
-                  <line x1="16" y1="2" x2="16" y2="6"></line>
-                  <line x1="8" y1="2" x2="8" y2="6"></line>
-                  <line x1="3" y1="10" x2="21" y2="10"></line>
-                </svg>
-                Date:
-              </span>
-              <div className="cut-logs-date-group" id="cutLogsDateQuickFilters">
-                <button type="button" className="date-pill-btn active" data-date-filter="all" id="btnDateFilterAll" title="Show all dates">
-                  All
-                </button>
-                <button type="button" className="date-pill-btn" data-date-filter="today" id="btnDateFilterToday" title="Filter cuts made today">
-                  Today
-                </button>
-                <button type="button" className="date-pill-btn" data-date-filter="tomorrow" id="btnDateFilterTomorrow" title="Filter cuts for tomorrow">
-                  Tomorrow
-                </button>
-                <button type="button" className="date-pill-btn" data-date-filter="yesterday" id="btnDateFilterYesterday" title="Filter cuts from yesterday">
-                  Yesterday
-                </button>
-              </div>
-              <div className="cut-logs-custom-date-box">
-                <input
-                  type="date"
-                  id="filterCutLogsDateInput"
-                  className="input-control cut-logs-date-picker"
-                  title="Pick a specific date to filter logs"
-                />
-                <button
-                  type="button"
-                  id="btnClearDateFilter"
-                  className="btn btn-ghost btn-xs text-muted"
-                  title="Reset date filter to All"
-                  style={{ display: 'none', padding: '2px 6px', fontSize: '0.72rem' }}
-                >
-                  ✕ Clear
-                </button>
-              </div>
+          {/* Toolbar Row 2: Date Filters & Date Range Picker */}
+          <div style={{ display: 'flex', alignItems: 'center', gap: '0.65rem', flexWrap: 'wrap', marginBottom: '1.25rem' }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '0.4rem', color: '#0f172a', fontWeight: 700, fontSize: '0.88rem' }}>
+              <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2">
+                <rect x="3" y="4" width="18" height="18" rx="2" ry="2"></rect>
+                <line x1="16" y1="2" x2="16" y2="6"></line>
+                <line x1="8" y1="2" x2="8" y2="6"></line>
+                <line x1="3" y1="10" x2="21" y2="10"></line>
+              </svg>
+              <span>Date:</span>
             </div>
-            <div className="cut-logs-date-bar-right">
-              <span id="cutLogsDateFilterInfo" className="cut-logs-date-info">
-                All dates
-              </span>
+
+            <div className="cut-logs-date-group" id="cutLogsDateQuickFilters" style={{ display: 'flex', alignItems: 'center', gap: '0.45rem' }}>
+              <button type="button" className="date-pill-btn active" data-date-filter="all" id="btnDateFilterAll">
+                All
+              </button>
+              <button type="button" className="date-pill-btn" data-date-filter="today" id="btnDateFilterToday">
+                Today
+              </button>
+              <button type="button" className="date-pill-btn" data-date-filter="tomorrow" id="btnDateFilterTomorrow">
+                Tomorrow
+              </button>
+              <button type="button" className="date-pill-btn" data-date-filter="yesterday" id="btnDateFilterYesterday">
+                Yesterday
+              </button>
+            </div>
+
+            <div style={{ width: '1px', height: '22px', background: '#e2e8f0', margin: '0 0.35rem' }} />
+
+            <div style={{ position: 'relative', display: 'inline-flex', alignItems: 'center' }}>
+              <input
+                type="text"
+                id="filterCutLogsDateRange"
+                placeholder="dd/mm/yyyy - dd/mm/yyyy"
+                readOnly
+                style={{
+                  height: '36px',
+                  padding: '0 34px 0 12px',
+                  borderRadius: '10px',
+                  border: '1px solid #e2e8f0',
+                  fontSize: '0.82rem',
+                  color: '#64748b',
+                  background: '#ffffff',
+                  width: '215px',
+                  cursor: 'pointer'
+                }}
+              />
+              <input
+                type="date"
+                id="filterCutLogsDateInput"
+                style={{
+                  position: 'absolute',
+                  right: '6px',
+                  top: '50%',
+                  transform: 'translateY(-50%)',
+                  opacity: 0,
+                  width: '26px',
+                  height: '26px',
+                  cursor: 'pointer'
+                }}
+              />
+              <svg style={{ position: 'absolute', right: '10px', pointerEvents: 'none', color: '#64748b' }} width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2">
+                <rect x="3" y="4" width="18" height="18" rx="2" ry="2"></rect>
+                <line x1="16" y1="2" x2="16" y2="6"></line>
+                <line x1="8" y1="2" x2="8" y2="6"></line>
+                <line x1="3" y1="10" x2="21" y2="10"></line>
+              </svg>
             </div>
           </div>
 
-          <div className="cut-logs-content-area" id="cutLogsContentArea" style={{ padding: '0.75rem 1.5rem 1.25rem 1.5rem' }}>
-            {/*  Desktop Table View  */}
-            <div className="table-responsive cut-logs-table-wrapper" id="cutLogsTableWrapper" style={{ maxHeight: '440px', overflowY: 'auto' }}>
-              <table className="data-table" id="cutLogsTable">
+          <div className="cut-logs-content-area" id="cutLogsContentArea" style={{ padding: 0 }}>
+            {/* Desktop Table View */}
+            <div className="table-responsive cut-logs-table-wrapper" id="cutLogsTableWrapper" style={{ maxHeight: '460px', overflowY: 'auto', overflowX: 'auto', borderRadius: '14px', border: '1px solid #e2e8f0' }}>
+              <table className="data-table" id="cutLogsTable" style={{ width: '100%', borderCollapse: 'collapse' }}>
                 <thead>
-                  <tr>
-                    <th style={{ width: '42px', textAlign: 'center' }}>
-                      <input type="checkbox" id="selectAllCutLogs" title="Select / Deselect All Logs for Slip" style={{ cursor: 'pointer', width: '16px', height: '16px' }} />
+                  <tr style={{ background: '#f0fdf9', borderBottom: '1px solid #e2e8f0' }}>
+                    <th style={{ width: '40px', textAlign: 'center', padding: '10px 8px' }}>
+                      <input type="checkbox" id="selectAllCutLogs" title="Select / Deselect All Logs for Slip" style={{ cursor: 'pointer', width: '16px', height: '16px', accentColor: '#0d9488' }} />
                     </th>
-                    <th>Date &amp; Time</th>
-                    <th id="thCutLogsItemSpec">Rod / Spec</th>
-                    <th className="text-right">Original</th>
-                    <th className="text-right">Cut Size</th>
-                    <th className="text-right">Qty</th>
-                    <th>Remnant Offcut</th>
-                    <th>Job / Reference</th>
-                    <th className="text-center">Created / Assigned</th>
-                    <th className="text-center">Slip</th>
+                    <th style={{ width: '160px', padding: '10px 10px', fontWeight: 700, fontSize: '0.82rem', color: '#0f172a' }}>Date &amp; Time ⇅</th>
+                    <th id="thCutLogsItemSpec" style={{ minWidth: '150px', padding: '10px 12px', fontWeight: 700, fontSize: '0.82rem', color: '#0f172a' }}>Rod / Spec</th>
+                    <th style={{ width: '90px', padding: '10px 10px', fontWeight: 700, fontSize: '0.82rem', color: '#0f172a' }}>Original</th>
+                    <th style={{ width: '90px', padding: '10px 10px', fontWeight: 700, fontSize: '0.82rem', color: '#0f172a' }}>Cut Size</th>
+                    <th style={{ width: '60px', padding: '10px 10px', fontWeight: 700, fontSize: '0.82rem', color: '#0f172a' }}>Qty</th>
+                    <th style={{ width: '160px', padding: '10px 10px', fontWeight: 700, fontSize: '0.82rem', color: '#0f172a' }}>Remnant / Offcut</th>
+                    <th style={{ width: '160px', padding: '10px 10px', fontWeight: 700, fontSize: '0.82rem', color: '#0f172a' }}>Created By</th>
+                    <th style={{ width: '100px', textAlign: 'center', padding: '10px 8px', fontWeight: 700, fontSize: '0.82rem', color: '#0f172a' }}>Action</th>
                   </tr>
                 </thead>
                 <tbody id="cutLogsTableBody">
-                  {/*  Dynamically populated  */}
+                  {/* Dynamically populated */}
                 </tbody>
               </table>
             </div>
@@ -2994,13 +5216,56 @@ export default function Home() {
             </div>
           </div>
 
-          <div className="modal-footer cut-logs-modal-footer" style={{ justifyContent: 'space-between', flexWrap: 'wrap', gap: '0.5rem' }}>
-            <span className="text-muted cut-logs-count-summary" style={{ fontSize: '0.8125rem' }} id="cutLogsCountText">0 log entries</span>
-            <div className="cut-logs-footer-buttons" style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-              <button type="button" className="btn btn-primary btn-sm" id="btnFooterPrintCombinedSlip" title="Print a single slip with selected items">
-                🧾 Print Slip (<span id="selectedLogsCountFooter">0</span>)
+          {/* Footer */}
+          <div style={{ marginTop: '1.25rem', paddingTop: '0.85rem', display: 'flex', alignItems: 'center', justifyContent: 'space-between', borderTop: 'none', background: '#ffffff', flexWrap: 'wrap', gap: '0.75rem' }}>
+            <span id="cutLogsCountText" style={{ fontSize: '0.88rem', color: '#64748b', fontWeight: 500 }}>
+              Showing 0 of 0 logged cuts
+            </span>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
+              <button
+                type="button"
+                id="btnFooterPrintCombinedSlip"
+                title="Print slip with selected items"
+                style={{
+                  height: '42px',
+                  padding: '0 1.6rem',
+                  borderRadius: '9999px',
+                  background: '#0d9488',
+                  color: '#ffffff',
+                  fontWeight: 700,
+                  fontSize: '0.88rem',
+                  border: 'none',
+                  display: 'inline-flex',
+                  alignItems: 'center',
+                  gap: '0.5rem',
+                  cursor: 'pointer',
+                  boxShadow: '0 2px 6px rgba(13, 148, 136, 0.25)'
+                }}
+              >
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+                  <polyline points="6 9 6 2 18 2 18 9"></polyline>
+                  <path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2"></path>
+                  <rect x="6" y="14" width="12" height="8"></rect>
+                </svg>
+                <span>Print Slip (<span id="selectedLogsCountFooter">0</span>)</span>
               </button>
-              <button type="button" className="btn btn-secondary" id="btnCloseCutLogsBottom">Close</button>
+              <button
+                type="button"
+                id="btnCloseCutLogsBottom"
+                style={{
+                  height: '42px',
+                  padding: '0 1.6rem',
+                  borderRadius: '9999px',
+                  background: '#ffffff',
+                  border: '1px solid #e2e8f0',
+                  color: '#0f172a',
+                  fontWeight: 600,
+                  fontSize: '0.88rem',
+                  cursor: 'pointer'
+                }}
+              >
+                Close
+              </button>
             </div>
           </div>
         </div>
@@ -3183,250 +5448,191 @@ export default function Home() {
         </div>
       </div>
 
-      {/*  MODAL: GOOGLE SHEETS APPS SCRIPT SETUP & STATUS  */}
-      <div className={`modal-overlay ${isSheetsModalOpen ? '' : 'hidden'}`} role="dialog" aria-modal="true" aria-labelledby="sheetsModalTitle" style={{ zIndex: 110 }}>
-        <div className="modal-card modal-card-sm" style={{ maxWidth: '580px' }}>
-          <div className="modal-header">
+      {/*  MODAL: FIREBASE CLOUD DATABASE STATUS  */}
+      <div className={`modal-overlay ${isFirebaseModalOpen ? '' : 'hidden'}`} role="dialog" aria-modal="true" aria-labelledby="firebaseModalTitle" style={{ zIndex: 110 }}>
+        <div className="modal-card" style={{ maxWidth: '750px', width: '95vw', maxHeight: 'calc(100vh - 2.5rem)', display: 'flex', flexDirection: 'column' }}>
+          <div className="modal-header" style={{ flexShrink: 0, padding: '1rem 1.5rem' }}>
             <div className="modal-title-group">
-              <div className="modal-icon-badge" style={{ background: 'rgba(16, 185, 129, 0.1)', color: '#10b981', borderColor: 'rgba(16, 185, 129, 0.25)' }}>
-                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                  <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path>
-                  <polyline points="14 2 14 8 20 8"></polyline>
-                  <line x1="16" y1="13" x2="8" y2="13"></line>
-                  <line x1="16" y1="17" x2="8" y2="17"></line>
-                  <polyline points="10 9 9 9 8 9"></polyline>
+              <div className="modal-icon-badge" style={{ background: 'rgba(238, 114, 20, 0.12)', color: '#ea580c', borderColor: 'rgba(238, 114, 20, 0.3)' }}>
+                <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                  <path d="M4 14.899A7 7 0 1 1 15.71 8h1.79a4.5 4.5 0 0 1 2.5 8.242"></path>
+                  <path d="M12 12v9"></path>
+                  <path d="m8 17 4 4 4-4"></path>
                 </svg>
               </div>
               <div>
-                <h3 className="modal-title" id="sheetsModalTitle">Google Sheets &amp; Cloud Sync</h3>
-                <p className="modal-subtitle">Connected to Google Sheet: 1_rDLZvfHCD4Tzmzk7XHBqK2qHtxOjSP32wOLUOABkMQ</p>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '0.65rem' }}>
+                  <h3 className="modal-title" id="firebaseModalTitle" style={{ margin: 0, fontSize: '1.15rem' }}>Firebase Cloud Database</h3>
+                  <span className="badge badge-success" style={{ padding: '2px 8px', fontSize: '0.72rem', fontWeight: 700, background: 'rgba(16, 185, 129, 0.15)', color: '#059669', border: '1px solid rgba(16, 185, 129, 0.3)' }}>
+                    ● LIVE CLOUD STORAGE
+                  </span>
+                </div>
+                <p className="modal-subtitle" style={{ margin: '2px 0 0 0' }}>Project ID: <strong>rodsync-cc8d4</strong> • Realtime Cloud Firestore</p>
               </div>
             </div>
-            <button type="button" className="modal-close-btn" onClick={() => setIsSheetsModalOpen(false)} aria-label="Close dialog">&times;</button>
+            <button type="button" className="modal-close-btn" onClick={() => setIsFirebaseModalOpen(false)} aria-label="Close dialog">&times;</button>
           </div>
 
-          <div style={{ padding: '1.25rem 1.5rem', fontSize: '0.875rem' }}>
-            {/* Status Card */}
+          <div className="modal-body" style={{ flex: '1 1 auto', overflowY: 'auto', padding: '1.15rem 1.5rem', fontSize: '0.85rem' }}>
             <div style={{
               display: 'flex',
               alignItems: 'center',
               justifyContent: 'space-between',
-              padding: '0.75rem 1rem',
+              padding: '0.85rem 1rem',
               borderRadius: 'var(--radius-md)',
-              background: sheetsStatus === 'connected' ? 'rgba(16, 185, 129, 0.08)' : 'rgba(245, 158, 11, 0.08)',
-              border: sheetsStatus === 'connected' ? '1px solid rgba(16, 185, 129, 0.25)' : '1px solid rgba(245, 158, 11, 0.3)',
-              marginBottom: '1rem'
+              background: 'rgba(16, 185, 129, 0.08)',
+              border: '1px solid rgba(16, 185, 129, 0.25)',
+              marginBottom: '1rem',
+              gap: '0.75rem',
+              flexWrap: 'wrap'
             }}>
-              <div>
-                <span style={{ fontWeight: 600, display: 'block', color: sheetsStatus === 'connected' ? '#065f46' : '#92400e' }}>
-                  {sheetsStatus === 'connected' ? 'Live Cloud Sync Active' : 'Connected in Direct Read Mode'}
+              <div style={{ flex: '1 1 280px' }}>
+                <span style={{ fontWeight: 700, display: 'block', color: '#065f46', fontSize: '0.875rem' }}>
+                  🔥 Firebase Realtime Cloud Database Connected
                 </span>
-                <span style={{ fontSize: '0.8rem', color: sheetsStatus === 'connected' ? '#047857' : '#b45309' }}>
-                  {sheetsStatus === 'connected'
-                    ? 'All stock updates, additions, and cut logs save directly into your Google Sheet!'
-                    : 'Reading 177 rods from sheet. To save new rods & cut logs back into Google Sheets, enter your Web App URL below.'}
+                <span style={{ fontSize: '0.78rem', color: '#047857' }}>
+                  All stock additions, cuts, remnants, and edits sync directly with Firestore in real-time.
                 </span>
               </div>
-              <span className={`badge ${sheetsStatus === 'connected' ? 'badge-success' : 'badge-warning'}`} style={{ padding: '4px 10px', fontSize: '0.75rem', fontWeight: 700 }}>
-                {sheetsStatus === 'connected' ? 'LIVE WRITE' : 'READ ONLY'}
-              </span>
-            </div>
-
-            <div style={{ marginBottom: '1rem', padding: '10px 14px', background: 'rgba(59, 130, 246, 0.08)', borderRadius: 'var(--radius-md)', border: '1px solid rgba(59, 130, 246, 0.25)', display: 'flex', alignItems: 'center', justifyContent: 'space-between', fontSize: '0.8rem' }}>
-              <div>
-                <span style={{ fontWeight: 600, color: '#2563eb', display: 'block' }}>Connected Spreadsheet:</span>
-                <span style={{ fontFamily: 'monospace', fontSize: '0.75rem', color: 'var(--text-secondary)' }}>1_rDLZvfHCD4Tzmzk7XHBqK2qHtxOjSP32wOLUOABkMQ</span>
-              </div>
-              <a
-                href="https://docs.google.com/spreadsheets/d/1_rDLZvfHCD4Tzmzk7XHBqK2qHtxOjSP32wOLUOABkMQ/edit"
-                target="_blank"
-                rel="noopener noreferrer"
-                className="btn btn-secondary btn-sm"
-                style={{ textDecoration: 'none', fontSize: '0.75rem', padding: '4px 8px' }}
-              >
-                Open in Google Sheets ↗
-              </a>
-            </div>
-
-            {/* Action Buttons */}
-            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px', marginBottom: '1.25rem' }}>
-              <button
-                type="button"
-                className="btn btn-primary"
-                style={{ padding: '12px 14px', fontWeight: 600, background: 'linear-gradient(135deg, #2563eb, #1d4ed8)', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '4px' }}
-                onClick={() => {
-                  syncInventoryData(true);
-                  setIsSheetsModalOpen(false);
-                }}
-              >
-                <span style={{ fontSize: '1rem' }}>⚡</span>
-                <span>Reload 177 Rods From Sheet</span>
-              </button>
-
-              <a
-                href="https://docs.google.com/spreadsheets/d/1_rDLZvfHCD4Tzmzk7XHBqK2qHtxOjSP32wOLUOABkMQ/edit"
-                target="_blank"
-                rel="noopener noreferrer"
-                className="btn btn-primary"
-                style={{ padding: '12px 14px', fontWeight: 600, background: 'linear-gradient(135deg, #10b981, #059669)', borderColor: '#059669', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '4px', textDecoration: 'none', color: '#fff' }}
-              >
-                <span style={{ fontSize: '1rem' }}>↗</span>
-                <span>Open in Google Sheets</span>
-              </a>
-            </div>
-
-            {/* Project Tabs Guide */}
-            <div style={{
-              background: 'var(--bg-surface-subtle)',
-              border: '1px solid var(--border-subtle)',
-              borderRadius: 'var(--radius-md)',
-              padding: '0.875rem 1rem',
-              marginBottom: '1rem'
-            }}>
-              <div style={{ marginBottom: '8px', padding: '6px 10px', background: 'rgba(79, 70, 229, 0.08)', borderRadius: '6px', border: '1px solid rgba(79, 70, 229, 0.2)', fontSize: '0.8rem' }}>
-                <strong style={{ color: '#4f46e5' }}>Project Tabs in Connected Google Sheet:</strong>
-                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '6px', marginTop: '6px', fontSize: '0.75rem' }}>
-                  <span>🔵 <strong>Chrome rod inventory:</strong> 177 Rods Stock</span>
-                  <span>🔴 <strong>Chrome rod cutting logs:</strong> Rod Cut Records</span>
-                  <span>🟣 <strong>Guided rail inventory:</strong> Rail Stock</span>
-                  <span>🟠 <strong>Guided rail cutting logs:</strong> Rail Cut Records</span>
-                </div>
-              </div>
-              <p style={{ margin: 0, fontSize: '0.78rem', color: 'var(--text-secondary)' }}>
-                All rod inventory and cutting logs in this project strictly correspond to the tabs above in your connected spreadsheet.
-              </p>
-            </div>
-
-            {/* Live Cloud Writing Connection Section */}
-            <div style={{
-              background: 'var(--bg-surface-subtle)',
-              border: sheetsStatus === 'connected' ? '1px solid rgba(16, 185, 129, 0.3)' : '1px solid rgba(245, 158, 11, 0.4)',
-              borderRadius: 'var(--radius-md)',
-              padding: '1rem',
-              marginBottom: '1rem'
-            }}>
-              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '8px' }}>
-                <span style={{ fontWeight: 700, fontSize: '0.875rem', color: sheetsStatus === 'connected' ? '#059669' : '#d97706' }}>
-                  {sheetsStatus === 'connected' ? '✅ Live Cloud Writing Connected' : '⚡ Connect Live Writing to Google Sheets'}
-                </span>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', flexShrink: 0 }}>
                 <button
                   type="button"
                   className="btn btn-secondary btn-sm"
-                  style={{ fontSize: '0.75rem', padding: '4px 10px' }}
+                  style={{ gap: '0.35rem', fontSize: '0.78rem', padding: '0.35rem 0.75rem', fontWeight: 600 }}
                   onClick={() => {
-                    navigator.clipboard.writeText(APPS_SCRIPT_SNIPPET);
-                    setCopiedSnippet(true);
-                    setTimeout(() => setCopiedSnippet(false), 2000);
-                  }}
-                >
-                  {copiedSnippet ? '✓ Copied Script!' : '📋 Copy Apps Script'}
-                </button>
-              </div>
-
-              <p style={{ margin: '0 0 10px 0', fontSize: '0.78rem', color: 'var(--text-secondary)', lineHeight: 1.4 }}>
-                To save added rods, edited stock, and cut logs directly to your online Google Sheet, paste your Web App URL below:
-              </p>
-
-              <div style={{ display: 'flex', gap: '8px', marginBottom: '8px' }}>
-                <input
-                  type="url"
-                  placeholder="https://script.google.com/macros/s/.../exec"
-                  value={inputScriptUrl}
-                  onChange={(e) => setInputScriptUrl(e.target.value)}
-                  style={{
-                    flex: 1,
-                    padding: '8px 12px',
-                    borderRadius: 'var(--radius-md)',
-                    border: '1px solid var(--border-subtle)',
-                    background: 'var(--bg-surface-elevated)',
-                    color: 'var(--text-primary)',
-                    fontSize: '0.825rem'
-                  }}
-                />
-                <button
-                  type="button"
-                  className="btn btn-primary btn-sm"
-                  style={{ padding: '8px 16px', fontWeight: 600 }}
-                  onClick={() => {
-                    if (!inputScriptUrl.trim()) {
-                      alert('Please paste your Google Apps Script Web App URL first.');
-                      return;
-                    }
-                    localStorage.setItem('rodsync_gsheets_script_url', inputScriptUrl.trim());
                     syncInventoryData(true);
-                    alert('Saved Google Sheets Web App URL! Testing connection...');
                   }}
+                  title="Reload current inventory from Firebase"
                 >
-                  Connect URL
+                  <span>🔄</span>
+                  <span>Refresh Cloud Data</span>
                 </button>
+                <a
+                  href="https://console.firebase.google.com/project/rodsync-cc8d4/firestore"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="btn btn-primary btn-sm"
+                  style={{ gap: '0.35rem', fontSize: '0.78rem', padding: '0.35rem 0.75rem', fontWeight: 600, textDecoration: 'none', background: 'linear-gradient(135deg, #f97316, #ea580c)', borderColor: '#ea580c' }}
+                >
+                  <span>Open Console ↗</span>
+                </a>
+              </div>
+            </div>
+
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))', gap: '1rem' }}>
+              <div style={{
+                background: 'var(--bg-surface-subtle)',
+                border: '1px solid var(--border-subtle)',
+                borderRadius: 'var(--radius-md)',
+                padding: '0.9rem',
+                display: 'flex',
+                flexDirection: 'column',
+                gap: '0.65rem'
+              }}>
+                <span style={{ fontWeight: 700, fontSize: '0.82rem', color: '#ea580c' }}>
+                  ⚙️ Active Firebase Configuration
+                </span>
+                <div style={{ fontSize: '0.75rem', color: 'var(--text-secondary)', display: 'flex', flexDirection: 'column', gap: '5px', background: 'var(--bg-surface-elevated)', padding: '0.7rem', borderRadius: 'var(--radius-sm)', border: '1px solid var(--border-subtle)', fontFamily: 'monospace' }}>
+                  <div><strong>Project:</strong> rodsync-cc8d4</div>
+                  <div><strong>Auth Domain:</strong> rodsync-cc8d4.firebaseapp.com</div>
+                  <div><strong>Storage:</strong> rodsync-cc8d4.firebasestorage.app</div>
+                  <div><strong>Database:</strong> Cloud Firestore (default)</div>
+                </div>
+                <div style={{ fontSize: '0.72rem', color: 'var(--text-muted)', lineHeight: 1.4 }}>
+                  ⚡ High-performance document database with automatic offline persistence and real-time multi-device synchronization.
+                </div>
               </div>
 
-              <div style={{ fontSize: '0.74rem', color: 'var(--text-tertiary)', lineHeight: 1.4 }}>
-                <strong>30-second setup in Google Sheets:</strong><br />
-                1. Click <strong>Extensions &gt; Apps Script</strong> in your sheet.<br />
-                2. Click <strong>📋 Copy Apps Script</strong> above, paste it in the editor, and click Save.<br />
-                3. Click <strong>Deploy &gt; New deployment</strong> &rarr; Select <strong>Web app</strong> &rarr; Access: <strong>Anyone</strong> &rarr; Deploy.<br />
-                4. Copy the Web app URL and paste it into the box above.
+              <div style={{
+                background: 'var(--bg-surface-subtle)',
+                border: '1px solid var(--border-subtle)',
+                borderRadius: 'var(--radius-md)',
+                padding: '0.9rem',
+                display: 'flex',
+                flexDirection: 'column',
+                gap: '0.65rem'
+              }}>
+                <span style={{ fontWeight: 700, fontSize: '0.82rem', color: '#0d9488' }}>
+                  📦 Synchronized Cloud Collections
+                </span>
+
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0.5rem' }}>
+                  <div style={{ padding: '0.5rem 0.65rem', background: 'rgba(20, 184, 166, 0.08)', borderRadius: '6px', border: '1px solid rgba(20, 184, 166, 0.2)' }}>
+                    <div style={{ fontSize: '0.75rem', fontWeight: 700, color: '#0d9488' }}>🟢 Chrome Rod Stock</div>
+                    <div style={{ fontSize: '0.7rem', color: 'var(--text-muted)' }}>Realtime Rod Stock</div>
+                  </div>
+                  <div style={{ padding: '0.5rem 0.65rem', background: 'rgba(107, 142, 35, 0.08)', borderRadius: '6px', border: '1px solid rgba(107, 142, 35, 0.2)' }}>
+                    <div style={{ fontSize: '0.75rem', fontWeight: 700, color: '#6b8e23' }}>🌿 Guided Rail Stock</div>
+                    <div style={{ fontSize: '0.7rem', color: 'var(--text-muted)' }}>Realtime Rail Stock</div>
+                  </div>
+                  <div style={{ padding: '0.5rem 0.65rem', background: 'rgba(239, 68, 68, 0.08)', borderRadius: '6px', border: '1px solid rgba(239, 68, 68, 0.2)' }}>
+                    <div style={{ fontSize: '0.75rem', fontWeight: 700, color: '#ef4444' }}>🔴 Rod Cut Logs</div>
+                    <div style={{ fontSize: '0.7rem', color: 'var(--text-muted)' }}>Offcut Records</div>
+                  </div>
+                  <div style={{ padding: '0.5rem 0.65rem', background: 'rgba(245, 158, 11, 0.08)', borderRadius: '6px', border: '1px solid rgba(245, 158, 11, 0.2)' }}>
+                    <div style={{ fontSize: '0.75rem', fontWeight: 700, color: '#d97706' }}>🟠 Rail Cut Logs</div>
+                    <div style={{ fontSize: '0.7rem', color: 'var(--text-muted)' }}>Rail Precision Cuts</div>
+                  </div>
+                </div>
+
+                <div style={{ fontSize: '0.72rem', color: 'var(--text-secondary)', lineHeight: 1.4, padding: '0.5rem 0.65rem', background: 'var(--bg-surface-elevated)', borderRadius: 'var(--radius-sm)', border: '1px solid var(--border-subtle)' }}>
+                  💡 Whenever you cut a rod or rail, the remaining length is updated and the cut log is saved directly to Firebase.
+                </div>
               </div>
             </div>
           </div>
-          <div className="modal-footer">
+
+          <div className="modal-footer" style={{ flexShrink: 0, padding: '0.75rem 1.5rem', display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '0.75rem', borderTop: '1px solid var(--border-subtle)', background: 'var(--bg-surface-subtle)' }}>
             <button
               type="button"
-              className="btn btn-secondary"
+              className="btn btn-secondary btn-sm"
+              style={{ fontSize: '0.8rem', padding: '0.45rem 0.95rem', fontWeight: 600 }}
               onClick={async () => {
-                const urlToTest = inputScriptUrl.trim() || localStorage.getItem('rodsync_gsheets_script_url') || '';
                 try {
-                  const res = await fetch('/api/gsheets-sync', {
-                    headers: urlToTest ? { 'x-google-script-url': urlToTest } : {}
-                  });
+                  const res = await fetch('/api/firebase-sync');
                   const data = await res.json();
-                  if (data.success && (data.mode === 'apps-script' || data.configured)) {
-                    setSheetsStatus('connected');
-                    alert('Google Sheets live write connection successful! Ready to sync.');
+                  if (data.success) {
+                    alert(`✅ Firebase Cloud Database Connected! (Project: ${data.projectId || 'rodsync-cc8d4'}, Rods: ${data.rods?.length || 0}, Rails: ${data.railStock?.length || 0})`);
                   } else {
-                    setSheetsStatus(data.configured ? 'connected' : 'unconfigured');
-                    alert(`Google Sheets Status: ${data.message || 'Connected in Read-Only mode. Paste Web App URL to enable live writing.'}`);
+                    alert('Firebase status check: ' + (data.message || 'Offline fallback'));
                   }
                 } catch (e: unknown) {
                   alert(`Test Failed: ${e instanceof Error ? e.message : 'Unknown error'}`);
                 }
               }}
             >
-              Test Connection
+              🔄 Test Cloud Connection
             </button>
-            <button
-              type="button"
-              className="btn btn-primary"
-              onClick={async () => {
-                const urlToTest = inputScriptUrl.trim() || localStorage.getItem('rodsync_gsheets_script_url') || '';
-                try {
-                  const storedRods = JSON.parse(localStorage.getItem('rod_stock_inventory_v1') || '[]');
-                  const storedLogs = JSON.parse(localStorage.getItem('rod_stock_cut_logs_v1') || '[]');
-                  const railStock = (typeof window !== 'undefined' && (window as any).getGuidedRailStock) ? (window as any).getGuidedRailStock() : [];
-                  const res = await fetch('/api/gsheets-sync', {
-                    method: 'POST',
-                    headers: {
-                      'Content-Type': 'application/json',
-                      ...(urlToTest ? { 'x-google-script-url': urlToTest } : {})
-                    },
-                    body: JSON.stringify({ rods: storedRods, cutLogs: storedLogs, railStock, scriptUrl: urlToTest })
-                  });
-                  const data = await res.json();
-                  if (data.syncedToGoogleSheets) {
-                    setSheetsStatus('connected');
-                    alert('Success! All current stock and cut logs synchronized directly to your Google Sheet tabs (Chrome rod inventory, Chrome rod cutting logs)!');
-                  } else {
-                    alert(`Sync Note: ${data.message || 'Saved locally, waiting for Web App URL connection.'}`);
+            <div style={{ display: 'flex', alignItems: 'center', gap: '0.65rem' }}>
+              <button
+                type="button"
+                className="btn btn-primary btn-sm"
+                style={{ fontSize: '0.8rem', padding: '0.45rem 1.15rem', fontWeight: 700, background: 'linear-gradient(135deg, #f97316, #ea580c)', borderColor: '#ea580c' }}
+                onClick={async () => {
+                  try {
+                    const storedRods = (typeof window !== 'undefined' && (window as any).getVanillaRods) ? (window as any).getVanillaRods() : (window.__INITIAL_RODS__ || []);
+                    const storedLogs = (typeof window !== 'undefined' && (window as any).getVanillaCutLogs) ? (window as any).getVanillaCutLogs() : (window.__INITIAL_CUT_LOGS__ || []);
+                    const railStock = (typeof window !== 'undefined' && (window as any).getGuidedRailStock) ? (window as any).getGuidedRailStock() : [];
+                    const res = await fetch('/api/firebase-sync', {
+                      method: 'POST',
+                      headers: { 'Content-Type': 'application/json' },
+                      body: JSON.stringify({ rods: storedRods, cutLogs: storedLogs, railStock })
+                    });
+                    const data = await res.json();
+                    if (data.success) {
+                      alert('🔥 Success! All current stock and cut logs synchronized directly to Firebase Cloud Firestore!');
+                    } else {
+                      alert(`Sync Note: ${data.message || 'Saved locally, syncing to cloud.'}`);
+                    }
+                  } catch (e: unknown) {
+                    alert(`Sync Error: ${e instanceof Error ? e.message : 'Unknown error'}`);
                   }
-                } catch (e: unknown) {
-                  alert(`Sync Error: ${e instanceof Error ? e.message : 'Unknown error'}`);
-                }
-              }}
-            >
-              Push All Stock &amp; Logs to Sheet Now
-            </button>
-            <button type="button" className="btn btn-secondary" onClick={() => setIsSheetsModalOpen(false)}>Close</button>
+                }}
+              >
+                ⚡ Push Stock &amp; Logs to Firebase
+              </button>
+              <button type="button" className="btn btn-secondary btn-sm" style={{ fontSize: '0.8rem', padding: '0.45rem 0.95rem', fontWeight: 600 }} onClick={() => setIsFirebaseModalOpen(false)}>Close</button>
+            </div>
           </div>
         </div>
       </div>
@@ -3435,7 +5641,7 @@ export default function Home() {
       <div id="toastContainer" className="toast-container" aria-live="polite" aria-atomic="true"></div>
 
       {/*  MOBILE NATIVE BOTTOM NAVIGATION BAR  */}
-      <nav className="mobile-bottom-nav" aria-label="Mobile Navigation">
+      <nav className="mobile-bottom-nav" aria-label="Mobile Navigation" style={{ display: portalView === 'main' ? undefined : 'none' }}>
         <button className="mob-nav-item active" id="mobNavSearch" title="Smart Search">
           <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
             <circle cx="11" cy="11" r="8"></circle>
@@ -3480,7 +5686,7 @@ export default function Home() {
 
       {/* We load the script with afterInteractive strategy and trigger initialization on load */}
       <Script
-        src="/script.js?v=17"
+        src="/script.js?v=119"
         strategy="afterInteractive"
         onLoad={() => {
           if (window.initVanillaApp) {
@@ -3490,7 +5696,7 @@ export default function Home() {
       />
       {/* Guided Rail Module */}
       <Script
-        src="/guided-rail.js?v=6"
+        src="/guided-rail.js?v=123"
         strategy="afterInteractive"
         onLoad={() => {
           if (window.initGuidedRail) {

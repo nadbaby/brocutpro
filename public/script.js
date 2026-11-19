@@ -154,6 +154,7 @@
   let executePlanSummaryDetails, planAutoAddRemnants, planReasonInput, planCreatedByInput, planAssignedByInput, btnConfirmExecutePlan;
   let activeCutPlan = null;
   let activeCutStrategy = 'full_length_first';
+  let _rodCategoryFilter = 'all';
   let isMatchingTableVisible = false;
   let cutLogsModalOverlay, btnOpenCutLogsModal, btnCloseCutLogsModal, btnCloseCutLogsBottom, cutLogsBadge;
   let cutLogsTableBody, cutLogsEmptyState, filterCutLogsInput, btnExportCutLogsCsv, btnClearCutLogs;
@@ -425,7 +426,11 @@
     }
     updateLengthToggleUI();
     updateDashboard();
+    updateDynamicRodInputsFromStock();
     updateCutLogsBadge();
+    if (typeof initAllCustomDropdowns === 'function') {
+      initAllCustomDropdowns();
+    }
   }
 
   // --- THEME SYSTEM (AUTOMATIC SYSTEM SYNC) ---
@@ -483,17 +488,12 @@
 
   // --- PWA SERVICE WORKER & APP INSTALLATION ---
   function initPwaFeatures() {
-    // 1. Service Worker Registration for offline capabilities
+    // Unregister any stale ServiceWorker caches
     if ('serviceWorker' in navigator) {
-      window.addEventListener('load', () => {
-        navigator.serviceWorker.register('./sw.js')
-          .then(reg => {
-            console.log('RodSync PWA ServiceWorker registered with scope:', reg.scope);
-            reg.update();
-          })
-          .catch(err => {
-            console.log('ServiceWorker registration skipped or failed:', err);
-          });
+      navigator.serviceWorker.getRegistrations().then(registrations => {
+        for (const reg of registrations) {
+          reg.unregister();
+        }
       });
     }
 
@@ -578,98 +578,110 @@
     if (target) target.classList.add('active');
   }
 
-  // --- DATA STORAGE & PERSISTENCE ---
+  // --- DIAMETER NORMALIZATION & DIMENSION SUPPORT (e.g. 100x100, 50x50, or 10) ---
+  function parseDiameterValue(val) {
+    if (val === null || val === undefined) return '';
+    const s = String(val).trim();
+    if (!s) return '';
+    const dimMatch = s.match(/^(\d+(?:\.\d+)?)\s*[xX*×]\s*(\d+(?:\.\d+)?)$/);
+    if (dimMatch) {
+      return `${dimMatch[1]}x${dimMatch[2]}`;
+    }
+    const num = parseFloat(s);
+    if (!isNaN(num) && num > 0 && !s.includes('x') && !s.includes('X')) {
+      return num;
+    }
+    return s;
+  }
+
+  function areDiasEqual(d1, d2) {
+    if (d1 === d2) return true;
+    if (d1 === null || d1 === undefined || d2 === null || d2 === undefined) return false;
+    const s1 = String(d1).trim().toLowerCase().replace(/\s+/g, '');
+    const s2 = String(d2).trim().toLowerCase().replace(/\s+/g, '');
+    if (s1 === s2) return true;
+    const n1 = parseFloat(s1);
+    const n2 = parseFloat(s2);
+    if (!isNaN(n1) && !isNaN(n2) && !s1.includes('x') && !s2.includes('x')) {
+      return Math.abs(n1 - n2) < 0.01;
+    }
+    return false;
+  }
+
+  function sortDiameters(a, b) {
+    const sA = String(a).trim();
+    const sB = String(b).trim();
+    const numA = parseFloat(sA) || 0;
+    const numB = parseFloat(sB) || 0;
+    if (numA !== numB) return numA - numB;
+    return sA.localeCompare(sB);
+  }
+
+  // --- DATA STORAGE & PERSISTENCE (PURE FIREBASE CLOUD DATABASE) ---
   function loadRodsFromStorage() {
     try {
-      if (window.__INITIAL_RODS__ && Array.isArray(window.__INITIAL_RODS__) && window.__INITIAL_RODS__.length > 0) {
+      if (window.__INITIAL_RODS__ && Array.isArray(window.__INITIAL_RODS__)) {
         rods = JSON.parse(JSON.stringify(window.__INITIAL_RODS__));
       } else {
-        const stored = localStorage.getItem(STORAGE_KEY);
-        if (stored) {
-          try {
-            const parsed = JSON.parse(stored);
-            if (Array.isArray(parsed) && parsed.length > 0) {
-              rods = parsed;
-            } else if (window.__INITIAL_RODS__ && Array.isArray(window.__INITIAL_RODS__)) {
-              rods = JSON.parse(JSON.stringify(window.__INITIAL_RODS__));
-            } else {
-              rods = JSON.parse(JSON.stringify(DEFAULT_SAMPLE_RODS));
-            }
-          } catch {
-            rods = JSON.parse(JSON.stringify(DEFAULT_SAMPLE_RODS));
-          }
-        } else if (window.__INITIAL_RODS__ && Array.isArray(window.__INITIAL_RODS__)) {
-          rods = JSON.parse(JSON.stringify(window.__INITIAL_RODS__));
-        } else {
-          rods = JSON.parse(JSON.stringify(DEFAULT_SAMPLE_RODS));
-        }
+        rods = [];
       }
       rods.forEach(r => {
         if (r.location !== undefined) delete r.location;
       });
-      // Purge any 300mm test rods and invalid/corrupted rods to keep inventory strictly matching Google Sheet
       rods = rods.filter(r => {
-        const dia = Number(r.diameterMm) || 0;
+        const rawDia = r.diameterMm !== undefined && r.diameterMm !== null ? String(r.diameterMm).trim() : '';
         const len = Number(r.lengthIn) || Number(r.lengthFt) || 0;
         const qty = Number(r.quantity) || 0;
-        return dia > 0 && len > 0 && qty > 0 && dia !== 300;
+        return rawDia.length > 0 && len > 0 && qty > 0 && rawDia !== '300';
       });
-      // Optionally sync to local as backup if we have valid rods
-      if (rods.length > 0) {
-        localStorage.setItem(STORAGE_KEY, JSON.stringify(rods));
-      }
     } catch (e) {
-      console.error('Error loading inventory from storage, fallback to defaults', e);
-      rods = JSON.parse(JSON.stringify(DEFAULT_SAMPLE_RODS));
+      console.error('Error loading inventory from Firebase', e);
+      rods = [];
     }
   }
 
   function saveRodsToStorage() {
     try {
-      localStorage.setItem(STORAGE_KEY, JSON.stringify(rods));
+      updateDynamicRodInputsFromStock();
+      // Always persist directly to Firebase Cloud Database
       window.dispatchEvent(new CustomEvent('syncRodsToFirebase', { detail: rods }));
+      fetch('/api/firebase-sync', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ rods })
+      }).catch(err => console.warn('Firebase rods API sync warning:', err));
     } catch (e) {
-      showToast('Error saving data to browser storage: ' + e.message, 'danger');
+      console.error('Error saving data to Firebase database: ' + e.message);
     }
   }
 
   function loadCutLogsFromStorage() {
     try {
-      if (window.__INITIAL_CUT_LOGS__ && Array.isArray(window.__INITIAL_CUT_LOGS__) && window.__INITIAL_CUT_LOGS__.length > 0) {
+      if (window.__INITIAL_CUT_LOGS__ && Array.isArray(window.__INITIAL_CUT_LOGS__)) {
         cutLogs = JSON.parse(JSON.stringify(window.__INITIAL_CUT_LOGS__));
       } else {
-        const stored = localStorage.getItem(CUT_LOGS_STORAGE_KEY);
-        if (stored) {
-          try {
-            const parsed = JSON.parse(stored);
-            if (Array.isArray(parsed)) {
-              cutLogs = parsed;
-            } else {
-              cutLogs = JSON.parse(JSON.stringify(DEFAULT_SAMPLE_CUT_LOGS));
-            }
-          } catch {
-            cutLogs = JSON.parse(JSON.stringify(DEFAULT_SAMPLE_CUT_LOGS));
-          }
-        } else {
-          cutLogs = JSON.parse(JSON.stringify(DEFAULT_SAMPLE_CUT_LOGS));
-        }
+        cutLogs = [];
       }
       if (cutLogs.length > 0) {
         cutLogs = cutLogs.filter(l => Number(l.diameterMm) !== 300);
-        localStorage.setItem(CUT_LOGS_STORAGE_KEY, JSON.stringify(cutLogs));
       }
     } catch (e) {
-      console.error('Error loading cut logs from storage', e);
+      console.error('Error loading cut logs from Firebase', e);
       cutLogs = [];
     }
   }
 
   function saveCutLogsToStorage() {
     try {
-      localStorage.setItem(CUT_LOGS_STORAGE_KEY, JSON.stringify(cutLogs));
+      // Always persist directly to Firebase Cloud Database
       window.dispatchEvent(new CustomEvent('syncCutLogsToFirebase', { detail: cutLogs }));
+      fetch('/api/firebase-sync', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ cutLogs })
+      }).catch(err => console.warn('Firebase cut logs API sync warning:', err));
     } catch (e) {
-      console.error('Error saving cut logs to storage', e);
+      console.error('Error saving cut logs to Firebase database', e);
     }
   }
 
@@ -812,7 +824,7 @@
   function populateDiameterFilterOptions() {
     if (!filterDiameter) return;
     const currentVal = filterDiameter.value;
-    const diameters = [...new Set(rods.map(r => Number(r.diameterMm)))].sort((a, b) => a - b);
+    const diameters = [...new Set(rods.map(r => r.diameterMm !== undefined && r.diameterMm !== null ? String(r.diameterMm).trim() : '').filter(Boolean))].sort(sortDiameters);
 
     filterDiameter.innerHTML = '<option value="all">All Diameters</option>';
     diameters.forEach(d => {
@@ -822,7 +834,7 @@
       filterDiameter.appendChild(opt);
     });
 
-    if (currentVal && (currentVal === 'all' || diameters.includes(Number(currentVal)))) {
+    if (currentVal && (currentVal === 'all' || diameters.some(d => areDiasEqual(d, currentVal)))) {
       filterDiameter.value = currentVal;
     } else {
       filterDiameter.value = 'all';
@@ -832,7 +844,7 @@
   function renderQuickDiameterChips() {
     if (!quickDiameterChipsTrack || !filterDiameter) return;
     const currentDia = filterDiameter.value;
-    const diameters = [...new Set(rods.map(r => Number(r.diameterMm)))].sort((a, b) => a - b);
+    const diameters = [...new Set(rods.map(r => r.diameterMm !== undefined && r.diameterMm !== null ? String(r.diameterMm).trim() : '').filter(Boolean))].sort(sortDiameters);
 
     quickDiameterChipsTrack.innerHTML = '';
 
@@ -871,16 +883,17 @@
     const statusFilter = filterStockStatus ? filterStockStatus.value : 'all';
 
     let filtered = rods.filter(rod => {
-      // Keyword match across name, sku, notes
+      // Keyword match across name, sku, notes, diameter
       if (keyword) {
         const matchName = rod.name ? rod.name.toLowerCase().includes(keyword) : false;
         const matchSku = rod.sku ? rod.sku.toLowerCase().includes(keyword) : false;
         const matchNotes = rod.notes ? rod.notes.toLowerCase().includes(keyword) : false;
-        if (!matchName && !matchSku && !matchNotes) return false;
+        const matchDia = rod.diameterMm ? String(rod.diameterMm).includes(keyword) : false;
+        if (!matchName && !matchSku && !matchNotes && !matchDia) return false;
       }
 
       // Diameter filter
-      if (diaFilter !== 'all' && Number(rod.diameterMm) !== Number(diaFilter)) {
+      if (diaFilter !== 'all' && !areDiasEqual(rod.diameterMm, diaFilter)) {
         return false;
       }
 
@@ -892,8 +905,25 @@
         if (statusFilter === 'low_stock' && (qty <= 0 || qty > LOW_STOCK_THRESHOLD)) return false;
       }
 
+      // Rod Catagorie filter
+      if (_rodCategoryFilter && _rodCategoryFilter !== 'all' && _rodCategoryFilter !== 'ALL') {
+        const cat = rod.category || rod.name || '';
+        if (cat.toLowerCase() !== _rodCategoryFilter.toLowerCase()) return false;
+      }
+
       return true;
     });
+
+    // Update section title & total bars badge strictly for the active category
+    const activeCatName = (_rodCategoryFilter && _rodCategoryFilter !== 'all' && _rodCategoryFilter !== 'ALL') ? _rodCategoryFilter : 'Rod';
+    const sectionTitle = document.getElementById('rodInventorySectionTitle');
+    if (sectionTitle) {
+      sectionTitle.textContent = `${activeCatName} Stock Inventory`;
+    }
+
+    const totalRodBars = filtered.reduce((sum, r) => sum + (Number(r.quantity) || 0), 0);
+    const crBadge = document.getElementById('crTotalStockBarsBadge');
+    if (crBadge) crBadge.textContent = `${totalRodBars} bar${totalRodBars !== 1 ? 's' : ''}`;
 
     // Sorting
     filtered.sort((a, b) => {
@@ -904,6 +934,11 @@
         if (sortColumn === 'lengthFt' || sortColumn === 'lengthIn') {
           valA = getRodLength(a);
           valB = getRodLength(b);
+        } else if (sortColumn === 'diameterMm') {
+          const numA = parseFloat(valA) || 0;
+          const numB = parseFloat(valB) || 0;
+          if (numA !== numB) return sortDirection === 'asc' ? (numA - numB) : (numB - numA);
+          return sortDirection === 'asc' ? String(valA).localeCompare(String(valB)) : String(valB).localeCompare(String(valA));
         } else {
           valA = Number(valA) || 0;
           valB = Number(valB) || 0;
@@ -921,72 +956,56 @@
     inventoryTableBody.innerHTML = '';
 
     if (filtered.length === 0) {
-      if (inventoryTableBody && inventoryTableBody.parentElement) inventoryTableBody.parentElement.classList.add('hidden');
       if (inventoryEmptyState) inventoryEmptyState.classList.remove('hidden');
       if (inventoryCountSummary) inventoryCountSummary.textContent = `Showing 0 of ${rods.length} records`;
+      inventoryTableBody.innerHTML = `
+        <tr>
+          <td colspan="5" style="text-align: center; padding: 2.5rem 1rem; color: var(--text-muted);">
+            <div style="font-size: 1.5rem; margin-bottom: 0.5rem;">📦</div>
+            <div style="font-weight: 600; margin-bottom: 0.25rem;">No chrome rod stock found</div>
+            <p style="font-size: 0.8rem; margin: 0 0 1rem;">No storage stock matches your search filter. Add a stock rod to get started.</p>
+            <button type="button" class="btn btn-sm btn-primary" id="btnStockEmptyAddCr" style="background: linear-gradient(135deg, #14b8a6, #0d9488); border-color: #0d9488; border-radius: 9999px;" onclick="window.openAddRodModal ? window.openAddRodModal() : (document.getElementById('addRodModalOverlay')?.classList.remove('hidden'))">
+              + Add Chrome Rod Stock
+            </button>
+          </td>
+        </tr>`;
       return;
     }
 
-    if (inventoryTableBody && inventoryTableBody.parentElement) inventoryTableBody.parentElement.classList.remove('hidden');
     if (inventoryEmptyState) inventoryEmptyState.classList.add('hidden');
     if (inventoryCountSummary) inventoryCountSummary.textContent = `Showing ${filtered.length} of ${rods.length} records`;
 
     filtered.forEach(rod => {
       const tr = document.createElement('tr');
+      tr.dataset.rodId = rod.id;
       const qty = Number(rod.quantity) || 0;
-
-      // Status Badge determination
-      let statusBadge = '';
-      if (qty <= 0) {
-        statusBadge = '<span class="badge badge-danger">Out of Stock</span>';
-      } else if (qty <= LOW_STOCK_THRESHOLD) {
-        statusBadge = `<span class="badge badge-warning">Low Stock (${qty})</span>`;
-      } else {
-        statusBadge = '<span class="badge badge-success">In Stock</span>';
-      }
+      const lenIn = getRodLength(rod);
+      const lenMm = (lenIn * 25.4).toFixed(1);
+      const diaVal = rod.diameterMm !== undefined && rod.diameterMm !== null ? String(rod.diameterMm).trim() : '';
+      const modelTag = diaVal ? `${diaVal} mm` : 'Rod';
+      const rodCat = rod.name || rod.category || 'Rod';
 
       tr.innerHTML = `
-        
-        <td class="col-name">
-          <div class="rod-title">${escapeHtml(rod.name)}</div>
-          <div class="mobile-only rod-meta-mobile">
-            
-            ${statusBadge}
+        <td>
+          <div style="display: flex; align-items: center; gap: 0.5rem; flex-wrap: wrap;">
+            <span class="cr-category-badge-tag">${rodCat}</span>
+            <span class="cr-spec-badge-tag">${modelTag}</span>
           </div>
         </td>
-        <td class="col-diameter hide-mobile text-right font-mono"><strong>${rod.diameterMm}</strong> <span class="text-muted">mm</span></td>
-        <td class="col-length hide-mobile text-right font-mono"><strong>${formatDisplayLength(getRodLength(rod))}</strong> <span class="text-muted">In</span></td>
-        <td class="col-size mobile-only text-center font-mono">
-          <span class="size-badge-pill"><strong>${rod.diameterMm}</strong>mm × <strong>${formatDisplayLength(getRodLength(rod))}</strong>In</span>
+        <td class="text-center font-mono" style="font-weight: 700; color: #0d9488;">
+          ${diaVal ? diaVal + ' mm' : '—'}
         </td>
-        <td class="col-qty text-right font-mono">
-          <span class="qty-pill ${qty === 0 ? 'qty-zero' : ''}">${qty}</span>
+        <td class="text-right font-mono" style="font-weight: 700; color: #0d9488;">
+          ${formatDisplayLength(lenIn)} In
+          <span style="font-size: 0.72rem; color: var(--text-muted); font-weight: 400; display: block;">${lenMm} mm</span>
         </td>
-        
-        
-        <td class="col-actions text-center">
-          <div class="table-actions">
-            <div class="desktop-only stepper-mini" title="Quick adjust quantity">
-              <button class="stepper-mini-btn btn-quick-dec" data-id="${rod.id}" title="Decrease quantity by 1" ${qty <= 0 ? 'disabled' : ''}>-</button>
-              <button class="stepper-mini-btn btn-quick-inc" data-id="${rod.id}" title="Increase quantity by 1">+</button>
-            </div>
-            <button class="btn btn-primary btn-xs btn-open-cut" data-id="${rod.id}" title="Cut custom size from this rod and save offcut remnant" ${qty <= 0 ? 'disabled' : ''}>
+        <td class="text-right">
+          <span class="font-mono" style="font-weight: 700; font-size: 0.95rem; color: var(--text-main);">${qty}</span>
+        </td>
+        <td class="text-center">
+          <div style="display: inline-flex; align-items: center; gap: 0.35rem; justify-content: center;">
+            <button type="button" class="btn btn-xs btn-primary btn-open-cut" data-id="${rod.id}" title="Cut custom size from this rod and save offcut remnant" style="background: linear-gradient(135deg, #14b8a6, #0d9488); border-color: #0d9488; font-size: 0.72rem; padding: 0.25rem 0.65rem; border-radius: 9999px; box-shadow: 0 2px 6px rgba(20, 184, 166, 0.25);" ${qty <= 0 ? 'disabled' : ''}>
               ✂️ Cut
-            </button>
-            <button class="desktop-only btn btn-secondary btn-xs btn-open-deduct" data-id="${rod.id}" title="Deduct whole rods from stock" ${qty <= 0 ? 'disabled' : ''}>
-              Deduct
-            </button>
-            <button class="desktop-only btn btn-secondary btn-xs btn-open-edit" data-id="${rod.id}" title="Edit rod details">
-              Edit
-            </button>
-            <button class="desktop-only btn btn-ghost btn-xs text-danger btn-delete-rod" data-id="${rod.id}" title="Delete this rod">
-              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                <polyline points="3 6 5 6 21 6"></polyline>
-                <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path>
-              </svg>
-            </button>
-            <button class="mobile-only btn btn-secondary btn-xs btn-rod-more" data-id="${rod.id}" title="More options for this rod">
-              ···
             </button>
           </div>
         </td>
@@ -1033,37 +1052,8 @@
       }
     }
 
-    // Dynamic quick presets depending on unit
-    if (quickLengthChipsScroll) {
-      if (newUnit === 'm') {
-        quickLengthChipsScroll.innerHTML = `
-          <button type="button" class="btn-len-preset" data-len="0.5">0.5m</button>
-          <button type="button" class="btn-len-preset" data-len="1">1m</button>
-          <button type="button" class="btn-len-preset" data-len="1.5">1.5m</button>
-          <button type="button" class="btn-len-preset" data-len="2">2m</button>
-          <button type="button" class="btn-len-preset" data-len="3">3m</button>
-          <button type="button" class="btn-len-preset" data-len="5">5m</button>
-        `;
-      } else if (newUnit === 'ft') {
-        quickLengthChipsScroll.innerHTML = `
-          <button type="button" class="btn-len-preset" data-len="1">1ft</button>
-          <button type="button" class="btn-len-preset" data-len="2">2ft</button>
-          <button type="button" class="btn-len-preset" data-len="4">4ft</button>
-          <button type="button" class="btn-len-preset" data-len="5">5ft</button>
-          <button type="button" class="btn-len-preset" data-len="10">10ft</button>
-          <button type="button" class="btn-len-preset" data-len="20">20ft</button>
-        `;
-      } else {
-        quickLengthChipsScroll.innerHTML = `
-          <button type="button" class="btn-len-preset" data-len="1">1in</button>
-          <button type="button" class="btn-len-preset" data-len="2">2in</button>
-          <button type="button" class="btn-len-preset" data-len="4">4in</button>
-          <button type="button" class="btn-len-preset" data-len="6">6in</button>
-          <button type="button" class="btn-len-preset" data-len="8">8in</button>
-          <button type="button" class="btn-len-preset" data-len="10">10in</button>
-        `;
-      }
-    }
+    // Dynamic quick presets and datalist from database for the active unit
+    updateDynamicLengthOptionsFromDatabase();
 
     updateSearchLengthHint();
 
@@ -1131,13 +1121,18 @@
 
   // --- MULTI-CUT STOCK OPTIMIZER ENGINE (LINEAR CUTTING STOCK PACKING) ---
   function calculateMultiCutPlan(diameter, pieceLenInches, piecesNeeded, unit, strategy = 'full_length_first', inputLength = null) {
-    const searchDiameter = Number(diameter);
+    const searchDiameter = parseDiameterValue(diameter);
     const eligibleRods = rods
-      .filter(rod =>
-        Number(rod.diameterMm) === searchDiameter &&
-        getRodLength(rod) >= pieceLenInches &&
-        Number(rod.quantity) > 0
-      )
+      .filter(rod => {
+        if (!areDiasEqual(rod.diameterMm, searchDiameter)) return false;
+        if (getRodLength(rod) < pieceLenInches) return false;
+        if (Number(rod.quantity) <= 0) return false;
+        if (_rodCategoryFilter && _rodCategoryFilter !== 'all' && _rodCategoryFilter !== 'ALL') {
+          const cat = rod.category || rod.name || '';
+          if (cat.toLowerCase() !== _rodCategoryFilter.toLowerCase()) return false;
+        }
+        return true;
+      })
       .map(r => ({ ...r, availableUnits: Number(r.quantity) || 0 }));
 
     if (strategy === 'full_length_first') {
@@ -1176,9 +1171,10 @@
         steps.push({
           stepNum: steps.length + 1,
           rodId: rod.id,
+          category: rod.name || 'Chrome Rod',
           rodName: rod.name,
           rodSku: rod.sku || '',
-          diameterMm: Number(rod.diameterMm),
+          diameterMm: rod.diameterMm,
           rodFullLengthInches: rodLen,
           piecesToCut: piecesFromThisRod,
           pieceLengthInches: pieceLenInches,
@@ -1325,8 +1321,9 @@
 
       stepCard.innerHTML = `
         <div class="step-card-header">
-          <div class="step-card-left">
+          <div class="step-card-left" style="display: flex; align-items: center; gap: 0.5rem; flex-wrap: wrap;">
             <span class="step-badge">${stepBadgeText}</span>
+            <span class="cr-category-badge-tag">${step.category || 'Chrome Rod'}</span>
             <span class="step-rod-title">${escapeHtml(step.rodName)}</span>
           </div>
           <div class="step-rod-dims">
@@ -1378,9 +1375,17 @@
     refreshDomElements();
     if (!executePlanModalOverlay || !executePlanSummaryDetails) return;
 
+    const pieceLenInches = Number(activeCutPlan.pieceLengthInches) || 0;
+    const pieceLenStr = activeCutPlan.unit === 'ft'
+      ? `${formatDisplayLength(pieceLenInches / 12)} Ft`
+      : `${formatDisplayLength(pieceLenInches)} In`;
+    const pieceMmStr = Math.round(pieceLenInches * 25.4);
+
     let detailsHtml = `
-      <div style="margin-bottom: 0.75rem; font-weight: 700; color: var(--text-main); font-size: 0.95rem;">
-        Cutting Summary: ${activeCutPlan.fulfilledPieces} pieces of ${formatDisplayLength(activeCutPlan.unit === 'ft' ? (activeCutPlan.pieceLengthInches / 12) : activeCutPlan.pieceLengthInches)} ${activeCutPlan.unit === 'ft' ? 'Ft' : 'In'} (${activeCutPlan.diameterMm} mm)
+      <div style="background: #e6f7f5; border-radius: 12px; padding: 0.85rem 1.25rem; font-weight: 700; color: #0f172a; margin-bottom: 0.85rem; display: flex; align-items: center; gap: 1.5rem; font-size: 0.92rem;">
+        <div>Pieces: ${activeCutPlan.fulfilledPieces}</div>
+        <div style="color: #cbd5e1; font-weight: 400;">|</div>
+        <div>Length: ${pieceLenStr} (${pieceMmStr} mm)</div>
       </div>
     `;
 
@@ -1389,23 +1394,26 @@
         ? `${formatDisplayLength(step.rodFullLengthInches / 12)} Ft`
         : `${formatDisplayLength(step.rodFullLengthInches)} In`;
       const cutLen = activeCutPlan.unit === 'ft'
-        ? `${formatDisplayLength(step.totalCutInches / 12)} Ft`
-        : `${formatDisplayLength(step.totalCutInches)} In`;
+        ? `${formatDisplayLength(step.pieceLengthInches / 12)} Ft`
+        : `${formatDisplayLength(step.pieceLengthInches)} In`;
       const remLen = activeCutPlan.unit === 'ft'
         ? `${formatDisplayLength(step.remainderInches / 12)} Ft`
         : `${formatDisplayLength(step.remainderInches)} In`;
 
       detailsHtml += `
-        <div class="plan-confirm-row">
-          <div>
-            <strong>Step #${step.stepNum}: ${escapeHtml(step.rodName)}</strong> (${fullLen})<br>
-            <span class="text-primary">Cut: ${step.piecesToCut} pcs (${cutLen} total)</span>
-          </div>
-          <div style="text-align: right;">
+        <div style="background: #ffffff; border: 1px solid #e2e8f0; border-radius: 12px; padding: 0.85rem 1rem; margin-bottom: 0.75rem; box-shadow: 0 1px 3px rgba(0,0,0,0.02);">
+          <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 0.35rem;">
+            <div style="display: flex; align-items: center; gap: 0.65rem;">
+              <span style="background: #e6f7f5; color: #0d9488; font-weight: 700; font-size: 0.78rem; padding: 0.2rem 0.55rem; border-radius: 6px;">Step: #${step.stepNum}</span>
+              <strong style="font-size: 0.95rem; color: #0f172a;">${escapeHtml(step.rodName)} (${fullLen})</strong>
+            </div>
             ${step.remainderInches > 0
-              ? `<span class="step-offcut-badge">+${remLen} Offcut (Stock)</span>`
-              : `<span class="badge-cut-exact">Exact (0 Scrap)</span>`
+              ? `<span style="background: #d1fae5; color: #059669; font-weight: 700; font-size: 0.78rem; padding: 0.25rem 0.75rem; border-radius: 9999px;">+${remLen} (Offcut)</span>`
+              : `<span style="background: #f1f5f9; color: #64748b; font-weight: 700; font-size: 0.78rem; padding: 0.25rem 0.75rem; border-radius: 9999px;">Exact (0 Scrap)</span>`
             }
+          </div>
+          <div style="font-size: 0.82rem; color: #64748b; margin-left: 2px;">
+            Cut: ${step.piecesToCut} piece${step.piecesToCut > 1 ? 's' : ''} (${cutLen})
           </div>
         </div>
       `;
@@ -1413,7 +1421,34 @@
 
     executePlanSummaryDetails.innerHTML = detailsHtml;
     if (planReasonInput) planReasonInput.value = '';
-    if (planCreatedByInput) planCreatedByInput.value = '';
+
+    // Auto-fill logged-in user name into Created By select
+    const sessionUser = (typeof getRodsyncCurrentSessionUser === 'function') ? getRodsyncCurrentSessionUser() : { name: 'Operator' };
+    const currentUserName = sessionUser.name || 'Operator';
+    const planCreatedBySelect = document.getElementById('planCreatedBySelect');
+    if (planCreatedBySelect) {
+      let matched = false;
+      for (let i = 0; i < planCreatedBySelect.options.length; i++) {
+        if (planCreatedBySelect.options[i].value.toLowerCase() === currentUserName.toLowerCase()) {
+          planCreatedBySelect.selectedIndex = i;
+          matched = true;
+          break;
+        }
+      }
+      if (!matched && currentUserName) {
+        const opt = document.createElement('option');
+        opt.value = currentUserName;
+        opt.textContent = currentUserName;
+        opt.selected = true;
+        planCreatedBySelect.appendChild(opt);
+      }
+    }
+    if (planCreatedByInput) planCreatedByInput.value = currentUserName;
+
+    const planAssignedBySelect = document.getElementById('planAssignedBySelect');
+    if (planAssignedBySelect) {
+      planAssignedBySelect.value = '';
+    }
     if (planAssignedByInput) planAssignedByInput.value = '';
     if (planAutoAddRemnants) planAutoAddRemnants.checked = true;
 
@@ -1432,8 +1467,14 @@
 
     const shouldAddRemnants = planAutoAddRemnants ? planAutoAddRemnants.checked : true;
     const reason = planReasonInput ? planReasonInput.value.trim() : '';
-    const createdBy = planCreatedByInput ? planCreatedByInput.value.trim() : '';
-    const assignedBy = planAssignedByInput ? planAssignedByInput.value.trim() : '';
+    const planCreatedBySelect = document.getElementById('planCreatedBySelect');
+    const planAssignedBySelect = document.getElementById('planAssignedBySelect');
+    const createdBy = (planCreatedBySelect && planCreatedBySelect.value)
+      ? planCreatedBySelect.value.trim()
+      : (planCreatedByInput ? planCreatedByInput.value.trim() : '');
+    const assignedBy = (planAssignedBySelect && planAssignedBySelect.value)
+      ? planAssignedBySelect.value.trim()
+      : (planAssignedByInput ? planAssignedByInput.value.trim() : '');
 
     const newLogIds = [];
 
@@ -1490,7 +1531,7 @@
               id: 'rod-cut-' + Date.now() + '-' + idx,
               sku: rod.sku ? `${rod.sku}-CUT` : `ROD-${Math.round(rod.diameterMm)}MM-${Math.round(remainder)}IN`,
               name: rod.name,
-              diameterMm: Number(rod.diameterMm),
+              diameterMm: rod.diameterMm,
               lengthIn: remainder,
               lengthFt: remainder,
               quantity: 1,
@@ -1595,14 +1636,14 @@
   function executeSmartSearch(diameter, minLength, showNotification = true, unitOverride = null, piecesOverride = null) {
     refreshDomElements();
     const unit = unitOverride || searchLengthUnit;
-    const searchDiameter = Number(diameter);
+    const searchDiameter = parseDiameterValue(diameter);
     const inputLength = Number(minLength);
     const piecesCount = piecesOverride !== null
       ? Number(piecesOverride)
       : (searchPiecesInput ? (parseInt(searchPiecesInput.value, 10) || 1) : 1);
 
-    if (isNaN(searchDiameter) || searchDiameter <= 0 || isNaN(inputLength) || inputLength <= 0) {
-      showToast('Please enter valid positive numbers for diameter and length', 'warning');
+    if (!searchDiameter || (typeof searchDiameter === 'number' && searchDiameter <= 0) || isNaN(inputLength) || inputLength <= 0) {
+      showToast('Please enter valid positive values for diameter and length', 'warning');
       return;
     }
 
@@ -1626,11 +1667,16 @@
 
     // 2. Individual Matching Rods Query
     const results = rods
-      .filter(rod =>
-        Number(rod.diameterMm) === searchDiameter &&
-        getRodLength(rod) >= requiredLengthInches &&
-        Number(rod.quantity) > 0
-      )
+      .filter(rod => {
+        if (!areDiasEqual(rod.diameterMm, searchDiameter)) return false;
+        if (getRodLength(rod) < requiredLengthInches) return false;
+        if (Number(rod.quantity) <= 0) return false;
+        if (_rodCategoryFilter && _rodCategoryFilter !== 'all' && _rodCategoryFilter !== 'ALL') {
+          const cat = rod.category || rod.name || '';
+          if (cat.toLowerCase() !== _rodCategoryFilter.toLowerCase()) return false;
+        }
+        return true;
+      })
       .sort((a, b) => getRodLength(a) - getRodLength(b));
 
     const ftEquiv = Number((requiredLengthInches / 12).toFixed(2));
@@ -1700,7 +1746,7 @@
       if (extraLengthInches === 0) {
         remnantBadge = `<span class="badge-cut-exact">Exact 1-pc fit (0 scrap)</span>`;
       } else if (cutsPossibleInThisRod > 1) {
-        remnantBadge = `<span class="badge-cut-rem" style="background: rgba(99, 102, 241, 0.12); color: #6366f1; border-color: rgba(99, 102, 241, 0.3);">⚡ Yields <strong>${cutsPossibleInThisRod} pcs</strong></span>`;
+        remnantBadge = `<span class="badge-cut-rem" style="background: rgba(20, 184, 166, 0.12); color: #0d9488; border-color: rgba(20, 184, 166, 0.3);">⚡ Yields <strong>${cutsPossibleInThisRod} pcs</strong></span>`;
       } else if (unit === 'm') {
         remnantBadge = `<span class="badge-cut-rem">✂️ <strong>${extraLengthM} M</strong> (${extraLengthInches} In) offcut</span>`;
       } else if (unit === 'ft') {
@@ -1742,8 +1788,9 @@
         <td class="smart-col-fit hide-mobile">${fitBadge}</td>
         <td class="smart-col-rod">
           <div class="mobile-only" style="margin-bottom: 0.25rem;">${fitBadge}</div>
-          <div style="font-weight: 600; line-height: 1.25;">${escapeHtml(rod.name)}</div>
-          <div class="font-mono text-muted" style="font-size: 0.725rem;">${escapeHtml(rod.sku || 'No SKU')}</div>
+          <div style="display: flex; align-items: center; gap: 0.4rem; flex-wrap: wrap;">
+            <span class="cr-category-badge-tag">${escapeHtml(rod.name || 'Chrome Rod')}</span>
+          </div>
         </td>
         <td class="smart-col-dia hide-mobile text-right font-mono"><strong>${rod.diameterMm}</strong> mm</td>
         <td class="smart-col-len hide-mobile text-right font-mono">${lengthDisplayDesktop}</td>
@@ -1813,7 +1860,27 @@
     cutPiecesQtyInput.value = '1';
     cutPiecesQtyInput.max = rod.quantity;
     cutReasonInput.value = '';
-    if (cutCreatedByInput) cutCreatedByInput.value = '';
+
+    // Auto-fill logged-in user name and permanently lock it
+    const sessionUser = (typeof getRodsyncCurrentSessionUser === 'function') ? getRodsyncCurrentSessionUser() : { name: 'Operator' };
+    const currentUserName = sessionUser.name || 'Operator';
+    if (cutCreatedByInput) {
+      cutCreatedByInput.value = currentUserName;
+      cutCreatedByInput.readOnly = true;
+      cutCreatedByInput.tabIndex = -1;
+      cutCreatedByInput.setAttribute('readonly', 'readonly');
+      cutCreatedByInput.style.backgroundColor = '#f1f5f9';
+      cutCreatedByInput.style.cursor = 'not-allowed';
+      cutCreatedByInput.style.fontWeight = '700';
+      cutCreatedByInput.style.color = '#1e293b';
+      cutCreatedByInput.title = `Job Created By is automatically set to your logged-in account (${currentUserName}) and is locked.`;
+    }
+    const cutCreatedByLabel = document.getElementById('cutCreatedByLabel');
+    if (cutCreatedByLabel) {
+      const isRail = document.documentElement.getAttribute('data-system-mode') === 'guided-rail';
+      const lockColor = isRail ? '#6b8e23' : '#0d9488';
+      cutCreatedByLabel.innerHTML = `👤 Job Created By <span style="font-size: 0.7rem; color: ${lockColor}; font-weight: 700; margin-left: 4px;">(🔒 Locked)</span>`;
+    }
     if (cutAssignedByInput) cutAssignedByInput.value = '';
     cutAutoAddRemnant.checked = true;
 
@@ -2205,8 +2272,8 @@
       // Clean up rods with quantity <= 0
       rods = rods.filter(r => r.quantity > 0);
 
-      localStorage.setItem(STORAGE_KEY, JSON.stringify(rods));
-      localStorage.setItem(CUT_LOGS_STORAGE_KEY, JSON.stringify(cutLogs));
+      saveRodsToStorage();
+      saveCutLogsToStorage();
       updateCutLogsBadge();
       updateDashboard();
       closeCutModal();
@@ -2319,7 +2386,7 @@
             id: 'rod-cut-' + Date.now(),
             sku: rod.sku ? `${rod.sku}-CUT` : `ROD-${Math.round(rod.diameterMm)}MM-${Math.round(remainder)}IN`,
             name: rod.name,
-            diameterMm: Number(rod.diameterMm),
+            diameterMm: rod.diameterMm,
             lengthIn: remainder,
             lengthFt: remainder,
             quantity: rodsQty,
@@ -2355,9 +2422,9 @@
     };
     cutLogs.unshift(logEntry);
 
-    // 3. Save to local storage
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(rods));
-    localStorage.setItem(CUT_LOGS_STORAGE_KEY, JSON.stringify(cutLogs));
+    // 3. Save directly to Firebase Cloud Database
+    saveRodsToStorage();
+    saveCutLogsToStorage();
     updateCutLogsBadge();
     updateDashboard();
     closeCutModal();
@@ -2392,7 +2459,7 @@
     });
     if (updated) {
       try {
-        localStorage.setItem(CUT_LOGS_STORAGE_KEY, JSON.stringify(cutLogs));
+        saveCutLogsToStorage();
         renderCutLogsTable();
       } catch (err) {}
     }
@@ -2666,7 +2733,7 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>RodSync Slip — [${cleanRef}]</title>
+  <title>BroCutPro Slip — [${cleanRef}]</title>
   <style>
     @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&display=swap');
     *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
@@ -2723,8 +2790,8 @@
       letter-spacing: -0.2px;
     }
     .preview-badge {
-      background: #e0f2fe;
-      color: #0284c7;
+      background: #d1fae5;
+      color: #065f46;
       font-size: 0.6rem;
       font-weight: 800;
       letter-spacing: 0.6px;
@@ -2738,7 +2805,7 @@
       gap: 6px;
     }
     .btn-print-slip {
-      background: #1d4ed8;
+      background: linear-gradient(135deg, #14b8a6, #0d9488);
       color: #ffffff;
       border: none;
       border-radius: 8px;
@@ -2748,11 +2815,11 @@
       align-items: center;
       gap: 6px;
       font-family: inherit;
-      box-shadow: 0 2px 6px rgba(29, 78, 216, 0.28);
+      box-shadow: 0 2px 6px rgba(20, 184, 166, 0.28);
       transition: background 0.15s, transform 0.1s;
     }
     .btn-print-slip:hover {
-      background: #1e40af;
+      background: linear-gradient(135deg, #0d9488, #065f46);
     }
     .btn-print-slip:active {
       transform: scale(0.97);
@@ -2816,8 +2883,8 @@
       transition: border-color 0.15s, box-shadow 0.15s;
     }
     .preview-input:focus {
-      border-color: #2563eb;
-      box-shadow: 0 0 0 2px rgba(37, 99, 235, 0.15);
+      border-color: #14b8a6;
+      box-shadow: 0 0 0 2px rgba(20, 184, 166, 0.2);
     }
 
     /* ---- THE SLIP RECEIPT (FIT FOR 80MM THERMAL PRINTER ROLL) ---- */
@@ -3066,7 +3133,7 @@
 
     <div class="slip-meta-row">
       <span class="slip-ref-no">Ref: ${escapeForHtml(cleanRef)}</span>
-      <span class="slip-brand-logo">RODSYNC</span>
+      <span class="slip-brand-logo">BROCUTPRO</span>
     </div>
 
     ${slipContentHtml}
@@ -3165,9 +3232,26 @@
   // --- CUT LOGS MODAL & AUDIT HISTORY ---
   function setCutLogsViewMode(mode) {
     cutLogsViewMode = mode;
+    const isRail = getCurrentSystemMode() === 'guided-rail';
+    const activeColor = isRail ? '#6b8e23' : '#0d9488';
     if (btnCutLogsCards && btnCutLogsTable) {
       btnCutLogsCards.classList.toggle('active', mode === 'cards');
       btnCutLogsTable.classList.toggle('active', mode === 'table');
+      if (mode === 'cards') {
+        btnCutLogsCards.style.background = activeColor;
+        btnCutLogsCards.style.color = '#ffffff';
+        btnCutLogsCards.style.fontWeight = '700';
+        btnCutLogsTable.style.background = 'transparent';
+        btnCutLogsTable.style.color = '#64748b';
+        btnCutLogsTable.style.fontWeight = '600';
+      } else {
+        btnCutLogsTable.style.background = activeColor;
+        btnCutLogsTable.style.color = '#ffffff';
+        btnCutLogsTable.style.fontWeight = '700';
+        btnCutLogsCards.style.background = 'transparent';
+        btnCutLogsCards.style.color = '#64748b';
+        btnCutLogsCards.style.fontWeight = '600';
+      }
     }
     if (cutLogsContentArea) {
       cutLogsContentArea.classList.toggle('force-cards-view', mode === 'cards');
@@ -3230,11 +3314,23 @@
       btn.classList.toggle('active', filterType === cutLogsDateFilter);
     });
 
+    const dateRangeInput = document.getElementById('filterCutLogsDateRange');
     if (filterCutLogsDateInput) {
       if (cutLogsDateFilter === 'custom') {
         filterCutLogsDateInput.value = cutLogsCustomDate;
+        if (dateRangeInput) {
+          const parts = cutLogsCustomDate.split('-');
+          if (parts.length === 3) {
+            dateRangeInput.value = `${parts[2]}/${parts[1]}/${parts[0]}`;
+          } else {
+            dateRangeInput.value = cutLogsCustomDate;
+          }
+        }
       } else {
         filterCutLogsDateInput.value = '';
+        if (dateRangeInput) {
+          dateRangeInput.value = '';
+        }
       }
     }
 
@@ -3725,47 +3821,38 @@
     filteredLogs.forEach(log => {
       const isSelected = selectedCutLogIds.has(log.id);
       const isRail = isGuidedRailLog(log);
-      const dObj = parseLogDate(log.timestamp);
-      const dateStr = dObj ? dObj.toLocaleString([], {
-        year: 'numeric',
-        month: 'short',
-        day: 'numeric',
-        hour: '2-digit',
-        minute: '2-digit'
-      }) : '—';
+      const dObj = parseLogDate(log.timestamp) || new Date();
+
+      const day = dObj.getDate();
+      const monthNames = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+      const month = monthNames[dObj.getMonth()];
+      const year = dObj.getFullYear();
+      const hours = String(dObj.getHours()).padStart(2, '0');
+      const minutes = String(dObj.getMinutes()).padStart(2, '0');
+      const dateFormatted = `${day} ${month} ${year}, ${hours}:${minutes}`;
+
+      const now = new Date();
+      const todayKey = `${now.getFullYear()}-${String(now.getMonth()+1).padStart(2,'0')}-${String(now.getDate()).padStart(2,'0')}`;
+      const logKey = `${dObj.getFullYear()}-${String(dObj.getMonth()+1).padStart(2,'0')}-${String(dObj.getDate()).padStart(2,'0')}`;
+      const yest = new Date(now.getFullYear(), now.getMonth(), now.getDate() - 1);
+      const yestKey = `${yest.getFullYear()}-${String(yest.getMonth()+1).padStart(2,'0')}-${String(yest.getDate()).padStart(2,'0')}`;
+
+      let relativeTag = '';
+      if (logKey === todayKey) relativeTag = 'Today';
+      else if (logKey === yestKey) relativeTag = 'Yesterday';
+      else relativeTag = dObj.toLocaleDateString([], { weekday: 'short' });
 
       const origLen = getLogOrigLength(log);
       const cutLen = getLogCutLength(log);
       const remLen = getLogRemainder(log);
 
-      let remnantDisplay = '';
-      let remnantCardBadge = '';
-      if (isRail) {
-        const remMm = log.remainderMm !== undefined ? log.remainderMm : Math.round(remLen * 25.4);
-        if (remMm > 0) {
-          remnantDisplay = `<span class="badge-cut-rem">✂️ +${remMm} mm (${formatDisplayLength(remLen)} In)</span> ${log.remnantAdded ? '<span style="font-size: 0.725rem; color: var(--success-solid); font-weight: 600;">(In Stock)</span>' : ''}`;
-          remnantCardBadge = `<span class="badge-cut-rem">✂️ Offcut +${remMm} mm</span> ${log.remnantAdded ? '<span style="font-size: 0.725rem; color: var(--success-solid); font-weight: 600;">(In Stock)</span>' : ''}`;
-        } else {
-          remnantDisplay = `<span class="badge-cut-exact">Exact Cut (0 scrap)</span>`;
-          remnantCardBadge = `<span class="badge-cut-exact">Exact Cut (0 scrap)</span>`;
-        }
-      } else {
-        if (remLen > 0) {
-          remnantDisplay = `<span class="badge-cut-rem">✂️ +${formatDisplayLength(remLen)} In</span> ${log.remnantAdded ? '<span style="font-size: 0.725rem; color: var(--success-solid); font-weight: 600;">(Added to stock)</span>' : ''}`;
-          remnantCardBadge = `<span class="badge-cut-rem">✂️ Offcut +${formatDisplayLength(remLen)} In</span> ${log.remnantAdded ? '<span style="font-size: 0.725rem; color: var(--success-solid); font-weight: 600;">(In Stock)</span>' : ''}`;
-        } else {
-          remnantDisplay = `<span class="badge-cut-exact">Exact Cut (0 scrap)</span>`;
-          remnantCardBadge = `<span class="badge-cut-exact">Exact Cut (0 scrap)</span>`;
-        }
-      }
-
       // Spec column details
       const specTitle = isRail
-        ? (log.modelName ? `${log.modelName}` : escapeHtml(log.rodName))
-        : escapeHtml(log.rodName);
+        ? (log.modelName ? `${escapeHtml(log.modelName)}` : escapeHtml(log.rodName || 'Rail'))
+        : escapeHtml(log.rodName || 'Rod');
       const specSub = isRail
-        ? `PCC: ${log.pitchMm || log.diameterMm || '—'} mm • ${log.holesCount !== undefined ? log.holesCount + ' holes' : 'Linear Rail'}`
-        : `${log.diameterMm} mm diameter`;
+        ? `PCC: ${log.pitchMm || log.diameterMm || '—'} mm`
+        : `⌀${log.diameterMm} mm`;
 
       // Length displays
       const origText = isRail
@@ -3774,39 +3861,62 @@
       const cutText = isRail
         ? `-${log.cutLengthMm || Math.round(cutLen * 25.4)} mm`
         : `-${formatDisplayLength(cutLen)} In`;
+      const remLenInches = formatDisplayLength(remLen);
+
+      // Remnant badge
+      let remnantBadge = '';
+      if (remLen <= 0.01 && !isRail) {
+        remnantBadge = `<span style="background: #e6f7f5; border: 1px solid #99f6e4; color: #0d9488; border-radius: 9999px; padding: 0.25rem 0.85rem; font-weight: 700; font-size: 0.78rem; display: inline-block; white-space: nowrap;">Exact Cut (0 Scrap)</span>`;
+      } else if (isRail && (!log.remainderMm || log.remainderMm <= 0.1)) {
+        remnantBadge = `<span style="background: #e6f7f5; border: 1px solid #99f6e4; color: #0d9488; border-radius: 9999px; padding: 0.25rem 0.85rem; font-weight: 700; font-size: 0.78rem; display: inline-block; white-space: nowrap;">Exact Cut (0 Scrap)</span>`;
+      } else if (isRail) {
+        remnantBadge = `<span style="background: #d1fae5; color: #059669; border-radius: 9999px; padding: 0.25rem 0.85rem; font-weight: 700; font-size: 0.78rem; display: inline-block; white-space: nowrap;">+${log.remainderMm || Math.round(remLen * 25.4)} mm (Offcut)</span>`;
+      } else {
+        remnantBadge = `<span style="background: #d1fae5; color: #059669; border-radius: 9999px; padding: 0.25rem 0.85rem; font-weight: 700; font-size: 0.78rem; display: inline-block; white-space: nowrap;">+${remLenInches} In (Offcut)</span>`;
+      }
+
+      // Created By
+      const creatorName = escapeHtml(log.createdBy || log.assignBy || 'Dipanshu');
+      const isCreatorAdmin = creatorName.toLowerCase() === 'dipanshu' || (log.userRole && log.userRole === 'admin');
+      const creatorRole = isCreatorAdmin ? 'Admin' : 'Operator';
+      const creatorInitial = (creatorName.charAt(0) || 'D').toUpperCase();
 
       // 1. Table Row (for Desktop view)
       const tr = document.createElement('tr');
       if (isSelected) tr.classList.add('selected-cut-log-row');
+      tr.style.borderBottom = '1px solid #f1f5f9';
       tr.innerHTML = `
-        <td style="text-align: center; vertical-align: middle;">
-          <input type="checkbox" class="cut-log-checkbox" data-log-id="${log.id}" ${isSelected ? 'checked' : ''} title="Select this cut for slip" style="cursor: pointer; width: 16px; height: 16px; accent-color: var(--primary-600);" />
+        <td style="text-align: center; vertical-align: middle; width: 40px; padding: 12px 8px;">
+          <input type="checkbox" class="cut-log-checkbox" data-log-id="${log.id}" ${isSelected ? 'checked' : ''} title="Select this cut for slip" style="cursor: pointer; width: 16px; height: 16px; accent-color: #0d9488; border-radius: 4px;" />
         </td>
-        <td style="font-size: 0.8rem; color: var(--text-muted); white-space: nowrap;">${dateStr}</td>
-        <td>
-          <div style="font-weight: 600;">${specTitle} ${isRail ? '<span style="font-size: 0.68rem; background: #ede9fe; color: #6d28d9; padding: 1px 6px; border-radius: 9999px; font-weight: 700; margin-left: 4px;">Rail</span>' : ''}</div>
-          <div class="font-mono text-muted" style="font-size: 0.75rem;">${specSub}</div>
+        <td style="padding: 12px 10px; width: 160px;">
+          <div style="font-weight: 600; font-size: 0.88rem; color: #0f172a; line-height: 1.2;">${dateFormatted}</div>
+          <div style="font-size: 0.78rem; color: #94a3b8; margin-top: 3px;">${relativeTag}</div>
         </td>
-        <td class="text-right font-mono">${origText}</td>
-        <td class="text-right font-mono" style="color: var(--danger-solid); font-weight: 700;">${cutText}</td>
-        <td class="text-right font-mono"><strong>${log.quantity}</strong></td>
-        <td>${remnantDisplay}</td>
-        <td><span style="font-size: 0.825rem; color: var(--text-secondary);">${escapeHtml(log.reason || '—')}</span></td>
-        <td style="text-align:center;">
-          <div style="font-size:0.75rem; color:var(--text-secondary); line-height:1.5;">
-            ${(log.assignBy || log.createdBy) ? `<div><span style="font-weight:500;">👤 By:</span> ${escapeHtml(log.assignBy || log.createdBy)}</div>` : ''}
-            ${(log.assignTo || log.assignedBy) ? `<div><span style="font-weight:500;">🏷️ To:</span> ${escapeHtml(log.assignTo || log.assignedBy)}</div>` : (!log.assignBy && !log.createdBy ? '—' : '')}
+        <td style="padding: 12px 12px;">
+          <div style="font-weight: 700; font-size: 0.95rem; color: #0f172a; line-height: 1.2;">${specTitle}</div>
+          <div style="font-size: 0.82rem; color: #64748b; margin-top: 3px;">${specSub}</div>
+        </td>
+        <td style="padding: 12px 10px; font-weight: 600; font-size: 0.88rem; color: #0f172a;">${origText}</td>
+        <td style="padding: 12px 10px; font-weight: 700; font-size: 0.88rem; color: #ef4444;">${cutText}</td>
+        <td style="padding: 12px 10px; font-weight: 700; font-size: 0.88rem; color: #0f172a;">${log.quantity}</td>
+        <td style="padding: 12px 10px; white-space: nowrap;">${remnantBadge}</td>
+        <td style="padding: 12px 10px; width: 160px;">
+          <div style="display: flex; align-items: center; gap: 0.65rem;">
+            <div style="width: 28px; height: 28px; border-radius: 50%; background: #e2e8f0; color: #475569; font-weight: 700; font-size: 0.8rem; display: flex; align-items: center; justify-content: center; flex-shrink: 0;">${creatorInitial}</div>
+            <div>
+              <div style="font-weight: 600; font-size: 0.85rem; color: #0f172a; line-height: 1.2;">${creatorName}</div>
+              <div style="font-size: 0.72rem; color: #94a3b8; line-height: 1.2;">${creatorRole}</div>
+            </div>
           </div>
         </td>
-        <td style="text-align:center;">
-          <div style="display:inline-flex; align-items:center; gap:4px;">
-            <button class="btn btn-secondary btn-xs btn-print-slip" data-log-id="${log.id}" title="Print cut invoice slip"
-              style="padding:3px 8px; font-size:0.72rem; white-space:nowrap;">
-              🖨️ Slip
+        <td style="text-align: center; padding: 12px 8px; width: 100px;">
+          <div style="display: flex; align-items: center; justify-content: center; gap: 0.45rem;">
+            <button type="button" class="btn-print-slip" data-log-id="${log.id}" title="View & Print Slip" style="width: 32px; height: 32px; border-radius: 8px; background: #e6f7f5; border: none; color: #0d9488; display: inline-flex; align-items: center; justify-content: center; cursor: pointer; transition: all 0.15s ease;">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"></path><circle cx="12" cy="12" r="3"></circle></svg>
             </button>
-            <button class="btn btn-ghost btn-xs btn-edit-cut-log" data-log-id="${log.id}" title="Edit this cut log entry"
-              style="padding:3px 6px; font-size:0.72rem;">
-              ✏️
+            <button type="button" class="btn-edit-cut-log" data-log-id="${log.id}" title="Edit Cut Log" style="width: 32px; height: 32px; border-radius: 8px; background: #fff7ed; border: none; color: #ea580c; display: inline-flex; align-items: center; justify-content: center; cursor: pointer; transition: all 0.15s ease;">
+              <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"></path><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"></path></svg>
             </button>
           </div>
         </td>
@@ -3906,41 +4016,71 @@
     let rows = [];
 
     if (isRailMode) {
-      headers = ['Timestamp', 'Rail Model', 'PCC / Pitch (mm)', 'Original Length (mm)', 'Cut Length (mm)', 'Quantity', 'Remainder Offcut (mm)', 'Holes Count', 'End Margin (mm)', 'Remnant Added', 'Order Notes', 'Assign By', 'Assign To'];
+      headers = [
+        'Date & Time',
+        'Rail Model',
+        'Pitch / PCC (mm)',
+        'Original Length (mm)',
+        'Cut Length (mm)',
+        'Quantity',
+        'Remnant Offcut (mm)',
+        'Holes Count',
+        'End Margin (mm)',
+        'Remnant Added',
+        'Order / Job Notes',
+        'Assign By',
+        'Assign To'
+      ];
       rows = logsToExport.map(log => {
         const d = parseLogDate(log.timestamp);
+        const dateStr = d ? `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')} ${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}:${String(d.getSeconds()).padStart(2, '0')}` : (log.timestamp || '');
         const origMm = log.originalLengthMm || Math.round(getLogOrigLength(log) * 25.4);
         const cutMm = log.cutLengthMm || Math.round(getLogCutLength(log) * 25.4);
         const remMm = log.remainderMm !== undefined ? log.remainderMm : Math.round(getLogRemainder(log) * 25.4);
+        const isRemAdded = (log.remnantAdded === true || log.remnantAdded === 'Yes' || log.remnantAdded === 'true');
         return [
-          escapeCsvField(d ? d.toISOString() : ''),
+          escapeCsvField(dateStr),
           escapeCsvField(log.modelName || log.rodName || ''),
-          log.pitchMm || log.diameterMm || '',
+          log.pitchMm || log.diameterMm || 60,
           origMm,
           cutMm,
-          log.quantity,
+          log.quantity !== undefined && log.quantity !== null ? log.quantity : 1,
           remMm,
-          log.holesCount !== undefined ? log.holesCount : '',
-          log.endMarginMm !== undefined ? log.endMarginMm : '',
-          log.remnantAdded ? 'Yes' : 'No',
+          log.holesCount !== undefined && log.holesCount !== null ? log.holesCount : '',
+          log.endMarginMm !== undefined && log.endMarginMm !== null ? log.endMarginMm : '',
+          isRemAdded ? 'Yes' : 'No',
           escapeCsvField(log.reason || ''),
           escapeCsvField(log.assignBy || log.createdBy || ''),
           escapeCsvField(log.assignTo || log.assignedBy || '')
         ];
       });
     } else {
-      headers = ['Timestamp', 'Rod Name', 'Diameter (mm)', 'Original Length (In)', 'Cut Length (In)', 'Quantity', 'Remainder Offcut (In)', 'Remnant Added', 'Job Reason', 'Assign By', 'Assign To'];
+      headers = [
+        'Date & Time',
+        'Rod Name',
+        'Diameter (mm)',
+        'Original Length (In)',
+        'Cut Length (In)',
+        'Quantity',
+        'Remnant Offcut (In)',
+        'Remnant Added',
+        'Job / Reason',
+        'Assign By',
+        'Assign To'
+      ];
       rows = logsToExport.map(log => {
         const d = parseLogDate(log.timestamp);
+        const dateStr = d ? `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')} ${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}:${String(d.getSeconds()).padStart(2, '0')}` : (log.timestamp || '');
+        const isRemAdded = (log.remnantAdded === true || log.remnantAdded === 'Yes' || log.remnantAdded === 'true');
         return [
-          escapeCsvField(d ? d.toISOString() : ''),
-          escapeCsvField(log.rodName || ''),
-          log.diameterMm,
+          escapeCsvField(dateStr),
+          escapeCsvField(log.rodName || 'Hard Chrome Rod'),
+          log.diameterMm !== undefined && log.diameterMm !== null ? log.diameterMm : '',
           getLogOrigLength(log),
           getLogCutLength(log),
-          log.quantity,
+          log.quantity !== undefined && log.quantity !== null ? log.quantity : 1,
           getLogRemainder(log),
-          log.remnantAdded ? 'Yes' : 'No',
+          isRemAdded ? 'Yes' : 'No',
           escapeCsvField(log.reason || ''),
           escapeCsvField(log.assignBy || log.createdBy || ''),
           escapeCsvField(log.assignTo || log.assignedBy || '')
@@ -3989,6 +4129,10 @@
 
   // --- ADD / EDIT ROD MODAL ACTIONS ---
   function openAddRodModal(prefillData = null) {
+    if (window.rodsyncIsAdmin === false) {
+      showToast('Permission denied: Only administrators can add inventory.', 'warning');
+      return;
+    }
     refreshDomElements();
     if (!rodModalOverlay) return;
 
@@ -3996,6 +4140,14 @@
     if (rodEditId) rodEditId.value = '';
     if (modalTitle) modalTitle.textContent = 'Add New Rod Stock';
     if (btnSaveRodText) btnSaveRodText.textContent = 'Save Rod to Stock';
+
+    if (formRodName) {
+      if (_rodCategoryFilter && _rodCategoryFilter !== 'all' && _rodCategoryFilter !== 'ALL') {
+        formRodName.value = _rodCategoryFilter;
+      } else if (formRodName.options.length > 0 && formRodName.options[0].value) {
+        formRodName.value = formRodName.options[0].value;
+      }
+    }
 
     if (prefillData) {
       if (prefillData.diameter && formDiameterMm) formDiameterMm.value = prefillData.diameter;
@@ -4007,6 +4159,10 @@
   }
 
   function openEditRodModal(id) {
+    if (window.rodsyncIsAdmin === false) {
+      showToast('Permission denied: Only administrators can edit inventory.', 'warning');
+      return;
+    }
     refreshDomElements();
     const rod = rods.find(r => r.id === id);
     if (!rod) {
@@ -4015,7 +4171,18 @@
     }
 
     if (rodEditId) rodEditId.value = rod.id;
-    if (formRodName) formRodName.value = rod.name || '';
+    if (formRodName) {
+      const rName = (rod.category || rod.name || '').trim();
+      if (rName) {
+        if (!formRodName.querySelector(`option[value="${rName}"]`)) {
+          const opt = document.createElement('option');
+          opt.value = rName;
+          opt.textContent = rName;
+          formRodName.appendChild(opt);
+        }
+        formRodName.value = rName;
+      }
+    }
     if (formDiameterMm) formDiameterMm.value = rod.diameterMm ?? '';
     if (formLengthFt) formLengthFt.value = getRodLength(rod) || '';
     if (formQuantity) formQuantity.value = rod.quantity ?? 0;
@@ -4041,8 +4208,10 @@
     e.preventDefault();
     refreshDomElements();
 
-    const name = formRodName ? formRodName.value.trim() : '';
-    const diameterMm = formDiameterMm ? parseFloat(formDiameterMm.value) : NaN;
+    const name = formRodName ? formRodName.value.trim() : 'Chrome Rod';
+    const category = name;
+    const rawDia = formDiameterMm ? formDiameterMm.value.trim() : '';
+    const diameterMm = parseDiameterValue(rawDia);
     const lengthVal = formLengthFt ? parseFloat(formLengthFt.value) : NaN;
     const quantity = formQuantity ? parseInt(formQuantity.value, 10) : NaN;
     const customSku = formSku ? formSku.value.trim() : '';
@@ -4050,11 +4219,11 @@
     const editId = rodEditId ? rodEditId.value : '';
 
     if (!name) {
-      showToast('Please enter a valid rod name or material type', 'warning');
+      showToast('Please select a valid rod catagorie', 'warning');
       return;
     }
-    if (isNaN(diameterMm) || diameterMm <= 0) {
-      showToast('Please specify a positive diameter in millimeters', 'warning');
+    if (!diameterMm || (typeof diameterMm === 'number' && diameterMm <= 0)) {
+      showToast('Please specify a positive diameter or dimension (e.g. 12 or 100x100)', 'warning');
       return;
     }
     if (isNaN(lengthVal) || lengthVal <= 0) {
@@ -4066,7 +4235,8 @@
       return;
     }
 
-    const autoSku = customSku || `ROD-${Math.round(diameterMm)}MM-${Math.round(lengthVal)}IN-${Math.random().toString(36).substring(2, 6).toUpperCase()}`;
+    const diaSkuPart = String(diameterMm).replace(/[^a-zA-Z0-9]/g, 'X').toUpperCase();
+    const autoSku = customSku || `ROD-${diaSkuPart}MM-${Math.round(lengthVal)}IN-${Math.random().toString(36).substring(2, 6).toUpperCase()}`;
 
     // Editing Existing Rod
     if (editId) {
@@ -4074,6 +4244,7 @@
       if (index !== -1) {
         rods[index] = {
           ...rods[index],
+          category,
           name,
           diameterMm,
           lengthIn: lengthVal,
@@ -4086,12 +4257,7 @@
         saveRodsToStorage();
         updateDashboard();
         closeRodModal();
-        const hasScriptUrl = Boolean(localStorage.getItem('rodsync_gsheets_script_url'));
-        if (hasScriptUrl) {
-          showToast(`Updated "${name}" in stock (Synced to Google Sheet)!`, 'success');
-        } else {
-          showToast(`Updated "${name}" in local stock. (To save to Google Sheet, connect Apps Script URL)`, 'info', 5000);
-        }
+        showToast(`Updated "${name}" in stock (Synced to Firebase)!`, 'success');
       }
       return;
     }
@@ -4099,15 +4265,17 @@
     // Adding New Rod: Duplicate Detection Check
     const duplicateMatch = rods.find(r =>
       r.name.toLowerCase() === name.toLowerCase() &&
-      Number(r.diameterMm) === diameterMm &&
+      areDiasEqual(r.diameterMm, diameterMm) &&
       getRodLength(r) === lengthVal
     );
 
     if (duplicateMatch) {
+      if (!duplicateMatch.category) duplicateMatch.category = category;
       pendingDuplicateResolution = {
         existingRod: duplicateMatch,
         newRodData: {
           id: 'rod-' + Date.now(),
+          category,
           sku: autoSku,
           name,
           diameterMm,
@@ -4125,6 +4293,7 @@
 
     const newRod = {
       id: 'rod-' + Date.now(),
+      category,
       sku: autoSku,
       name,
       diameterMm,
@@ -4139,12 +4308,7 @@
     saveRodsToStorage();
     updateDashboard();
     closeRodModal();
-    const hasScriptUrl = Boolean(localStorage.getItem('rodsync_gsheets_script_url'));
-    if (hasScriptUrl) {
-      showToast(`Added ${quantity} units of "${name}" (Synced to Google Sheet)!`, 'success');
-    } else {
-      showToast(`Added ${quantity} units of "${name}" to local stock. (To save to Google Sheet, connect Apps Script URL)`, 'info', 5000);
-    }
+    showToast(`Added ${quantity} units of "${name}" (Synced to Firebase)!`, 'success');
   }
 
   // --- DUPLICATE RESOLUTION DIALOG ---
@@ -4268,8 +4432,8 @@
       reason: reason || 'Whole Rod Deduction'
     };
     cutLogs.unshift(logEntry);
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(rods));
-    localStorage.setItem(CUT_LOGS_STORAGE_KEY, JSON.stringify(cutLogs));
+    saveRodsToStorage();
+    saveCutLogsToStorage();
     updateCutLogsBadge();
     updateDashboard();
     closeDeductModal();
@@ -4302,6 +4466,10 @@
 
   // --- DELETE ROD ---
   function deleteRod(id) {
+    if (window.rodsyncIsAdmin === false) {
+      showToast('Permission denied: Only administrators can delete inventory.', 'warning');
+      return;
+    }
     const rod = rods.find(r => r.id === id);
     if (!rod) return;
 
@@ -4325,14 +4493,12 @@
       return;
     }
 
-    const headers = ['SKU', 'Rod Name', 'Diameter (mm)', 'Length (In)', 'Quantity', 'Notes'];
+    const headers = ['Rod name', 'Diameter(mm)', 'length(inch)', 'quantity'];
     const rows = rods.map(r => [
-      escapeCsvField(r.sku || ''),
-      escapeCsvField(r.name || ''),
-      r.diameterMm,
+      escapeCsvField(r.name || 'Hard Chrome Rod'),
+      r.diameterMm !== undefined && r.diameterMm !== null ? r.diameterMm : '',
       getRodLength(r),
-      r.quantity,
-      escapeCsvField(r.notes || '')
+      r.quantity !== undefined && r.quantity !== null ? r.quantity : 0
     ]);
 
     const csvContent = [headers.join(','), ...rows.map(row => row.join(','))].join('\r\n');
@@ -4463,12 +4629,12 @@
       // ── Sheet 2: Chrome Rod Stock ──
       const rodRows = [
         row([
+          cell('Rod name', 'String', 'Header2'),
+          cell('Diameter(mm)', 'String', 'Header2'),
+          cell('length(inch)', 'String', 'Header2'),
+          cell('quantity', 'String', 'Header2'),
           cell('ID', 'String', 'Header2'),
           cell('SKU', 'String', 'Header2'),
-          cell('Rod Name', 'String', 'Header2'),
-          cell('Diameter (mm)', 'String', 'Header2'),
-          cell('Length (In)', 'String', 'Header2'),
-          cell('Quantity', 'String', 'Header2'),
           cell('Notes', 'String', 'Header2'),
           cell('Last Updated', 'String', 'Header2')
         ])
@@ -4476,12 +4642,12 @@
       rodList.forEach(r => {
         const len = (r.lengthIn !== undefined && r.lengthIn !== null) ? r.lengthIn : (r.lengthFt || 0);
         rodRows.push(row([
-          cell(r.id || '', 'String'),
-          cell(r.sku || '', 'String'),
-          cell(r.name || '', 'String'),
+          cell(r.name || 'Hard Chrome Rod', 'String'),
           cell(r.diameterMm || 0, 'Number'),
           cell(len, 'Number'),
           cell(r.quantity || 0, 'Number'),
+          cell(r.id || '', 'String'),
+          cell(r.sku || '', 'String'),
           cell(r.notes || '', 'String'),
           cell(r.updatedAt ? new Date(r.updatedAt).toLocaleString() : '', 'String')
         ]));
@@ -4496,29 +4662,29 @@
       // ── Sheet 3: Guided Rail Stock ──
       const railRows = [
         row([
-          cell('ID', 'String', 'Header3'),
+          cell('Rail catagorie', 'String', 'Header3'),
           cell('Model Name', 'String', 'Header3'),
-          cell('SKU', 'String', 'Header3'),
-          cell('Rail Width (mm)', 'String', 'Header3'),
-          cell('Rail Height (mm)', 'String', 'Header3'),
           cell('Pitch / PCC (mm)', 'String', 'Header3'),
           cell('Length (mm)', 'String', 'Header3'),
           cell('Quantity', 'String', 'Header3'),
-          cell('Storage Rack / Notes', 'String', 'Header3'),
+          cell('ID', 'String', 'Header3'),
+          cell('SKU', 'String', 'Header3'),
+          cell('Rail Width (mm)', 'String', 'Header3'),
+          cell('Rail Height (mm)', 'String', 'Header3'),
           cell('Last Updated', 'String', 'Header3')
         ])
       ];
       railList.forEach(g => {
         railRows.push(row([
-          cell(g.id || '', 'String'),
+          cell(g.brand || g.category || 'HIWIN', 'String'),
           cell(g.modelName || '', 'String'),
+          cell(g.pitchMm || 60, 'Number'),
+          cell(g.lengthMm || 0, 'Number'),
+          cell(g.quantity || 0, 'Number'),
+          cell(g.id || '', 'String'),
           cell(g.sku || '', 'String'),
           cell(g.railWidthMm || 0, 'Number'),
           cell(g.railHeightMm || 0, 'Number'),
-          cell(g.pitchMm || 0, 'Number'),
-          cell(g.lengthMm || 0, 'Number'),
-          cell(g.quantity || 0, 'Number'),
-          cell(g.notes || '', 'String'),
           cell(g.updatedAt ? new Date(g.updatedAt).toLocaleString() : '', 'String')
         ]));
       });
@@ -4645,88 +4811,220 @@
   }
 
   function handleCsvImport(e) {
+    if (window.rodsyncIsAdmin === false) {
+      showToast('Permission denied: Only administrators can import inventory.', 'warning');
+      if (e.target) e.target.value = '';
+      return;
+    }
     const file = e.target.files && e.target.files[0];
     if (!file) return;
 
-    const reader = new FileReader();
-    reader.onload = function (evt) {
+    function processText(text) {
       try {
-        const text = evt.target.result;
-        const importedCount = parseAndImportCsv(text);
-        if (importedCount > 0) {
+        const result = parseAndImportCsv(text);
+        if (result && (result.addedCount > 0 || result.mergedCount > 0)) {
           saveRodsToStorage();
           updateDashboard();
-          showToast(`Successfully imported ${importedCount} rod records from CSV!`, 'success');
+          const detail = [];
+          if (result.addedCount > 0) detail.push(`${result.addedCount} new stock bar(s)`);
+          if (result.mergedCount > 0) detail.push(`${result.mergedCount} existing bar(s) updated`);
+          showToast(`Successfully imported & organized: ${detail.join(', ')}!`, 'success');
         } else {
-          showToast('No valid rod records found in CSV file', 'warning');
+          showToast('No valid rod records found in file. Please use the template format.', 'warning');
         }
       } catch (err) {
-        showToast('Error importing CSV: ' + err.message, 'danger');
+        showToast('Error importing file: ' + err.message, 'danger');
       } finally {
-        csvFileInput.value = '';
+        if (csvFileInput) csvFileInput.value = '';
       }
-    };
-    reader.readAsText(file);
+    }
+
+    const fileName = (file.name || '').toLowerCase();
+    const isExcel = fileName.endsWith('.xlsx') || fileName.endsWith('.xls');
+
+    if (isExcel && window.XLSX) {
+      const reader = new FileReader();
+      reader.onload = function (evt) {
+        try {
+          const data = new Uint8Array(evt.target.result);
+          const workbook = window.XLSX.read(data, { type: 'array' });
+          const firstSheetName = workbook.SheetNames[0];
+          const worksheet = workbook.Sheets[firstSheetName];
+          const csvText = window.XLSX.utils.sheet_to_csv(worksheet);
+          processText(csvText);
+        } catch (err) {
+          showToast('Error reading Excel spreadsheet: ' + err.message, 'danger');
+          if (csvFileInput) csvFileInput.value = '';
+        }
+      };
+      reader.readAsArrayBuffer(file);
+    } else {
+      const reader = new FileReader();
+      reader.onload = function (evt) {
+        processText(evt.target.result);
+      };
+      reader.onerror = function (err) {
+        showToast('Error reading file: ' + err.message, 'danger');
+        if (csvFileInput) csvFileInput.value = '';
+      };
+      reader.readAsText(file);
+    }
   }
 
   function parseAndImportCsv(csvText) {
-    const lines = csvText.split(/\r?\n/).filter(line => line.trim().length > 0);
-    if (lines.length < 2) return 0;
+    const rawLines = csvText.split(/\r?\n/).map(l => l.trim()).filter(Boolean);
+    if (rawLines.length < 2) return { addedCount: 0, mergedCount: 0 };
 
-    const headers = parseCsvRow(lines[0]).map(h => (h || '').trim().toLowerCase());
+    // Find the header row (skip top titles like "ROD" if present)
+    let headerRowIndex = -1;
     let nameIdx = -1, diaIdx = -1, lenIdx = -1, qtyIdx = -1, skuIdx = -1, notesIdx = -1;
 
-    headers.forEach((h, idx) => {
-      if (h.includes('dia')) diaIdx = idx;
-      else if (h.includes('len')) lenIdx = idx;
-      else if (h.includes('qty') || h.includes('quant')) qtyIdx = idx;
-      else if (h.includes('name') || h.includes('rod')) nameIdx = idx;
-      else if (h.includes('sku')) skuIdx = idx;
-      else if (h.includes('note')) notesIdx = idx;
-    });
+    for (let r = 0; r < Math.min(5, rawLines.length); r++) {
+      const rowCols = parseCsvRow(rawLines[r]).map(h => (h || '').trim().toLowerCase());
+      let dI = -1, lI = -1, qI = -1, nI = -1, sI = -1, noI = -1;
 
-    const hasHeaderMatch = (diaIdx !== -1 && lenIdx !== -1 && qtyIdx !== -1);
-    if (!hasHeaderMatch) {
-      if (headers.length === 4) {
-        nameIdx = 0; diaIdx = 1; lenIdx = 2; qtyIdx = 3;
-      } else {
-        skuIdx = 0; nameIdx = 1; diaIdx = 2; lenIdx = 3; qtyIdx = 4; notesIdx = 5;
+      rowCols.forEach((col, idx) => {
+        const clean = col.replace(/[^a-z0-9]/g, '');
+        if (clean.includes('dia')) {
+          dI = idx;
+        } else if (clean.includes('len') || clean.includes('inch') || clean === 'in') {
+          lI = idx;
+        } else if (clean.includes('piece') || clean.includes('pcs') || clean.includes('qty') || clean.includes('quant') || clean.includes('count')) {
+          qI = idx;
+        } else if (clean.includes('subcat') || clean.includes('subcategory') || clean.includes('sub') || clean.includes('cat') || clean.includes('rodname') || clean.includes('name') || clean.includes('type') || clean === 'rod' || clean === 'model') {
+          nI = idx;
+        } else if (clean.includes('sku') || clean.includes('code')) {
+          sI = idx;
+        } else if (clean.includes('note') || clean.includes('desc') || clean.includes('remark')) {
+          noI = idx;
+        }
+      });
+
+      // Valid header if it matches diameter and (length or quantity or name)
+      if (dI !== -1 && (lI !== -1 || qI !== -1)) {
+        headerRowIndex = r;
+        nameIdx = nI; diaIdx = dI; lenIdx = lI; qtyIdx = qI; skuIdx = sI; notesIdx = noI;
+        break;
+      }
+    }
+
+    // Fallback if header wasn't detected by keywords
+    if (headerRowIndex === -1) {
+      headerRowIndex = 0;
+      const firstCols = parseCsvRow(rawLines[0]);
+      if (firstCols.length === 1 && rawLines.length > 2) {
+        // Line 0 was just a single title banner e.g. "ROD"
+        headerRowIndex = 1;
+      }
+      nameIdx = 0; diaIdx = 1; lenIdx = 2; qtyIdx = 3;
+    } else {
+      if (nameIdx === -1 && diaIdx !== 0) nameIdx = 0;
+      if (qtyIdx === -1) {
+        const cols = parseCsvRow(rawLines[headerRowIndex]);
+        if (cols.length >= 4 && diaIdx !== 3 && lenIdx !== 3 && nameIdx !== 3) qtyIdx = 3;
       }
     }
 
     let addedCount = 0;
-    for (let i = 1; i < lines.length; i++) {
-      const parts = parseCsvRow(lines[i]);
-      if (parts.length < 3) continue;
+    let mergedCount = 0;
+    const newSubcategoriesFound = new Set();
 
-      const diameterMm = parseFloat(diaIdx >= 0 ? parts[diaIdx] : '');
-      const lengthVal = parseFloat(lenIdx >= 0 ? parts[lenIdx] : '');
-      const quantity = parseInt(qtyIdx >= 0 ? parts[qtyIdx] : '1', 10);
-      const name = (nameIdx >= 0 && parts[nameIdx] ? parts[nameIdx] : 'Chrome Rod').trim();
-      const sku = (skuIdx >= 0 && parts[skuIdx] ? parts[skuIdx] : `ROD-${Math.round(diameterMm)}MM-${lengthVal}IN-STOCK`).trim();
-      const notes = (notesIdx >= 0 && parts[notesIdx] ? parts[notesIdx] : '').trim();
+    for (let i = headerRowIndex + 1; i < rawLines.length; i++) {
+      const parts = parseCsvRow(rawLines[i]);
+      if (parts.length < 2) continue;
 
-      if (isNaN(diameterMm) || diameterMm <= 0 || isNaN(lengthVal) || lengthVal <= 0 || isNaN(quantity) || quantity < 0) {
+      const rawDia = diaIdx >= 0 ? parts[diaIdx] : '';
+      const diameterMm = parseDiameterValue(rawDia);
+      const rawLen = lenIdx >= 0 ? parts[lenIdx] : '';
+      const lengthVal = parseFloat(String(rawLen).replace(/[^0-9.]/g, ''));
+      const rawQty = qtyIdx >= 0 ? parts[qtyIdx] : '1';
+      const quantity = parseInt(String(rawQty).replace(/[^0-9]/g, '') || '1', 10);
+      let name = (nameIdx >= 0 && parts[nameIdx] ? parts[nameIdx] : 'Chrome Rod').trim();
+      if (!name) name = 'Chrome Rod';
+
+      if (!diameterMm || (typeof diameterMm === 'number' && diameterMm <= 0) || isNaN(lengthVal) || lengthVal <= 0 || isNaN(quantity) || quantity < 0) {
         continue;
       }
 
-      rods.push({
-        id: 'rod-csv-' + Date.now() + '-' + i,
-        sku: sku || `ROD-${Math.round(diameterMm)}MM-${Math.round(lengthVal)}IN`,
-        name,
-        diameterMm,
-        lengthIn: lengthVal,
-        lengthFt: lengthVal,
-        quantity,
-        notes,
-        createdAt: Date.now()
+      newSubcategoriesFound.add(name);
+
+      // Check if identical rod already exists in database (same subcategory, diameter, and length)
+      const existing = rods.find(r => {
+        const rName = String(r.category || r.name || '').trim().toLowerCase();
+        const isSameName = rName === name.toLowerCase();
+        const isSameDia = areDiasEqual(r.diameterMm, diameterMm);
+        const curLen = Number(r.lengthIn || r.lengthFt || 0);
+        const isSameLen = Math.abs(curLen - lengthVal) < 0.01;
+        return isSameName && isSameDia && isSameLen;
       });
-      addedCount++;
+
+      if (existing) {
+        // Auto-arrange: consolidate pieces into existing inventory bar
+        existing.quantity = (Number(existing.quantity) || 0) + quantity;
+        mergedCount++;
+      } else {
+        const diaSkuPart = String(diameterMm).replace(/[^a-zA-Z0-9]/g, 'X').toUpperCase();
+        const sku = (skuIdx >= 0 && parts[skuIdx] ? parts[skuIdx] : `ROD-${diaSkuPart}MM-${Math.round(lengthVal)}IN`).trim();
+        const notes = (notesIdx >= 0 && parts[notesIdx] ? parts[notesIdx] : '').trim();
+
+        rods.push({
+          id: 'rod-csv-' + Date.now() + '-' + i + '-' + Math.random().toString(36).substr(2, 4),
+          sku: sku || `ROD-${diaSkuPart}MM-${Math.round(lengthVal)}IN`,
+          name: name,
+          category: name,
+          diameterMm: diameterMm,
+          lengthIn: lengthVal,
+          lengthFt: lengthVal,
+          quantity: quantity,
+          notes: notes,
+          createdAt: Date.now()
+        });
+        addedCount++;
+      }
     }
-    return addedCount;
+
+    // Auto-arrange database: Sort cleanly by Subcategory alphabetically, then Diameter ascending, then Length ascending
+    rods.sort((a, b) => {
+      const catA = String(a.category || a.name || '').toLowerCase();
+      const catB = String(b.category || b.name || '').toLowerCase();
+      if (catA !== catB) return catA.localeCompare(catB);
+      if (Number(a.diameterMm) !== Number(b.diameterMm)) return Number(a.diameterMm) - Number(b.diameterMm);
+      return Number(a.lengthIn || a.lengthFt || 0) - Number(b.lengthIn || b.lengthFt || 0);
+    });
+
+    // Auto-register any new subcategories with Firestore & UI
+    if (newSubcategoriesFound.size > 0) {
+      const currentCats = Array.isArray(window.__ROD_SUBCATEGORIES__) && window.__ROD_SUBCATEGORIES__.length > 0
+        ? [...window.__ROD_SUBCATEGORIES__]
+        : ['Chrome Rod', 'Hard Chrome Rod'];
+
+      let changed = false;
+      newSubcategoriesFound.forEach(catName => {
+        if (!currentCats.some(c => c.toLowerCase() === catName.toLowerCase())) {
+          currentCats.push(catName);
+          changed = true;
+          fetch('/api/categories', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ action: 'add', type: 'rod', name: catName })
+          }).catch(err => console.warn('Auto subcategory sync error:', err));
+        }
+      });
+
+      if (changed) {
+        window.__ROD_SUBCATEGORIES__ = currentCats;
+        if (window.updateRodNamesDropdown) window.updateRodNamesDropdown(currentCats);
+      }
+    }
+
+    return { addedCount, mergedCount };
   }
 
   function parseCsvRow(rowText) {
+    if (rowText.includes('\t')) {
+      return rowText.split('\t').map(c => c.trim().replace(/^"|"$/g, '').replace(/""/g, '"'));
+    }
+    const delimiter = (rowText.includes(';') && !rowText.includes(',')) ? ';' : ',';
     const result = [];
     let current = '';
     let inQuotes = false;
@@ -4734,14 +5032,14 @@
       const char = rowText[i];
       if (char === '"' && (i === 0 || rowText[i - 1] !== '\\')) {
         inQuotes = !inQuotes;
-      } else if (char === ',' && !inQuotes) {
-        result.push(current.replace(/^"|"$/g, '').replace(/""/g, '"'));
+      } else if (char === delimiter && !inQuotes) {
+        result.push(current.replace(/^"|"$/g, '').replace(/""/g, '"').trim());
         current = '';
       } else {
         current += char;
       }
     }
-    result.push(current.replace(/^"|"$/g, '').replace(/""/g, '"'));
+    result.push(current.replace(/^"|"$/g, '').replace(/""/g, '"').trim());
     return result;
   }
 
@@ -4815,6 +5113,17 @@
         return;
       }
 
+      // 0a. Quick Category Chip Selection (Smart Search)
+      const rodCatChip = e.target.closest('#rodQuickCategoryChips .btn-dia-preset');
+      if (rodCatChip) {
+        e.preventDefault();
+        const cat = rodCatChip.dataset.rodCat || 'ALL';
+        if (typeof window.setRodCategoryFilter === 'function') {
+          window.setRodCategoryFilter(cat === 'ALL' ? 'all' : cat);
+        }
+        return;
+      }
+
       // 1. Add Rod Stock / Add Product button triggers
       const addBtn = e.target.closest('#btnOpenAddModal, .btn-add-main, #mobNavAdd, #btnEmptySuggestAdd');
       if (addBtn) {
@@ -4848,7 +5157,7 @@
       }
 
       // 2. Rod Modal Close / Cancel buttons
-      const closeRodBtn = e.target.closest('#btnCloseRodModal, #btnCancelRodModal');
+      const closeRodBtn = e.target.closest('#btnCloseRodModal, #btnCancelRodModal, #btnRodStockHeaderBack');
       if (closeRodBtn) {
         e.preventDefault();
         closeRodModal();
@@ -4856,7 +5165,7 @@
       }
 
       // 3. Cut Rod Modal Close / Cancel
-      const closeCutBtn = e.target.closest('#btnCloseCutModal, #btnCancelCutModal');
+      const closeCutBtn = e.target.closest('#btnCloseCutModal, #btnCancelCutModal, #btnCutModalHeaderBack');
       if (closeCutBtn) {
         e.preventDefault();
         closeCutModal();
@@ -4872,7 +5181,7 @@
       }
 
       // 5. Cut Logs Modal Close
-      const closeCutLogsBtn = e.target.closest('#btnCloseCutLogsModal, #btnCloseCutLogsBottom');
+      const closeCutLogsBtn = e.target.closest('#btnCloseCutLogsModal, #btnCloseCutLogsBottom, #btnCutLogsHeaderBack');
       if (closeCutLogsBtn) {
         e.preventDefault();
         closeCutLogsModal();
@@ -4936,6 +5245,7 @@
         }
         document.querySelectorAll('.btn-dia-preset').forEach(b => b.classList.remove('active'));
         target.classList.add('active');
+        updateDynamicLengthOptionsFromDatabase();
         if (searchLengthInput && parseFloat(searchLengthInput.value) > 0) {
           executeSmartSearch(dia, searchLengthInput.value, false, searchLengthUnit);
         }
@@ -5040,6 +5350,15 @@
         setCutLogsViewMode('cards');
       } else if (target.id === 'btnCutLogsTable') {
         setCutLogsViewMode('table');
+      } else if (target.id === 'filterCutLogsDateRange' || target.closest('#filterCutLogsDateRange')) {
+        const dateInput = document.getElementById('filterCutLogsDateInput');
+        if (dateInput) {
+          try {
+            dateInput.showPicker();
+          } catch (err) {
+            dateInput.click();
+          }
+        }
       } else if (target.id === 'btnResetInventoryFilters') {
         refreshDomElements();
         if (filterKeyword) filterKeyword.value = '';
@@ -5274,6 +5593,9 @@
     document.addEventListener('input', (e) => {
       if (!e.target) return;
       if (e.target.id === 'searchLengthInput' || e.target.id === 'searchDiameterInput' || e.target.id === 'searchPiecesInput') {
+        if (e.target.id === 'searchDiameterInput') {
+          updateDynamicLengthOptionsFromDatabase();
+        }
         updateSearchLengthHint();
         const dia = searchDiameterInput ? parseFloat(searchDiameterInput.value) : NaN;
         const len = searchLengthInput ? parseFloat(searchLengthInput.value) : NaN;
@@ -5323,6 +5645,11 @@
           setCutLogsDateFilter('custom', val);
         } else {
           setCutLogsDateFilter('all');
+        }
+      } else if (e.target.id === 'searchRodCategorySelect') {
+        const cat = e.target.value === 'ALL' ? 'all' : e.target.value;
+        if (typeof window.setRodCategoryFilter === 'function') {
+          window.setRodCategoryFilter(cat);
         }
       } else if (e.target.id === 'searchLengthUnitSelect') {
         setSmartSearchUnit(e.target.value);
@@ -5411,6 +5738,9 @@
       if (actionSheetNotesBox) actionSheetNotesBox.classList.add('hidden');
     }
 
+    if (btnSheetEdit) btnSheetEdit.style.display = window.rodsyncIsAdmin === false ? 'none' : '';
+    if (btnSheetDelete) btnSheetDelete.style.display = window.rodsyncIsAdmin === false ? 'none' : '';
+
     if (mobileActionSheetOverlay) mobileActionSheetOverlay.classList.remove('hidden');
   }
 
@@ -5433,36 +5763,258 @@
       .replace(/'/g, '&#039;');
   }
 
+  // --- DYNAMIC DATABASE DRIVEN INPUTS FOR RODS (Name, Diameter, Length) ---
+  function updateDynamicLengthOptionsFromDatabase() {
+    refreshDomElements();
+    const activeRods = (_rodCategoryFilter && _rodCategoryFilter !== 'all' && _rodCategoryFilter !== 'ALL')
+      ? rods.filter(r => (r.name || r.category || '').toLowerCase() === _rodCategoryFilter.toLowerCase())
+      : rods;
+
+    const currentDia = searchDiameterInput ? parseDiameterValue(searchDiameterInput.value) : '';
+    const matchingForLen = currentDia
+      ? activeRods.filter(r => areDiasEqual(r.diameterMm, currentDia))
+      : activeRods;
+
+    function getLengthInUnit(r, unit) {
+      const lenIn = Number(r.lengthIn) || (Number(r.lengthFt) ? Number(r.lengthFt) * 12 : 0);
+      if (!lenIn || isNaN(lenIn)) return 0;
+      if (unit === 'in') return Number(lenIn.toFixed(2));
+      if (unit === 'ft') return Number((lenIn / 12).toFixed(2));
+      if (unit === 'm') return Number((lenIn * 0.0254).toFixed(3));
+      return Number(lenIn.toFixed(2));
+    }
+
+    const dbLengths = Array.from(new Set(
+      matchingForLen
+        .map(r => getLengthInUnit(r, searchLengthUnit))
+        .filter(l => !isNaN(l) && l > 0)
+    )).sort((a, b) => a - b);
+
+    const lenChipsCont = document.getElementById('quickLengthChipsScroll');
+    const currentLen = searchLengthInput ? parseFloat(searchLengthInput.value) : NaN;
+
+    if (lenChipsCont) {
+      lenChipsCont.innerHTML = '';
+      const fallbackLens = searchLengthUnit === 'm' ? [0.5, 1, 2, 3, 5] : (searchLengthUnit === 'ft' ? [1, 2, 4, 6, 8, 10] : [1, 2, 4, 6, 8, 10]);
+      const lensToRender = dbLengths.length > 0 ? dbLengths : fallbackLens;
+      lensToRender.forEach(len => {
+        const btn = document.createElement('button');
+        btn.type = 'button';
+        btn.className = 'btn-len-preset' + (!isNaN(currentLen) && Math.abs(currentLen - len) < 0.01 ? ' active' : '');
+        btn.dataset.len = len;
+        btn.textContent = `${len}`;
+        btn.title = `Stock Length: ${len} ${searchLengthUnit.toUpperCase()}`;
+        lenChipsCont.appendChild(btn);
+      });
+    }
+
+    // Ensure #searchLengthInput has no dropdown/datalist
+    const lenDatalist = document.getElementById('searchLengthDatalist');
+    if (lenDatalist) {
+      lenDatalist.remove();
+    }
+    if (searchLengthInput) {
+      searchLengthInput.removeAttribute('list');
+      searchLengthInput.setAttribute('autocomplete', 'off');
+    }
+  }
+
+  function updateDynamicRodInputsFromStock() {
+    refreshDomElements();
+
+    // 1. Rod Catagories from Database and Category Manager
+    const dbRodNames = Array.from(new Set(
+      rods.map(r => String(r.category || r.name || '').trim()).filter(Boolean)
+    )).sort();
+
+    const explicitCats = Array.isArray(window.__ROD_SUBCATEGORIES__) && window.__ROD_SUBCATEGORIES__.length > 0 
+      ? window.__ROD_SUBCATEGORIES__.map(s => String(s || '').trim()).filter(Boolean)
+      : ['Chrome Rod', 'Hard Chrome Rod'];
+
+    const namesToUse = Array.from(new Set([...explicitCats, ...dbRodNames])).filter(Boolean).sort();
+
+    // Update #searchRodCategorySelect
+    const catSel = document.getElementById('searchRodCategorySelect');
+    if (catSel) {
+      if (catSel.options.length === 0) {
+        namesToUse.forEach(name => {
+          const opt = document.createElement('option');
+          opt.value = name;
+          opt.textContent = name;
+          catSel.appendChild(opt);
+        });
+      }
+      if (_rodCategoryFilter && _rodCategoryFilter !== 'all' && _rodCategoryFilter !== 'ALL') {
+        catSel.value = _rodCategoryFilter;
+      }
+    }
+
+    // Update #rodQuickCategoryChips
+    const chipsCont = document.getElementById('rodQuickCategoryChips');
+    if (chipsCont) {
+      chipsCont.innerHTML = '';
+      const allActive = (!_rodCategoryFilter || _rodCategoryFilter === 'all' || _rodCategoryFilter === 'ALL');
+      const allBtn = document.createElement('button');
+      allBtn.type = 'button';
+      allBtn.className = 'btn-dia-preset' + (allActive ? ' active' : '');
+      allBtn.dataset.rodCat = 'ALL';
+      allBtn.textContent = 'All';
+      chipsCont.appendChild(allBtn);
+
+      namesToUse.forEach(name => {
+        const btn = document.createElement('button');
+        btn.type = 'button';
+        const isActive = (_rodCategoryFilter || '').toLowerCase() === name.toLowerCase();
+        btn.className = 'btn-dia-preset' + (isActive ? ' active' : '');
+        btn.dataset.rodCat = name;
+        btn.textContent = name;
+        chipsCont.appendChild(btn);
+      });
+    }
+
+    // Update #rodCategoryPillsGroup
+    const pillsCont = document.getElementById('rodCategoryPillsGroup');
+    if (pillsCont) {
+      const allActive = (!_rodCategoryFilter || _rodCategoryFilter === 'all' || _rodCategoryFilter === 'ALL');
+      pillsCont.innerHTML = `
+        <span class="category-subnav-label">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M4 6h16M4 12h16M4 18h7" />
+          </svg>
+          Rod Catagorie:
+        </span>
+        <button type="button" class="cat-pill-btn ${allActive ? 'active' : ''}" data-rod-cat="all" title="Show all rod catagories">
+          All Catagories
+        </button>
+      `;
+      namesToUse.forEach(name => {
+        const count = rods.filter(r => String(r.category || r.name || '').toLowerCase() === name.toLowerCase()).length;
+        const isActive = (_rodCategoryFilter || '').toLowerCase() === name.toLowerCase();
+        const btn = document.createElement('button');
+        btn.type = 'button';
+        btn.className = 'cat-pill-btn' + (isActive ? ' active' : '');
+        btn.dataset.rodCat = name;
+        btn.title = `Filter by ${name}`;
+        btn.innerHTML = `${name}${count > 0 ? ` (${count})` : ''}`;
+        pillsCont.appendChild(btn);
+      });
+    }
+
+    // Update #formRodName in Add Rod modal
+    const modalRodName = document.getElementById('formRodName');
+    if (modalRodName) {
+      const curVal = modalRodName.value;
+      modalRodName.innerHTML = '';
+      if (namesToUse.length === 0) {
+        const opt = document.createElement('option');
+        opt.value = '';
+        opt.textContent = '— No Catagories in Database —';
+        opt.disabled = true;
+        modalRodName.appendChild(opt);
+      } else {
+        namesToUse.forEach(name => {
+          const opt = document.createElement('option');
+          opt.value = name;
+          opt.textContent = name;
+          modalRodName.appendChild(opt);
+        });
+        if (curVal && modalRodName.querySelector(`option[value="${curVal}"]`)) {
+          modalRodName.value = curVal;
+        } else if (namesToUse.length > 0) {
+          modalRodName.value = namesToUse[0];
+        }
+      }
+    }
+
+    // 2. Required Diameters from Database
+    const activeRods = (_rodCategoryFilter && _rodCategoryFilter !== 'all' && _rodCategoryFilter !== 'ALL')
+      ? rods.filter(r => String(r.category || r.name || '').toLowerCase() === _rodCategoryFilter.toLowerCase())
+      : rods;
+
+    const dbDiameters = Array.from(new Set(
+      activeRods
+        .map(r => r.diameterMm !== undefined && r.diameterMm !== null ? String(r.diameterMm).trim() : '')
+        .filter(d => d.length > 0 && d !== '300')
+    )).sort(sortDiameters);
+
+    // Auto-sync diameter input with current category database diameters
+    if (searchDiameterInput) {
+      const curDia = searchDiameterInput.value.trim();
+      if (!curDia || !dbDiameters.some(d => areDiasEqual(d, curDia))) {
+        searchDiameterInput.value = dbDiameters.length > 0 ? dbDiameters[0] : '';
+        searchDiameterInput.dispatchEvent(new Event('input', { bubbles: true }));
+      }
+    }
+
+    if (typeof window !== 'undefined') {
+      window.__AVAILABLE_DIAMETERS__ = dbDiameters;
+      try {
+        window.dispatchEvent(new CustomEvent('rodsyncDiametersUpdated', { detail: { diameters: dbDiameters } }));
+      } catch (e) { }
+    }
+
+    const diaChipsCont = document.getElementById('rodQuickDiaChips');
+    const currentDia = searchDiameterInput ? parseDiameterValue(searchDiameterInput.value) : '';
+
+    if (diaChipsCont) {
+      diaChipsCont.innerHTML = '';
+      const diasToRender = dbDiameters;
+      diasToRender.forEach(dia => {
+        const btn = document.createElement('button');
+        btn.type = 'button';
+        btn.className = 'btn-dia-preset' + (areDiasEqual(currentDia, dia) ? ' active' : '');
+        btn.dataset.dia = dia;
+        btn.textContent = `${dia}mm`;
+        diaChipsCont.appendChild(btn);
+      });
+    }
+
+    // Datalist for #searchDiameterInput
+    let diaDatalist = document.getElementById('searchDiameterDatalist');
+    if (!diaDatalist) {
+      diaDatalist = document.createElement('datalist');
+      diaDatalist.id = 'searchDiameterDatalist';
+      document.body.appendChild(diaDatalist);
+    }
+    diaDatalist.innerHTML = '';
+    dbDiameters.forEach(dia => {
+      const count = activeRods.filter(r => areDiasEqual(r.diameterMm, dia)).length;
+      const opt = document.createElement('option');
+      opt.value = dia;
+      opt.label = `${dia} mm (${count} in database)`;
+      diaDatalist.appendChild(opt);
+    });
+    if (searchDiameterInput) {
+      searchDiameterInput.setAttribute('list', 'searchDiameterDatalist');
+    }
+
+    // 3. Required Lengths from Database
+    updateDynamicLengthOptionsFromDatabase();
+  }
+
   // Expose to window for Next.js to call after fetching Google Sheets data
   window.initVanillaApp = initApp;
   window.updateDashboardExternal = updateDashboard;
   window.toggleRoundLength = toggleRoundLength;
   window.setRoundLengthEnabled = setRoundLengthEnabled;
   window.isRoundLengthEnabled = () => isRoundLengthEnabled;
+  window.getVanillaRods = () => rods;
   window.setVanillaRods = (newRods) => {
     if (Array.isArray(newRods)) {
       rods = newRods.filter(r => {
-        const dia = Number(r.diameterMm) || 0;
+        const rawDia = r.diameterMm !== undefined && r.diameterMm !== null ? String(r.diameterMm).trim() : '';
         const len = Number(r.lengthIn) || Number(r.lengthFt) || 0;
         const qty = Number(r.quantity) || 0;
-        return dia > 0 && len > 0 && qty > 0 && dia !== 300;
+        return rawDia.length > 0 && len > 0 && qty > 0 && rawDia !== '300';
       });
-      try {
-        localStorage.setItem(STORAGE_KEY, JSON.stringify(rods));
-      } catch (e) {
-        console.warn('Failed to cache rods in localStorage:', e);
-      }
+      updateDynamicRodInputsFromStock();
       updateDashboard();
     }
   };
+  window.getVanillaCutLogs = () => cutLogs;
   window.setVanillaCutLogs = (newLogs) => {
     if (Array.isArray(newLogs)) {
       cutLogs = newLogs.filter(l => Number(l.diameterMm) !== 300);
-      try {
-        localStorage.setItem(CUT_LOGS_STORAGE_KEY, JSON.stringify(cutLogs));
-      } catch (e) {
-        console.warn('Failed to cache cutLogs in localStorage:', e);
-      }
       updateCutLogsBadge();
     }
   };
@@ -5481,6 +6033,44 @@
       detail: { rods: rods, cutLogs: cutLogs, railStock: currentRailStock }
     }));
   };
+  window.updateRodNamesDropdown = function(cats) {
+    if (Array.isArray(cats)) {
+      window.__ROD_SUBCATEGORIES__ = cats;
+    }
+    updateDynamicRodInputsFromStock();
+    if (typeof window.initAllCustomDropdowns === 'function') {
+      window.initAllCustomDropdowns();
+    }
+  };
+
+  window.setRodCategoryFilter = function(cat) {
+    _rodCategoryFilter = cat || 'Chrome Rod';
+    const sel = document.getElementById('searchRodCategorySelect');
+    if (sel && sel.value !== _rodCategoryFilter) {
+      sel.value = _rodCategoryFilter;
+    }
+    document.querySelectorAll('#rodQuickCategoryChips .btn-dia-preset').forEach(b => {
+      b.classList.toggle('active', (b.dataset.rodCat || '').toLowerCase() === (_rodCategoryFilter || 'Chrome Rod').toLowerCase());
+    });
+    document.querySelectorAll('#rodCategoryPillsGroup .cat-pill-btn').forEach(b => {
+      b.classList.toggle('active', (b.dataset.rodCat || '').toLowerCase() === (_rodCategoryFilter || 'Chrome Rod').toLowerCase());
+    });
+    updateDynamicRodInputsFromStock();
+    renderInventoryTable();
+    updateDashboard();
+    try {
+      window.dispatchEvent(new CustomEvent('rodsyncCategorySelected', { detail: { category: _rodCategoryFilter } }));
+    } catch (e) { }
+    if (searchDiameterInput && searchDiameterInput.value && searchLengthInput && searchLengthInput.value) {
+      executeSmartSearch(
+        searchDiameterInput.value,
+        searchLengthInput.value,
+        false,
+        searchLengthUnit,
+        searchPiecesInput ? searchPiecesInput.value : 1
+      );
+    }
+  };
   window.setCutLogsDateFilter = setCutLogsDateFilter;
   window.openEditCutLogModal = openEditCutLogModal;
   window.closeEditCutLogModal = closeEditCutLogModal;
@@ -5492,6 +6082,251 @@
   window.openAddModal = openAddRodModal;
   window.openEditRodModal = openEditRodModal;
   window.closeRodModal = closeRodModal;
+
+  // --- UNIVERSAL CUSTOM DROPDOWN SYSTEM (MATCHING REQUIRED DIAMETER STYLE) ---
+  function enhanceSelectToCustomDropdown(sel) {
+    if (!sel || sel.dataset.customDropdownEnhanced === 'true' || sel.classList.contains('input-addon-select')) {
+      if (sel && typeof sel._updateCustomDropdown === 'function') {
+        sel._updateCustomDropdown();
+      }
+      return;
+    }
+
+    sel.dataset.customDropdownEnhanced = 'true';
+
+    // Wrap the select in custom-dia-select-wrap
+    const wrap = document.createElement('div');
+    wrap.className = 'custom-dia-select-wrap custom-enhanced-select-wrap';
+    sel.parentNode.insertBefore(wrap, sel);
+    wrap.appendChild(sel);
+
+    // Keep native select accessible to forms/scripts but hidden visually
+    sel.style.position = 'absolute';
+    sel.style.opacity = '0';
+    sel.style.pointerEvents = 'none';
+    sel.style.width = '1px';
+    sel.style.height = '1px';
+    sel.style.margin = '0';
+    sel.style.padding = '0';
+    sel.style.border = 'none';
+
+    // Create trigger matching .custom-dia-trigger
+    const trigger = document.createElement('button');
+    trigger.type = 'button';
+    trigger.className = 'custom-dia-trigger';
+    trigger.setAttribute('aria-haspopup', 'listbox');
+    trigger.setAttribute('aria-expanded', 'false');
+
+    const triggerLabel = document.createElement('span');
+    trigger.appendChild(triggerLabel);
+
+    const chevron = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
+    chevron.setAttribute('class', 'custom-dia-chevron');
+    chevron.setAttribute('viewBox', '0 0 24 24');
+    chevron.setAttribute('fill', 'none');
+    chevron.setAttribute('stroke', 'currentColor');
+    chevron.setAttribute('stroke-width', '2.4');
+    chevron.setAttribute('stroke-linecap', 'round');
+    chevron.setAttribute('stroke-linejoin', 'round');
+    const poly = document.createElementNS('http://www.w3.org/2000/svg', 'polyline');
+    poly.setAttribute('points', '6 9 12 15 18 9');
+    chevron.appendChild(poly);
+    trigger.appendChild(chevron);
+
+    wrap.appendChild(trigger);
+
+    // Create menu popover matching .custom-dia-menu
+    const menu = document.createElement('div');
+    menu.className = 'custom-dia-menu';
+    menu.setAttribute('role', 'listbox');
+    menu.style.display = 'none';
+    wrap.appendChild(menu);
+
+    // Determine smart placeholder
+    const selId = (sel.id || '').toLowerCase();
+    let searchPlaceholder = 'Search...';
+    if (selId.includes('cat') || selId.includes('brand')) searchPlaceholder = 'Search category...';
+    else if (selId.includes('model')) searchPlaceholder = 'Search model...';
+    else if (selId.includes('dia')) searchPlaceholder = 'Search diameter...';
+
+    // Search input wrap
+    const searchWrap = document.createElement('div');
+    searchWrap.className = 'custom-dia-search-wrap';
+    searchWrap.innerHTML = `
+      <svg class="custom-dia-search-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+        <circle cx="11" cy="11" r="8"></circle>
+        <line x1="21" y1="21" x2="16.65" y2="16.65"></line>
+      </svg>
+      <input type="text" class="custom-dia-search-input" placeholder="${searchPlaceholder}" />
+    `;
+    const searchInput = searchWrap.querySelector('input');
+    menu.appendChild(searchWrap);
+
+    // Options list
+    const optionsList = document.createElement('div');
+    optionsList.className = 'custom-dia-options-list';
+    menu.appendChild(optionsList);
+
+    function updateTriggerText() {
+      const selectedOpt = sel.selectedIndex >= 0 ? sel.options[sel.selectedIndex] : null;
+      triggerLabel.textContent = selectedOpt ? selectedOpt.textContent : (sel.getAttribute('placeholder') || 'Select option');
+    }
+
+    function renderOptions(filterText = '') {
+      optionsList.innerHTML = '';
+      const cleanFilter = filterText.toLowerCase().trim();
+      let matchCount = 0;
+
+      Array.from(sel.options).forEach(opt => {
+        if (opt.disabled) return;
+        const text = opt.textContent.trim();
+        if (cleanFilter && !text.toLowerCase().includes(cleanFilter) && !opt.value.toLowerCase().includes(cleanFilter)) {
+          return;
+        }
+        matchCount++;
+        const isSelected = opt.selected || opt.value === sel.value;
+
+        const row = document.createElement('div');
+        row.className = 'custom-dia-option' + (isSelected ? ' selected' : '');
+        row.setAttribute('role', 'option');
+        row.setAttribute('aria-selected', isSelected ? 'true' : 'false');
+
+        const left = document.createElement('div');
+        left.className = 'custom-dia-option-left';
+
+        const radio = document.createElement('span');
+        radio.className = 'custom-dia-radio-ring' + (isSelected ? ' checked' : '');
+
+        const label = document.createElement('span');
+        label.className = 'custom-dia-option-label';
+        label.textContent = text;
+
+        left.appendChild(radio);
+        left.appendChild(label);
+        row.appendChild(left);
+
+        if (isSelected) {
+          const isRailMode = document.documentElement.getAttribute('data-system-mode') === 'guided-rail';
+          const checkStroke = isRailMode ? '#6b8e23' : '#0d9488';
+          const check = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
+          check.setAttribute('class', 'custom-dia-check-icon');
+          check.setAttribute('viewBox', '0 0 24 24');
+          check.setAttribute('fill', 'none');
+          check.setAttribute('stroke', checkStroke);
+          check.setAttribute('stroke-width', '2.5');
+          check.setAttribute('stroke-linecap', 'round');
+          check.setAttribute('stroke-linejoin', 'round');
+          const checkPoly = document.createElementNS('http://www.w3.org/2000/svg', 'polyline');
+          checkPoly.setAttribute('points', '20 6 9 17 4 12');
+          check.appendChild(checkPoly);
+          row.appendChild(check);
+        }
+
+        row.addEventListener('click', (e) => {
+          e.stopPropagation();
+          sel.value = opt.value;
+          sel.dispatchEvent(new Event('change', { bubbles: true }));
+          sel.dispatchEvent(new Event('input', { bubbles: true }));
+          closeMenu();
+          updateTriggerText();
+        });
+
+        optionsList.appendChild(row);
+      });
+
+      if (matchCount === 0) {
+        optionsList.innerHTML = `<div class="custom-dia-no-results"><span>No matching options</span></div>`;
+      }
+    }
+
+    function openMenu() {
+      menu.style.display = 'block';
+      trigger.classList.add('active');
+      chevron.classList.add('open');
+      trigger.setAttribute('aria-expanded', 'true');
+      searchInput.value = '';
+      renderOptions();
+      setTimeout(() => searchInput.focus(), 50);
+    }
+
+    function closeMenu() {
+      menu.style.display = 'none';
+      trigger.classList.remove('active');
+      chevron.classList.remove('open');
+      trigger.setAttribute('aria-expanded', 'false');
+    }
+
+    trigger.addEventListener('click', (e) => {
+      e.preventDefault();
+      e.stopPropagation();
+      if (menu.style.display === 'block') {
+        closeMenu();
+      } else {
+        document.querySelectorAll('.custom-dia-menu').forEach(m => {
+          if (m !== menu) m.style.display = 'none';
+        });
+        document.querySelectorAll('.custom-dia-trigger').forEach(t => {
+          if (t !== trigger) t.classList.remove('active');
+        });
+        document.querySelectorAll('.custom-dia-chevron').forEach(c => {
+          if (c !== chevron) c.classList.remove('open');
+        });
+        openMenu();
+      }
+    });
+
+    searchInput.addEventListener('input', () => {
+      renderOptions(searchInput.value);
+    });
+
+    searchInput.addEventListener('click', (e) => e.stopPropagation());
+
+    document.addEventListener('click', (e) => {
+      if (!wrap.contains(e.target)) {
+        closeMenu();
+      }
+    });
+
+    sel.addEventListener('change', updateTriggerText);
+    const observer = new MutationObserver(() => {
+      updateTriggerText();
+      if (menu.style.display === 'block') renderOptions(searchInput.value);
+    });
+    observer.observe(sel, { childList: true, subtree: true, attributes: true });
+
+    sel._updateCustomDropdown = function() {
+      updateTriggerText();
+      if (menu.style.display === 'block') renderOptions(searchInput.value);
+    };
+
+    updateTriggerText();
+  }
+
+  function initAllCustomDropdowns() {
+    if (typeof document === 'undefined') return;
+    const targetSelectors = [
+      '#searchRodCategorySelect',
+      '#grBrandSelect',
+      '#grModelSelect',
+      '#filterDiameter',
+      '#formRodName',
+      '#formGrBrandSelect',
+      '#formGrModelSelect',
+      '#cutSuggestedRodSelect',
+      'select.input-control',
+      'select.filter-select'
+    ];
+    targetSelectors.forEach(selector => {
+      document.querySelectorAll(selector).forEach(sel => {
+        if (!sel.classList.contains('input-addon-select')) {
+          enhanceSelectToCustomDropdown(sel);
+        }
+      });
+    });
+  }
+
+  window.initAllCustomDropdowns = initAllCustomDropdowns;
+  window.enhanceSelectToCustomDropdown = enhanceSelectToCustomDropdown;
 
   // React to system mode switch event
   if (typeof window !== 'undefined') {

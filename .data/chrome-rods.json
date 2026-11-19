@@ -8,7 +8,8 @@
     "lengthFt": 5.5,
     "quantity": 1,
     "notes": "",
-    "updatedAt": "2026-11-06T07:12:32.370Z"
+    "updatedAt": "2026-11-06T07:12:32.370Z",
+    "category": "Chrome Rod"
   },
   {
     "id": "rod-10-6-2",
@@ -19,7 +20,8 @@
     "lengthFt": 6,
     "quantity": 2,
     "notes": "",
-    "updatedAt": "2026-11-06T07:12:32.370Z"
+    "updatedAt": "2026-11-06T07:12:32.370Z",
+    "category": "Chrome Rod"
   },
   {
     "id": "rod-10-11.5-3",
@@ -30,139 +32,21 @@
     "lengthFt": 11.5,
     "quantity": 3,
     "notes": "",
-    "updatedAt": "2026-11-06T07:12:32.370Z"
+    "updatedAt": "2026-11-06T07:12:32.370Z",
+    "category": "Chrome Rod"
   },
   {
-    "id": "rod-16-6.5-4",
-    "sku": "ROD-16MM-6.5IN-STOCK",
+    "id": "rod-chrome-rod-10-12.53",
+    "sku": "ROD-CHROMEROD-10MM-12.53IN",
     "name": "Chrome Rod",
-    "diameterMm": 16,
-    "lengthIn": 6.5,
-    "lengthFt": 6.5,
-    "quantity": 6,
-    "notes": "",
-    "updatedAt": "2026-11-06T07:12:32.370Z"
-  },
-  {
-    "id": "rod-16-7-5",
-    "sku": "ROD-16MM-7IN-STOCK",
-    "name": "Chrome Rod",
-    "diameterMm": 16,
-    "lengthIn": 7,
-    "lengthFt": 7,
-    "quantity": 7,
-    "notes": "",
-    "updatedAt": "2026-11-06T07:12:32.370Z"
-  },
-  {
-    "id": "rod-16-8-6",
-    "sku": "ROD-16MM-8IN-STOCK",
-    "name": "Chrome Rod",
-    "diameterMm": 16,
-    "lengthIn": 8,
-    "lengthFt": 8,
-    "quantity": 1,
-    "notes": "",
-    "updatedAt": "2026-11-06T07:12:32.370Z"
-  },
-  {
-    "id": "rod-16-8.5-7",
-    "sku": "ROD-16MM-8.5IN-STOCK",
-    "name": "Chrome Rod",
-    "diameterMm": 16,
-    "lengthIn": 8.5,
-    "lengthFt": 8.5,
-    "quantity": 2,
-    "notes": "",
-    "updatedAt": "2026-11-06T07:12:32.370Z"
-  },
-  {
-    "id": "rod-16-9-8",
-    "sku": "ROD-16MM-9IN-STOCK",
-    "name": "Chrome Rod",
-    "diameterMm": 16,
-    "lengthIn": 9,
-    "lengthFt": 9,
-    "quantity": 1,
-    "notes": "",
-    "updatedAt": "2026-11-06T07:12:32.370Z"
-  },
-  {
-    "id": "rod-20-6-9",
-    "sku": "ROD-20MM-6IN-STOCK",
-    "name": "Chrome Rod",
-    "diameterMm": 20,
-    "lengthIn": 6,
-    "lengthFt": 6,
-    "quantity": 7,
-    "notes": "",
-    "updatedAt": "2026-11-06T07:12:32.370Z"
-  },
-  {
-    "id": "rod-20-6.5-10",
-    "sku": "ROD-20MM-6.5IN-STOCK",
-    "name": "Chrome Rod",
-    "diameterMm": 20,
-    "lengthIn": 6.5,
-    "lengthFt": 6.5,
-    "quantity": 2,
-    "notes": "",
-    "updatedAt": "2026-11-06T07:12:32.370Z"
-  },
-  {
-    "id": "rod-20-7-11",
-    "sku": "ROD-20MM-7IN-STOCK",
-    "name": "Chrome Rod",
-    "diameterMm": 20,
-    "lengthIn": 7,
-    "lengthFt": 7,
-    "quantity": 10,
-    "notes": "",
-    "updatedAt": "2026-11-06T07:12:32.370Z"
-  },
-  {
-    "id": "rod-20-7.5-12",
-    "sku": "ROD-20MM-7.5IN-STOCK",
-    "name": "Chrome Rod",
-    "diameterMm": 20,
-    "lengthIn": 7.5,
-    "lengthFt": 7.5,
-    "quantity": 1,
-    "notes": "",
-    "updatedAt": "2026-11-06T07:12:32.370Z"
-  },
-  {
-    "id": "rod-20-8-13",
-    "sku": "ROD-20MM-8IN-STOCK",
-    "name": "Chrome Rod",
-    "diameterMm": 20,
-    "lengthIn": 8,
-    "lengthFt": 8,
-    "quantity": 11,
-    "notes": "",
-    "updatedAt": "2026-11-06T07:12:32.370Z"
-  },
-  {
-    "id": "rod-20-8.5-14",
-    "sku": "ROD-20MM-8.5IN-STOCK",
-    "name": "Chrome Rod",
-    "diameterMm": 20,
-    "lengthIn": 8.5,
-    "lengthFt": 8.5,
-    "quantity": 1,
-    "notes": "",
-    "updatedAt": "2026-11-06T07:12:32.370Z"
-  },
-  {
-    "id": "rod-20-9-15",
-    "sku": "ROD-20MM-9IN-STOCK",
-    "name": "Chrome Rod",
-    "diameterMm": 20,
-    "lengthIn": 9,
-    "lengthFt": 9,
-    "quantity": 4,
-    "notes": "",
-    "updatedAt": "2026-11-06T07:12:32.370Z"
+    "category": "Chrome Rod",
+    "diameterMm": 10,
+    "lengthIn": 12.53,
+    "lengthFt": 12.53,
+    "quantity": 8,
+    "notes": "Initial Stock from Template",
+    "createdAt": "2026-11-19T08:54:51.836Z",
+    "updatedAt": "2026-11-19T08:54:51.837Z"
   },
   {
     "id": "rod-12-5-16",
@@ -173,7 +57,8 @@
     "lengthFt": 5,
     "quantity": 1,
     "notes": "",
-    "updatedAt": "2026-11-06T07:12:32.370Z"
+    "updatedAt": "2026-11-06T07:12:32.370Z",
+    "category": "Chrome Rod"
   },
   {
     "id": "rod-12-5.5-17",
@@ -184,7 +69,8 @@
     "lengthFt": 5.5,
     "quantity": 1,
     "notes": "",
-    "updatedAt": "2026-11-06T07:12:32.370Z"
+    "updatedAt": "2026-11-06T07:12:32.370Z",
+    "category": "Chrome Rod"
   },
   {
     "id": "rod-12-6-18",
@@ -195,7 +81,8 @@
     "lengthFt": 6,
     "quantity": 2,
     "notes": "",
-    "updatedAt": "2026-11-06T07:12:32.370Z"
+    "updatedAt": "2026-11-06T07:12:32.370Z",
+    "category": "Chrome Rod"
   },
   {
     "id": "rod-12-6.5-19",
@@ -206,7 +93,8 @@
     "lengthFt": 6.5,
     "quantity": 2,
     "notes": "",
-    "updatedAt": "2026-11-06T07:12:32.370Z"
+    "updatedAt": "2026-11-06T07:12:32.370Z",
+    "category": "Chrome Rod"
   },
   {
     "id": "rod-12-7.5-20",
@@ -217,7 +105,8 @@
     "lengthFt": 7.5,
     "quantity": 3,
     "notes": "",
-    "updatedAt": "2026-11-06T07:12:32.370Z"
+    "updatedAt": "2026-11-06T07:12:32.370Z",
+    "category": "Chrome Rod"
   },
   {
     "id": "rod-12-8-21",
@@ -228,7 +117,8 @@
     "lengthFt": 8,
     "quantity": 2,
     "notes": "",
-    "updatedAt": "2026-11-06T07:12:32.370Z"
+    "updatedAt": "2026-11-06T07:12:32.370Z",
+    "category": "Chrome Rod"
   },
   {
     "id": "rod-12-8.5-22",
@@ -239,7 +129,8 @@
     "lengthFt": 8.5,
     "quantity": 6,
     "notes": "",
-    "updatedAt": "2026-11-06T07:12:32.370Z"
+    "updatedAt": "2026-11-06T07:12:32.370Z",
+    "category": "Chrome Rod"
   },
   {
     "id": "rod-12-10-23",
@@ -250,7 +141,8 @@
     "lengthFt": 10,
     "quantity": 2,
     "notes": "",
-    "updatedAt": "2026-11-06T07:12:32.370Z"
+    "updatedAt": "2026-11-06T07:12:32.370Z",
+    "category": "Chrome Rod"
   },
   {
     "id": "rod-12-11-24",
@@ -261,7 +153,8 @@
     "lengthFt": 11,
     "quantity": 1,
     "notes": "",
-    "updatedAt": "2026-11-06T07:12:32.371Z"
+    "updatedAt": "2026-11-06T07:12:32.371Z",
+    "category": "Chrome Rod"
   },
   {
     "id": "rod-12-13-25",
@@ -272,7 +165,8 @@
     "lengthFt": 13,
     "quantity": 2,
     "notes": "",
-    "updatedAt": "2026-11-06T07:12:32.371Z"
+    "updatedAt": "2026-11-06T07:12:32.371Z",
+    "category": "Chrome Rod"
   },
   {
     "id": "rod-12-18.5-26",
@@ -283,7 +177,152 @@
     "lengthFt": 18.5,
     "quantity": 3,
     "notes": "",
-    "updatedAt": "2026-11-06T07:12:32.371Z"
+    "updatedAt": "2026-11-06T07:12:32.371Z",
+    "category": "Chrome Rod"
+  },
+  {
+    "id": "rod-16-6.5-4",
+    "sku": "ROD-16MM-6.5IN-STOCK",
+    "name": "Chrome Rod",
+    "diameterMm": 16,
+    "lengthIn": 6.5,
+    "lengthFt": 6.5,
+    "quantity": 6,
+    "notes": "",
+    "updatedAt": "2026-11-06T07:12:32.370Z",
+    "category": "Chrome Rod"
+  },
+  {
+    "id": "rod-16-7-5",
+    "sku": "ROD-16MM-7IN-STOCK",
+    "name": "Chrome Rod",
+    "diameterMm": 16,
+    "lengthIn": 7,
+    "lengthFt": 7,
+    "quantity": 7,
+    "notes": "",
+    "updatedAt": "2026-11-06T07:12:32.370Z",
+    "category": "Chrome Rod"
+  },
+  {
+    "id": "rod-16-8-6",
+    "sku": "ROD-16MM-8IN-STOCK",
+    "name": "Chrome Rod",
+    "diameterMm": 16,
+    "lengthIn": 8,
+    "lengthFt": 8,
+    "quantity": 1,
+    "notes": "",
+    "updatedAt": "2026-11-06T07:12:32.370Z",
+    "category": "Chrome Rod"
+  },
+  {
+    "id": "rod-16-8.5-7",
+    "sku": "ROD-16MM-8.5IN-STOCK",
+    "name": "Chrome Rod",
+    "diameterMm": 16,
+    "lengthIn": 8.5,
+    "lengthFt": 8.5,
+    "quantity": 2,
+    "notes": "",
+    "updatedAt": "2026-11-06T07:12:32.370Z",
+    "category": "Chrome Rod"
+  },
+  {
+    "id": "rod-16-9-8",
+    "sku": "ROD-16MM-9IN-STOCK",
+    "name": "Chrome Rod",
+    "diameterMm": 16,
+    "lengthIn": 9,
+    "lengthFt": 9,
+    "quantity": 1,
+    "notes": "",
+    "updatedAt": "2026-11-06T07:12:32.370Z",
+    "category": "Chrome Rod"
+  },
+  {
+    "id": "rod-20-6-9",
+    "sku": "ROD-20MM-6IN-STOCK",
+    "name": "Chrome Rod",
+    "diameterMm": 20,
+    "lengthIn": 6,
+    "lengthFt": 6,
+    "quantity": 7,
+    "notes": "",
+    "updatedAt": "2026-11-06T07:12:32.370Z",
+    "category": "Chrome Rod"
+  },
+  {
+    "id": "rod-20-6.5-10",
+    "sku": "ROD-20MM-6.5IN-STOCK",
+    "name": "Chrome Rod",
+    "diameterMm": 20,
+    "lengthIn": 6.5,
+    "lengthFt": 6.5,
+    "quantity": 2,
+    "notes": "",
+    "updatedAt": "2026-11-06T07:12:32.370Z",
+    "category": "Chrome Rod"
+  },
+  {
+    "id": "rod-20-7-11",
+    "sku": "ROD-20MM-7IN-STOCK",
+    "name": "Chrome Rod",
+    "diameterMm": 20,
+    "lengthIn": 7,
+    "lengthFt": 7,
+    "quantity": 10,
+    "notes": "",
+    "updatedAt": "2026-11-06T07:12:32.370Z",
+    "category": "Chrome Rod"
+  },
+  {
+    "id": "rod-20-7.5-12",
+    "sku": "ROD-20MM-7.5IN-STOCK",
+    "name": "Chrome Rod",
+    "diameterMm": 20,
+    "lengthIn": 7.5,
+    "lengthFt": 7.5,
+    "quantity": 1,
+    "notes": "",
+    "updatedAt": "2026-11-06T07:12:32.370Z",
+    "category": "Chrome Rod"
+  },
+  {
+    "id": "rod-20-8-13",
+    "sku": "ROD-20MM-8IN-STOCK",
+    "name": "Chrome Rod",
+    "diameterMm": 20,
+    "lengthIn": 8,
+    "lengthFt": 8,
+    "quantity": 11,
+    "notes": "",
+    "updatedAt": "2026-11-06T07:12:32.370Z",
+    "category": "Chrome Rod"
+  },
+  {
+    "id": "rod-20-8.5-14",
+    "sku": "ROD-20MM-8.5IN-STOCK",
+    "name": "Chrome Rod",
+    "diameterMm": 20,
+    "lengthIn": 8.5,
+    "lengthFt": 8.5,
+    "quantity": 1,
+    "notes": "",
+    "updatedAt": "2026-11-06T07:12:32.370Z",
+    "category": "Chrome Rod"
+  },
+  {
+    "id": "rod-20-9-15",
+    "sku": "ROD-20MM-9IN-STOCK",
+    "name": "Chrome Rod",
+    "diameterMm": 20,
+    "lengthIn": 9,
+    "lengthFt": 9,
+    "quantity": 4,
+    "notes": "",
+    "updatedAt": "2026-11-06T07:12:32.370Z",
+    "category": "Chrome Rod"
   },
   {
     "id": "rod-22-6-27",
@@ -294,7 +333,8 @@
     "lengthFt": 6,
     "quantity": 3,
     "notes": "",
-    "updatedAt": "2026-11-06T07:12:32.371Z"
+    "updatedAt": "2026-11-06T07:12:32.371Z",
+    "category": "Chrome Rod"
   },
   {
     "id": "rod-22-6.5-28",
@@ -305,7 +345,8 @@
     "lengthFt": 6.5,
     "quantity": 1,
     "notes": "",
-    "updatedAt": "2026-11-06T07:12:32.371Z"
+    "updatedAt": "2026-11-06T07:12:32.371Z",
+    "category": "Chrome Rod"
   },
   {
     "id": "rod-22-7-29",
@@ -316,7 +357,8 @@
     "lengthFt": 7,
     "quantity": 5,
     "notes": "",
-    "updatedAt": "2026-11-06T07:12:32.371Z"
+    "updatedAt": "2026-11-06T07:12:32.371Z",
+    "category": "Chrome Rod"
   },
   {
     "id": "rod-22-8-30",
@@ -327,7 +369,8 @@
     "lengthFt": 8,
     "quantity": 1,
     "notes": "",
-    "updatedAt": "2026-11-06T07:12:32.371Z"
+    "updatedAt": "2026-11-06T07:12:32.371Z",
+    "category": "Chrome Rod"
   },
   {
     "id": "rod-22-8.5-31",
@@ -338,7 +381,8 @@
     "lengthFt": 8.5,
     "quantity": 1,
     "notes": "",
-    "updatedAt": "2026-11-06T07:12:32.371Z"
+    "updatedAt": "2026-11-06T07:12:32.371Z",
+    "category": "Chrome Rod"
   },
   {
     "id": "rod-25-5-32",
@@ -349,7 +393,8 @@
     "lengthFt": 5,
     "quantity": 6,
     "notes": "",
-    "updatedAt": "2026-11-06T07:12:32.371Z"
+    "updatedAt": "2026-11-06T07:12:32.371Z",
+    "category": "Chrome Rod"
   },
   {
     "id": "rod-25-5.5-33",
@@ -360,7 +405,8 @@
     "lengthFt": 5.5,
     "quantity": 2,
     "notes": "",
-    "updatedAt": "2026-11-06T07:12:32.371Z"
+    "updatedAt": "2026-11-06T07:12:32.371Z",
+    "category": "Chrome Rod"
   },
   {
     "id": "rod-25-6-34",
@@ -371,7 +417,8 @@
     "lengthFt": 6,
     "quantity": 5,
     "notes": "",
-    "updatedAt": "2026-11-06T07:12:32.371Z"
+    "updatedAt": "2026-11-06T07:12:32.371Z",
+    "category": "Chrome Rod"
   },
   {
     "id": "rod-25-6.5-35",
@@ -382,7 +429,8 @@
     "lengthFt": 6.5,
     "quantity": 3,
     "notes": "",
-    "updatedAt": "2026-11-06T07:12:32.371Z"
+    "updatedAt": "2026-11-06T07:12:32.371Z",
+    "category": "Chrome Rod"
   },
   {
     "id": "rod-25-7-36",
@@ -393,7 +441,8 @@
     "lengthFt": 7,
     "quantity": 10,
     "notes": "",
-    "updatedAt": "2026-11-06T07:12:32.371Z"
+    "updatedAt": "2026-11-06T07:12:32.371Z",
+    "category": "Chrome Rod"
   },
   {
     "id": "rod-25-7.5-37",
@@ -404,7 +453,8 @@
     "lengthFt": 7.5,
     "quantity": 3,
     "notes": "",
-    "updatedAt": "2026-11-06T07:12:32.371Z"
+    "updatedAt": "2026-11-06T07:12:32.371Z",
+    "category": "Chrome Rod"
   },
   {
     "id": "rod-25-8.5-38",
@@ -413,9 +463,10 @@
     "diameterMm": 25,
     "lengthIn": 8.5,
     "lengthFt": 8.5,
-    "quantity": 1,
+    "quantity": 2,
     "notes": "",
-    "updatedAt": "2026-11-06T07:12:32.371Z"
+    "updatedAt": "2026-11-06T07:12:32.371Z",
+    "category": "Chrome Rod"
   },
   {
     "id": "rod-25-10-39",
@@ -426,7 +477,8 @@
     "lengthFt": 10,
     "quantity": 2,
     "notes": "",
-    "updatedAt": "2026-11-06T07:12:32.371Z"
+    "updatedAt": "2026-11-06T07:12:32.371Z",
+    "category": "Chrome Rod"
   },
   {
     "id": "rod-25-11-40",
@@ -435,9 +487,10 @@
     "diameterMm": 25,
     "lengthIn": 11,
     "lengthFt": 11,
-    "quantity": 1,
+    "quantity": 2,
     "notes": "",
-    "updatedAt": "2026-11-06T07:12:32.371Z"
+    "updatedAt": "2026-11-06T07:12:32.371Z",
+    "category": "Chrome Rod"
   },
   {
     "id": "rod-25-13-41",
@@ -448,7 +501,8 @@
     "lengthFt": 13,
     "quantity": 2,
     "notes": "",
-    "updatedAt": "2026-11-06T07:12:32.371Z"
+    "updatedAt": "2026-11-06T07:12:32.371Z",
+    "category": "Chrome Rod"
   },
   {
     "id": "rod-25-15.5-42",
@@ -459,7 +513,8 @@
     "lengthFt": 15.5,
     "quantity": 1,
     "notes": "",
-    "updatedAt": "2026-11-06T07:12:32.371Z"
+    "updatedAt": "2026-11-06T07:12:32.371Z",
+    "category": "Chrome Rod"
   },
   {
     "id": "rod-25-16-43",
@@ -470,7 +525,8 @@
     "lengthFt": 16,
     "quantity": 4,
     "notes": "",
-    "updatedAt": "2026-11-06T07:12:32.371Z"
+    "updatedAt": "2026-11-06T07:12:32.371Z",
+    "category": "Chrome Rod"
   },
   {
     "id": "rod-25-17-44",
@@ -481,7 +537,8 @@
     "lengthFt": 17,
     "quantity": 1,
     "notes": "",
-    "updatedAt": "2026-11-06T07:12:32.371Z"
+    "updatedAt": "2026-11-06T07:12:32.371Z",
+    "category": "Chrome Rod"
   },
   {
     "id": "rod-28-6-45",
@@ -492,7 +549,8 @@
     "lengthFt": 6,
     "quantity": 1,
     "notes": "",
-    "updatedAt": "2026-11-06T07:12:32.371Z"
+    "updatedAt": "2026-11-06T07:12:32.371Z",
+    "category": "Chrome Rod"
   },
   {
     "id": "rod-28-8.5-46",
@@ -503,7 +561,8 @@
     "lengthFt": 8.5,
     "quantity": 2,
     "notes": "",
-    "updatedAt": "2026-11-06T07:12:32.371Z"
+    "updatedAt": "2026-11-06T07:12:32.371Z",
+    "category": "Chrome Rod"
   },
   {
     "id": "rod-28-9-47",
@@ -514,7 +573,8 @@
     "lengthFt": 9,
     "quantity": 1,
     "notes": "",
-    "updatedAt": "2026-11-06T07:12:32.371Z"
+    "updatedAt": "2026-11-06T07:12:32.371Z",
+    "category": "Chrome Rod"
   },
   {
     "id": "rod-28-9.5-48",
@@ -525,7 +585,8 @@
     "lengthFt": 9.5,
     "quantity": 3,
     "notes": "",
-    "updatedAt": "2026-11-06T07:12:32.371Z"
+    "updatedAt": "2026-11-06T07:12:32.371Z",
+    "category": "Chrome Rod"
   },
   {
     "id": "rod-28-11-49",
@@ -536,7 +597,8 @@
     "lengthFt": 11,
     "quantity": 1,
     "notes": "",
-    "updatedAt": "2026-11-06T07:12:32.371Z"
+    "updatedAt": "2026-11-06T07:12:32.371Z",
+    "category": "Chrome Rod"
   },
   {
     "id": "rod-30-5-50",
@@ -547,7 +609,8 @@
     "lengthFt": 5,
     "quantity": 2,
     "notes": "",
-    "updatedAt": "2026-11-06T07:12:32.371Z"
+    "updatedAt": "2026-11-06T07:12:32.371Z",
+    "category": "Chrome Rod"
   },
   {
     "id": "rod-30-7-51",
@@ -558,7 +621,8 @@
     "lengthFt": 7,
     "quantity": 3,
     "notes": "",
-    "updatedAt": "2026-11-06T07:12:32.371Z"
+    "updatedAt": "2026-11-06T07:12:32.371Z",
+    "category": "Chrome Rod"
   },
   {
     "id": "rod-30-7.5-52",
@@ -569,7 +633,8 @@
     "lengthFt": 7.5,
     "quantity": 3,
     "notes": "",
-    "updatedAt": "2026-11-06T07:12:32.371Z"
+    "updatedAt": "2026-11-06T07:12:32.371Z",
+    "category": "Chrome Rod"
   },
   {
     "id": "rod-30-8-53",
@@ -580,7 +645,8 @@
     "lengthFt": 8,
     "quantity": 7,
     "notes": "",
-    "updatedAt": "2026-11-06T07:12:32.371Z"
+    "updatedAt": "2026-11-06T07:12:32.371Z",
+    "category": "Chrome Rod"
   },
   {
     "id": "rod-30-8.5-54",
@@ -591,7 +657,8 @@
     "lengthFt": 8.5,
     "quantity": 2,
     "notes": "",
-    "updatedAt": "2026-11-06T07:12:32.371Z"
+    "updatedAt": "2026-11-06T07:12:32.371Z",
+    "category": "Chrome Rod"
   },
   {
     "id": "rod-30-9-55",
@@ -602,7 +669,8 @@
     "lengthFt": 9,
     "quantity": 5,
     "notes": "",
-    "updatedAt": "2026-11-06T07:12:32.371Z"
+    "updatedAt": "2026-11-06T07:12:32.371Z",
+    "category": "Chrome Rod"
   },
   {
     "id": "rod-30-9.5-56",
@@ -613,7 +681,8 @@
     "lengthFt": 9.5,
     "quantity": 2,
     "notes": "",
-    "updatedAt": "2026-11-06T07:12:32.371Z"
+    "updatedAt": "2026-11-06T07:12:32.371Z",
+    "category": "Chrome Rod"
   },
   {
     "id": "rod-30-10-57",
@@ -624,7 +693,8 @@
     "lengthFt": 10,
     "quantity": 5,
     "notes": "",
-    "updatedAt": "2026-11-06T07:12:32.371Z"
+    "updatedAt": "2026-11-06T07:12:32.371Z",
+    "category": "Chrome Rod"
   },
   {
     "id": "rod-30-10.5-58",
@@ -635,7 +705,8 @@
     "lengthFt": 10.5,
     "quantity": 1,
     "notes": "",
-    "updatedAt": "2026-11-06T07:12:32.371Z"
+    "updatedAt": "2026-11-06T07:12:32.371Z",
+    "category": "Chrome Rod"
   },
   {
     "id": "rod-30-11-59",
@@ -646,7 +717,8 @@
     "lengthFt": 11,
     "quantity": 1,
     "notes": "",
-    "updatedAt": "2026-11-06T07:12:32.371Z"
+    "updatedAt": "2026-11-06T07:12:32.371Z",
+    "category": "Chrome Rod"
   },
   {
     "id": "rod-30-12.5-60",
@@ -657,7 +729,8 @@
     "lengthFt": 12.5,
     "quantity": 2,
     "notes": "",
-    "updatedAt": "2026-11-06T07:12:32.371Z"
+    "updatedAt": "2026-11-06T07:12:32.371Z",
+    "category": "Chrome Rod"
   },
   {
     "id": "rod-30-19-61",
@@ -668,7 +741,8 @@
     "lengthFt": 19,
     "quantity": 1,
     "notes": "",
-    "updatedAt": "2026-11-06T07:12:32.371Z"
+    "updatedAt": "2026-11-06T07:12:32.371Z",
+    "category": "Chrome Rod"
   },
   {
     "id": "rod-30-19.5-62",
@@ -679,7 +753,8 @@
     "lengthFt": 19.5,
     "quantity": 1,
     "notes": "",
-    "updatedAt": "2026-11-06T07:12:32.371Z"
+    "updatedAt": "2026-11-06T07:12:32.371Z",
+    "category": "Chrome Rod"
   },
   {
     "id": "rod-32-6-63",
@@ -690,7 +765,8 @@
     "lengthFt": 6,
     "quantity": 1,
     "notes": "",
-    "updatedAt": "2026-11-06T07:12:32.371Z"
+    "updatedAt": "2026-11-06T07:12:32.371Z",
+    "category": "Chrome Rod"
   },
   {
     "id": "rod-32-7-64",
@@ -701,7 +777,8 @@
     "lengthFt": 7,
     "quantity": 5,
     "notes": "",
-    "updatedAt": "2026-11-06T07:12:32.371Z"
+    "updatedAt": "2026-11-06T07:12:32.371Z",
+    "category": "Chrome Rod"
   },
   {
     "id": "rod-32-8-65",
@@ -712,7 +789,8 @@
     "lengthFt": 8,
     "quantity": 4,
     "notes": "",
-    "updatedAt": "2026-11-06T07:12:32.371Z"
+    "updatedAt": "2026-11-06T07:12:32.371Z",
+    "category": "Chrome Rod"
   },
   {
     "id": "rod-32-8.5-66",
@@ -723,7 +801,8 @@
     "lengthFt": 8.5,
     "quantity": 4,
     "notes": "",
-    "updatedAt": "2026-11-06T07:12:32.371Z"
+    "updatedAt": "2026-11-06T07:12:32.371Z",
+    "category": "Chrome Rod"
   },
   {
     "id": "rod-32-9-67",
@@ -734,7 +813,8 @@
     "lengthFt": 9,
     "quantity": 4,
     "notes": "",
-    "updatedAt": "2026-11-06T07:12:32.371Z"
+    "updatedAt": "2026-11-06T07:12:32.371Z",
+    "category": "Chrome Rod"
   },
   {
     "id": "rod-32-9.5-68",
@@ -745,7 +825,8 @@
     "lengthFt": 9.5,
     "quantity": 4,
     "notes": "",
-    "updatedAt": "2026-11-06T07:12:32.371Z"
+    "updatedAt": "2026-11-06T07:12:32.371Z",
+    "category": "Chrome Rod"
   },
   {
     "id": "rod-32-10-69",
@@ -756,7 +837,8 @@
     "lengthFt": 10,
     "quantity": 8,
     "notes": "",
-    "updatedAt": "2026-11-06T07:12:32.371Z"
+    "updatedAt": "2026-11-06T07:12:32.371Z",
+    "category": "Chrome Rod"
   },
   {
     "id": "rod-32-10.5-70",
@@ -767,7 +849,8 @@
     "lengthFt": 10.5,
     "quantity": 5,
     "notes": "",
-    "updatedAt": "2026-11-06T07:12:32.371Z"
+    "updatedAt": "2026-11-06T07:12:32.371Z",
+    "category": "Chrome Rod"
   },
   {
     "id": "rod-32-11-71",
@@ -778,7 +861,8 @@
     "lengthFt": 11,
     "quantity": 1,
     "notes": "",
-    "updatedAt": "2026-11-06T07:12:32.371Z"
+    "updatedAt": "2026-11-06T07:12:32.371Z",
+    "category": "Chrome Rod"
   },
   {
     "id": "rod-32-15-72",
@@ -789,7 +873,8 @@
     "lengthFt": 15,
     "quantity": 1,
     "notes": "",
-    "updatedAt": "2026-11-06T07:12:32.371Z"
+    "updatedAt": "2026-11-06T07:12:32.371Z",
+    "category": "Chrome Rod"
   },
   {
     "id": "rod-32-17-73",
@@ -800,7 +885,8 @@
     "lengthFt": 17,
     "quantity": 1,
     "notes": "",
-    "updatedAt": "2026-11-06T07:12:32.371Z"
+    "updatedAt": "2026-11-06T07:12:32.371Z",
+    "category": "Chrome Rod"
   },
   {
     "id": "rod-35-6.5-74",
@@ -811,7 +897,8 @@
     "lengthFt": 6.5,
     "quantity": 1,
     "notes": "",
-    "updatedAt": "2026-11-06T07:12:32.371Z"
+    "updatedAt": "2026-11-06T07:12:32.371Z",
+    "category": "Chrome Rod"
   },
   {
     "id": "rod-35-7.5-75",
@@ -822,7 +909,8 @@
     "lengthFt": 7.5,
     "quantity": 2,
     "notes": "",
-    "updatedAt": "2026-11-06T07:12:32.371Z"
+    "updatedAt": "2026-11-06T07:12:32.371Z",
+    "category": "Chrome Rod"
   },
   {
     "id": "rod-35-8-76",
@@ -833,7 +921,8 @@
     "lengthFt": 8,
     "quantity": 3,
     "notes": "",
-    "updatedAt": "2026-11-06T07:12:32.371Z"
+    "updatedAt": "2026-11-06T07:12:32.371Z",
+    "category": "Chrome Rod"
   },
   {
     "id": "rod-35-8.5-77",
@@ -844,7 +933,8 @@
     "lengthFt": 8.5,
     "quantity": 1,
     "notes": "",
-    "updatedAt": "2026-11-06T07:12:32.371Z"
+    "updatedAt": "2026-11-06T07:12:32.371Z",
+    "category": "Chrome Rod"
   },
   {
     "id": "rod-35-9-78",
@@ -855,7 +945,8 @@
     "lengthFt": 9,
     "quantity": 5,
     "notes": "",
-    "updatedAt": "2026-11-06T07:12:32.371Z"
+    "updatedAt": "2026-11-06T07:12:32.371Z",
+    "category": "Chrome Rod"
   },
   {
     "id": "rod-35-9.5-79",
@@ -866,7 +957,8 @@
     "lengthFt": 9.5,
     "quantity": 1,
     "notes": "",
-    "updatedAt": "2026-11-06T07:12:32.371Z"
+    "updatedAt": "2026-11-06T07:12:32.371Z",
+    "category": "Chrome Rod"
   },
   {
     "id": "rod-35-10.5-80",
@@ -877,7 +969,8 @@
     "lengthFt": 10.5,
     "quantity": 1,
     "notes": "",
-    "updatedAt": "2026-11-06T07:12:32.371Z"
+    "updatedAt": "2026-11-06T07:12:32.371Z",
+    "category": "Chrome Rod"
   },
   {
     "id": "rod-35-16-81",
@@ -888,7 +981,8 @@
     "lengthFt": 16,
     "quantity": 1,
     "notes": "",
-    "updatedAt": "2026-11-06T07:12:32.371Z"
+    "updatedAt": "2026-11-06T07:12:32.371Z",
+    "category": "Chrome Rod"
   },
   {
     "id": "rod-35-17-82",
@@ -899,7 +993,8 @@
     "lengthFt": 17,
     "quantity": 1,
     "notes": "",
-    "updatedAt": "2026-11-06T07:12:32.371Z"
+    "updatedAt": "2026-11-06T07:12:32.371Z",
+    "category": "Chrome Rod"
   },
   {
     "id": "rod-35-18-83",
@@ -910,7 +1005,8 @@
     "lengthFt": 18,
     "quantity": 1,
     "notes": "",
-    "updatedAt": "2026-11-06T07:12:32.371Z"
+    "updatedAt": "2026-11-06T07:12:32.371Z",
+    "category": "Chrome Rod"
   },
   {
     "id": "rod-38-7-84",
@@ -921,7 +1017,8 @@
     "lengthFt": 7,
     "quantity": 1,
     "notes": "",
-    "updatedAt": "2026-11-06T07:12:32.371Z"
+    "updatedAt": "2026-11-06T07:12:32.371Z",
+    "category": "Chrome Rod"
   },
   {
     "id": "rod-38-8-85",
@@ -932,7 +1029,8 @@
     "lengthFt": 8,
     "quantity": 5,
     "notes": "",
-    "updatedAt": "2026-11-06T07:12:32.371Z"
+    "updatedAt": "2026-11-06T07:12:32.371Z",
+    "category": "Chrome Rod"
   },
   {
     "id": "rod-38-8.5-86",
@@ -943,7 +1041,8 @@
     "lengthFt": 8.5,
     "quantity": 3,
     "notes": "",
-    "updatedAt": "2026-11-06T07:12:32.371Z"
+    "updatedAt": "2026-11-06T07:12:32.371Z",
+    "category": "Chrome Rod"
   },
   {
     "id": "rod-38-9-87",
@@ -954,7 +1053,8 @@
     "lengthFt": 9,
     "quantity": 1,
     "notes": "",
-    "updatedAt": "2026-11-06T07:12:32.371Z"
+    "updatedAt": "2026-11-06T07:12:32.371Z",
+    "category": "Chrome Rod"
   },
   {
     "id": "rod-38-10-88",
@@ -965,7 +1065,8 @@
     "lengthFt": 10,
     "quantity": 3,
     "notes": "",
-    "updatedAt": "2026-11-06T07:12:32.371Z"
+    "updatedAt": "2026-11-06T07:12:32.371Z",
+    "category": "Chrome Rod"
   },
   {
     "id": "rod-38-10.5-89",
@@ -976,7 +1077,8 @@
     "lengthFt": 10.5,
     "quantity": 1,
     "notes": "",
-    "updatedAt": "2026-11-06T07:12:32.371Z"
+    "updatedAt": "2026-11-06T07:12:32.371Z",
+    "category": "Chrome Rod"
   },
   {
     "id": "rod-38-17.5-90",
@@ -987,7 +1089,8 @@
     "lengthFt": 17.5,
     "quantity": 1,
     "notes": "",
-    "updatedAt": "2026-11-06T07:12:32.371Z"
+    "updatedAt": "2026-11-06T07:12:32.371Z",
+    "category": "Chrome Rod"
   },
   {
     "id": "rod-38-21-91",
@@ -998,7 +1101,8 @@
     "lengthFt": 21,
     "quantity": 1,
     "notes": "",
-    "updatedAt": "2026-11-06T07:12:32.371Z"
+    "updatedAt": "2026-11-06T07:12:32.371Z",
+    "category": "Chrome Rod"
   },
   {
     "id": "rod-40-5-92",
@@ -1009,7 +1113,8 @@
     "lengthFt": 5,
     "quantity": 1,
     "notes": "",
-    "updatedAt": "2026-11-06T07:12:32.371Z"
+    "updatedAt": "2026-11-06T07:12:32.371Z",
+    "category": "Chrome Rod"
   },
   {
     "id": "rod-40-6-93",
@@ -1020,7 +1125,8 @@
     "lengthFt": 6,
     "quantity": 4,
     "notes": "",
-    "updatedAt": "2026-11-06T07:12:32.371Z"
+    "updatedAt": "2026-11-06T07:12:32.371Z",
+    "category": "Chrome Rod"
   },
   {
     "id": "rod-40-7-94",
@@ -1031,7 +1137,8 @@
     "lengthFt": 7,
     "quantity": 12,
     "notes": "",
-    "updatedAt": "2026-11-06T07:12:32.371Z"
+    "updatedAt": "2026-11-06T07:12:32.371Z",
+    "category": "Chrome Rod"
   },
   {
     "id": "rod-40-7.5-95",
@@ -1042,7 +1149,8 @@
     "lengthFt": 7.5,
     "quantity": 5,
     "notes": "",
-    "updatedAt": "2026-11-06T07:12:32.371Z"
+    "updatedAt": "2026-11-06T07:12:32.371Z",
+    "category": "Chrome Rod"
   },
   {
     "id": "rod-40-8-96",
@@ -1053,7 +1161,8 @@
     "lengthFt": 8,
     "quantity": 9,
     "notes": "",
-    "updatedAt": "2026-11-06T07:12:32.371Z"
+    "updatedAt": "2026-11-06T07:12:32.371Z",
+    "category": "Chrome Rod"
   },
   {
     "id": "rod-40-8.5-97",
@@ -1064,7 +1173,8 @@
     "lengthFt": 8.5,
     "quantity": 4,
     "notes": "",
-    "updatedAt": "2026-11-06T07:12:32.371Z"
+    "updatedAt": "2026-11-06T07:12:32.371Z",
+    "category": "Chrome Rod"
   },
   {
     "id": "rod-40-9-98",
@@ -1075,7 +1185,8 @@
     "lengthFt": 9,
     "quantity": 7,
     "notes": "",
-    "updatedAt": "2026-11-06T07:12:32.371Z"
+    "updatedAt": "2026-11-06T07:12:32.371Z",
+    "category": "Chrome Rod"
   },
   {
     "id": "rod-40-10.5-99",
@@ -1086,7 +1197,8 @@
     "lengthFt": 10.5,
     "quantity": 1,
     "notes": "",
-    "updatedAt": "2026-11-06T07:12:32.371Z"
+    "updatedAt": "2026-11-06T07:12:32.371Z",
+    "category": "Chrome Rod"
   },
   {
     "id": "rod-40-14-100",
@@ -1097,7 +1209,20 @@
     "lengthFt": 14,
     "quantity": 3,
     "notes": "",
-    "updatedAt": "2026-11-06T07:12:32.371Z"
+    "updatedAt": "2026-11-06T07:12:32.371Z",
+    "category": "Chrome Rod"
+  },
+  {
+    "id": "rod-csv-1795082847853-89-2juf",
+    "sku": "ROD-40MM-16IN",
+    "name": "Chrome Rod",
+    "category": "Chrome Rod",
+    "diameterMm": 40,
+    "lengthIn": 16,
+    "lengthFt": 16,
+    "quantity": 1,
+    "notes": "",
+    "createdAt": 1795082847853
   },
   {
     "id": "rod-40-18-101",
@@ -1108,7 +1233,8 @@
     "lengthFt": 18,
     "quantity": 1,
     "notes": "",
-    "updatedAt": "2026-11-06T07:12:32.371Z"
+    "updatedAt": "2026-11-06T07:12:32.371Z",
+    "category": "Chrome Rod"
   },
   {
     "id": "rod-45-5-102",
@@ -1119,7 +1245,8 @@
     "lengthFt": 5,
     "quantity": 3,
     "notes": "",
-    "updatedAt": "2026-11-06T07:12:32.371Z"
+    "updatedAt": "2026-11-06T07:12:32.371Z",
+    "category": "Chrome Rod"
   },
   {
     "id": "rod-45-5.5-103",
@@ -1130,7 +1257,8 @@
     "lengthFt": 5.5,
     "quantity": 1,
     "notes": "",
-    "updatedAt": "2026-11-06T07:12:32.371Z"
+    "updatedAt": "2026-11-06T07:12:32.371Z",
+    "category": "Chrome Rod"
   },
   {
     "id": "rod-45-6-104",
@@ -1141,7 +1269,8 @@
     "lengthFt": 6,
     "quantity": 6,
     "notes": "",
-    "updatedAt": "2026-11-06T07:12:32.371Z"
+    "updatedAt": "2026-11-06T07:12:32.371Z",
+    "category": "Chrome Rod"
   },
   {
     "id": "rod-45-6.5-105",
@@ -1152,7 +1281,8 @@
     "lengthFt": 6.5,
     "quantity": 1,
     "notes": "",
-    "updatedAt": "2026-11-06T07:12:32.371Z"
+    "updatedAt": "2026-11-06T07:12:32.371Z",
+    "category": "Chrome Rod"
   },
   {
     "id": "rod-45-7-106",
@@ -1163,7 +1293,8 @@
     "lengthFt": 7,
     "quantity": 9,
     "notes": "",
-    "updatedAt": "2026-11-06T07:12:32.371Z"
+    "updatedAt": "2026-11-06T07:12:32.371Z",
+    "category": "Chrome Rod"
   },
   {
     "id": "rod-45-7.5-107",
@@ -1174,7 +1305,8 @@
     "lengthFt": 7.5,
     "quantity": 5,
     "notes": "",
-    "updatedAt": "2026-11-06T07:12:32.371Z"
+    "updatedAt": "2026-11-06T07:12:32.371Z",
+    "category": "Chrome Rod"
   },
   {
     "id": "rod-45-8-108",
@@ -1183,9 +1315,10 @@
     "diameterMm": 45,
     "lengthIn": 8,
     "lengthFt": 8,
-    "quantity": 19,
+    "quantity": 20,
     "notes": "",
-    "updatedAt": "2026-11-06T07:12:32.371Z"
+    "updatedAt": "2026-11-06T07:12:32.371Z",
+    "category": "Chrome Rod"
   },
   {
     "id": "rod-45-8.5-109",
@@ -1196,7 +1329,8 @@
     "lengthFt": 8.5,
     "quantity": 11,
     "notes": "",
-    "updatedAt": "2026-11-06T07:12:32.371Z"
+    "updatedAt": "2026-11-06T07:12:32.371Z",
+    "category": "Chrome Rod"
   },
   {
     "id": "rod-45-9-110",
@@ -1207,7 +1341,8 @@
     "lengthFt": 9,
     "quantity": 16,
     "notes": "",
-    "updatedAt": "2026-11-06T07:12:32.371Z"
+    "updatedAt": "2026-11-06T07:12:32.371Z",
+    "category": "Chrome Rod"
   },
   {
     "id": "rod-45-9.5-111",
@@ -1218,7 +1353,8 @@
     "lengthFt": 9.5,
     "quantity": 11,
     "notes": "",
-    "updatedAt": "2026-11-06T07:12:32.371Z"
+    "updatedAt": "2026-11-06T07:12:32.371Z",
+    "category": "Chrome Rod"
   },
   {
     "id": "rod-45-10-112",
@@ -1229,7 +1365,8 @@
     "lengthFt": 10,
     "quantity": 2,
     "notes": "",
-    "updatedAt": "2026-11-06T07:12:32.371Z"
+    "updatedAt": "2026-11-06T07:12:32.371Z",
+    "category": "Chrome Rod"
   },
   {
     "id": "rod-45-10.5-113",
@@ -1240,7 +1377,8 @@
     "lengthFt": 10.5,
     "quantity": 7,
     "notes": "",
-    "updatedAt": "2026-11-06T07:12:32.371Z"
+    "updatedAt": "2026-11-06T07:12:32.371Z",
+    "category": "Chrome Rod"
   },
   {
     "id": "rod-45-11-114",
@@ -1251,7 +1389,8 @@
     "lengthFt": 11,
     "quantity": 2,
     "notes": "",
-    "updatedAt": "2026-11-06T07:12:32.371Z"
+    "updatedAt": "2026-11-06T07:12:32.371Z",
+    "category": "Chrome Rod"
   },
   {
     "id": "rod-45-11.5-115",
@@ -1262,7 +1401,8 @@
     "lengthFt": 11.5,
     "quantity": 1,
     "notes": "",
-    "updatedAt": "2026-11-06T07:12:32.371Z"
+    "updatedAt": "2026-11-06T07:12:32.371Z",
+    "category": "Chrome Rod"
   },
   {
     "id": "rod-45-12-116",
@@ -1273,7 +1413,8 @@
     "lengthFt": 12,
     "quantity": 4,
     "notes": "",
-    "updatedAt": "2026-11-06T07:12:32.371Z"
+    "updatedAt": "2026-11-06T07:12:32.371Z",
+    "category": "Chrome Rod"
   },
   {
     "id": "rod-45-17-117",
@@ -1284,7 +1425,8 @@
     "lengthFt": 17,
     "quantity": 1,
     "notes": "",
-    "updatedAt": "2026-11-06T07:12:32.371Z"
+    "updatedAt": "2026-11-06T07:12:32.371Z",
+    "category": "Chrome Rod"
   },
   {
     "id": "rod-45-21-118",
@@ -1295,7 +1437,8 @@
     "lengthFt": 21,
     "quantity": 1,
     "notes": "",
-    "updatedAt": "2026-11-06T07:12:32.371Z"
+    "updatedAt": "2026-11-06T07:12:32.371Z",
+    "category": "Chrome Rod"
   },
   {
     "id": "rod-45-27-119",
@@ -1306,7 +1449,44 @@
     "lengthFt": 27,
     "quantity": 1,
     "notes": "",
-    "updatedAt": "2026-11-06T07:12:32.371Z"
+    "updatedAt": "2026-11-06T07:12:32.371Z",
+    "category": "Chrome Rod"
+  },
+  {
+    "id": "rod-csv-1795082847853-88-i74p",
+    "sku": "ROD-48MM-11.5IN",
+    "name": "Chrome Rod",
+    "category": "Chrome Rod",
+    "diameterMm": 48,
+    "lengthIn": 11.5,
+    "lengthFt": 11.5,
+    "quantity": 1,
+    "notes": "",
+    "createdAt": 1795082847853
+  },
+  {
+    "id": "rod-csv-1795082847853-86-6skd",
+    "sku": "ROD-50MM-4IN",
+    "name": "Chrome Rod",
+    "category": "Chrome Rod",
+    "diameterMm": 50,
+    "lengthIn": 4,
+    "lengthFt": 4,
+    "quantity": 2,
+    "notes": "",
+    "createdAt": 1795082847853
+  },
+  {
+    "id": "rod-csv-1795082847853-85-6pnq",
+    "sku": "ROD-50MM-6IN",
+    "name": "Chrome Rod",
+    "category": "Chrome Rod",
+    "diameterMm": 50,
+    "lengthIn": 6,
+    "lengthFt": 6,
+    "quantity": 1,
+    "notes": "",
+    "createdAt": 1795082847853
   },
   {
     "id": "rod-50-8-120",
@@ -1315,9 +1495,10 @@
     "diameterMm": 50,
     "lengthIn": 8,
     "lengthFt": 8,
-    "quantity": 6,
+    "quantity": 7,
     "notes": "",
-    "updatedAt": "2026-11-06T07:12:32.371Z"
+    "updatedAt": "2026-11-06T07:12:32.371Z",
+    "category": "Chrome Rod"
   },
   {
     "id": "rod-50-8.5-121",
@@ -1328,7 +1509,8 @@
     "lengthFt": 8.5,
     "quantity": 2,
     "notes": "",
-    "updatedAt": "2026-11-06T07:12:32.371Z"
+    "updatedAt": "2026-11-06T07:12:32.371Z",
+    "category": "Chrome Rod"
   },
   {
     "id": "rod-50-9-122",
@@ -1339,7 +1521,8 @@
     "lengthFt": 9,
     "quantity": 5,
     "notes": "",
-    "updatedAt": "2026-11-06T07:12:32.371Z"
+    "updatedAt": "2026-11-06T07:12:32.371Z",
+    "category": "Chrome Rod"
   },
   {
     "id": "rod-50-9.5-123",
@@ -1350,7 +1533,8 @@
     "lengthFt": 9.5,
     "quantity": 1,
     "notes": "",
-    "updatedAt": "2026-11-06T07:12:32.371Z"
+    "updatedAt": "2026-11-06T07:12:32.371Z",
+    "category": "Chrome Rod"
   },
   {
     "id": "rod-50-10-124",
@@ -1361,7 +1545,8 @@
     "lengthFt": 10,
     "quantity": 1,
     "notes": "",
-    "updatedAt": "2026-11-06T07:12:32.371Z"
+    "updatedAt": "2026-11-06T07:12:32.371Z",
+    "category": "Chrome Rod"
   },
   {
     "id": "rod-50-11-125",
@@ -1372,7 +1557,8 @@
     "lengthFt": 11,
     "quantity": 1,
     "notes": "",
-    "updatedAt": "2026-11-06T07:12:32.371Z"
+    "updatedAt": "2026-11-06T07:12:32.371Z",
+    "category": "Chrome Rod"
   },
   {
     "id": "rod-50-13.5-126",
@@ -1383,7 +1569,8 @@
     "lengthFt": 13.5,
     "quantity": 3,
     "notes": "",
-    "updatedAt": "2026-11-06T07:12:32.371Z"
+    "updatedAt": "2026-11-06T07:12:32.371Z",
+    "category": "Chrome Rod"
   },
   {
     "id": "rod-50-14.5-127",
@@ -1394,7 +1581,20 @@
     "lengthFt": 14.5,
     "quantity": 1,
     "notes": "",
-    "updatedAt": "2026-11-06T07:12:32.371Z"
+    "updatedAt": "2026-11-06T07:12:32.371Z",
+    "category": "Chrome Rod"
+  },
+  {
+    "id": "rod-csv-1795082847853-83-sxb6",
+    "sku": "ROD-50MM-15IN",
+    "name": "Chrome Rod",
+    "category": "Chrome Rod",
+    "diameterMm": 50,
+    "lengthIn": 15,
+    "lengthFt": 15,
+    "quantity": 1,
+    "notes": "",
+    "createdAt": 1795082847853
   },
   {
     "id": "rod-50-16-128",
@@ -1405,7 +1605,20 @@
     "lengthFt": 16,
     "quantity": 2,
     "notes": "",
-    "updatedAt": "2026-11-06T07:12:32.371Z"
+    "updatedAt": "2026-11-06T07:12:32.371Z",
+    "category": "Chrome Rod"
+  },
+  {
+    "id": "rod-csv-1795082847853-82-6lsw",
+    "sku": "ROD-50MM-20IN",
+    "name": "Chrome Rod",
+    "category": "Chrome Rod",
+    "diameterMm": 50,
+    "lengthIn": 20,
+    "lengthFt": 20,
+    "quantity": 1,
+    "notes": "",
+    "createdAt": 1795082847853
   },
   {
     "id": "rod-50-21-129",
@@ -1416,7 +1629,20 @@
     "lengthFt": 21,
     "quantity": 1,
     "notes": "",
-    "updatedAt": "2026-11-06T07:12:32.371Z"
+    "updatedAt": "2026-11-06T07:12:32.371Z",
+    "category": "Chrome Rod"
+  },
+  {
+    "id": "rod-csv-1795082847853-70-4af5",
+    "sku": "ROD-55MM-8IN",
+    "name": "Chrome Rod",
+    "category": "Chrome Rod",
+    "diameterMm": 55,
+    "lengthIn": 8,
+    "lengthFt": 8,
+    "quantity": 1,
+    "notes": "",
+    "createdAt": 1795082847853
   },
   {
     "id": "rod-55-9.5-130",
@@ -1427,7 +1653,8 @@
     "lengthFt": 9.5,
     "quantity": 1,
     "notes": "",
-    "updatedAt": "2026-11-06T07:12:32.371Z"
+    "updatedAt": "2026-11-06T07:12:32.371Z",
+    "category": "Chrome Rod"
   },
   {
     "id": "rod-55-10-131",
@@ -1438,7 +1665,8 @@
     "lengthFt": 10,
     "quantity": 4,
     "notes": "",
-    "updatedAt": "2026-11-06T07:12:32.371Z"
+    "updatedAt": "2026-11-06T07:12:32.371Z",
+    "category": "Chrome Rod"
   },
   {
     "id": "rod-55-11-132",
@@ -1449,7 +1677,8 @@
     "lengthFt": 11,
     "quantity": 5,
     "notes": "",
-    "updatedAt": "2026-11-06T07:12:32.371Z"
+    "updatedAt": "2026-11-06T07:12:32.371Z",
+    "category": "Chrome Rod"
   },
   {
     "id": "rod-55-11.5-133",
@@ -1460,7 +1689,8 @@
     "lengthFt": 11.5,
     "quantity": 1,
     "notes": "",
-    "updatedAt": "2026-11-06T07:12:32.371Z"
+    "updatedAt": "2026-11-06T07:12:32.371Z",
+    "category": "Chrome Rod"
   },
   {
     "id": "rod-55-12-134",
@@ -1469,9 +1699,10 @@
     "diameterMm": 55,
     "lengthIn": 12,
     "lengthFt": 12,
-    "quantity": 2,
+    "quantity": 3,
     "notes": "",
-    "updatedAt": "2026-11-06T07:12:32.371Z"
+    "updatedAt": "2026-11-06T07:12:32.371Z",
+    "category": "Chrome Rod"
   },
   {
     "id": "rod-55-17-135",
@@ -1482,7 +1713,8 @@
     "lengthFt": 17,
     "quantity": 1,
     "notes": "",
-    "updatedAt": "2026-11-06T07:12:32.371Z"
+    "updatedAt": "2026-11-06T07:12:32.371Z",
+    "category": "Chrome Rod"
   },
   {
     "id": "rod-55-22-136",
@@ -1493,7 +1725,20 @@
     "lengthFt": 22,
     "quantity": 1,
     "notes": "",
-    "updatedAt": "2026-11-06T07:12:32.371Z"
+    "updatedAt": "2026-11-06T07:12:32.371Z",
+    "category": "Chrome Rod"
+  },
+  {
+    "id": "rod-csv-1795082847853-68-26iu",
+    "sku": "ROD-55MM-27IN",
+    "name": "Chrome Rod",
+    "category": "Chrome Rod",
+    "diameterMm": 55,
+    "lengthIn": 27,
+    "lengthFt": 27,
+    "quantity": 1,
+    "notes": "",
+    "createdAt": 1795082847853
   },
   {
     "id": "rod-56-6-137",
@@ -1504,7 +1749,8 @@
     "lengthFt": 6,
     "quantity": 1,
     "notes": "",
-    "updatedAt": "2026-11-06T07:12:32.371Z"
+    "updatedAt": "2026-11-06T07:12:32.371Z",
+    "category": "Chrome Rod"
   },
   {
     "id": "rod-56-9-138",
@@ -1515,7 +1761,8 @@
     "lengthFt": 9,
     "quantity": 1,
     "notes": "",
-    "updatedAt": "2026-11-06T07:12:32.371Z"
+    "updatedAt": "2026-11-06T07:12:32.371Z",
+    "category": "Chrome Rod"
   },
   {
     "id": "rod-56-11-139",
@@ -1526,7 +1773,8 @@
     "lengthFt": 11,
     "quantity": 1,
     "notes": "",
-    "updatedAt": "2026-11-06T07:12:32.371Z"
+    "updatedAt": "2026-11-06T07:12:32.371Z",
+    "category": "Chrome Rod"
   },
   {
     "id": "rod-56-17-140",
@@ -1537,7 +1785,8 @@
     "lengthFt": 17,
     "quantity": 1,
     "notes": "",
-    "updatedAt": "2026-11-06T07:12:32.371Z"
+    "updatedAt": "2026-11-06T07:12:32.371Z",
+    "category": "Chrome Rod"
   },
   {
     "id": "rod-56-19-141",
@@ -1548,7 +1797,8 @@
     "lengthFt": 19,
     "quantity": 1,
     "notes": "",
-    "updatedAt": "2026-11-06T07:12:32.371Z"
+    "updatedAt": "2026-11-06T07:12:32.371Z",
+    "category": "Chrome Rod"
   },
   {
     "id": "rod-56-24.5-142",
@@ -1559,7 +1809,8 @@
     "lengthFt": 24.5,
     "quantity": 1,
     "notes": "",
-    "updatedAt": "2026-11-06T07:12:32.371Z"
+    "updatedAt": "2026-11-06T07:12:32.371Z",
+    "category": "Chrome Rod"
   },
   {
     "id": "rod-60-7-143",
@@ -1570,7 +1821,8 @@
     "lengthFt": 7,
     "quantity": 1,
     "notes": "",
-    "updatedAt": "2026-11-06T07:12:32.371Z"
+    "updatedAt": "2026-11-06T07:12:32.371Z",
+    "category": "Chrome Rod"
   },
   {
     "id": "rod-60-8.5-144",
@@ -1581,7 +1833,8 @@
     "lengthFt": 8.5,
     "quantity": 1,
     "notes": "",
-    "updatedAt": "2026-11-06T07:12:32.371Z"
+    "updatedAt": "2026-11-06T07:12:32.371Z",
+    "category": "Chrome Rod"
   },
   {
     "id": "rod-60-9-145",
@@ -1592,7 +1845,8 @@
     "lengthFt": 9,
     "quantity": 2,
     "notes": "",
-    "updatedAt": "2026-11-06T07:12:32.371Z"
+    "updatedAt": "2026-11-06T07:12:32.371Z",
+    "category": "Chrome Rod"
   },
   {
     "id": "rod-60-10-146",
@@ -1603,7 +1857,20 @@
     "lengthFt": 10,
     "quantity": 3,
     "notes": "",
-    "updatedAt": "2026-11-06T07:12:32.371Z"
+    "updatedAt": "2026-11-06T07:12:32.371Z",
+    "category": "Chrome Rod"
+  },
+  {
+    "id": "rod-csv-1795082847853-87-p8eg",
+    "sku": "ROD-60MM-10.5IN",
+    "name": "Chrome Rod",
+    "category": "Chrome Rod",
+    "diameterMm": 60,
+    "lengthIn": 10.5,
+    "lengthFt": 10.5,
+    "quantity": 1,
+    "notes": "",
+    "createdAt": 1795082847853
   },
   {
     "id": "rod-60-14.5-147",
@@ -1614,7 +1881,8 @@
     "lengthFt": 14.5,
     "quantity": 1,
     "notes": "",
-    "updatedAt": "2026-11-06T07:12:32.371Z"
+    "updatedAt": "2026-11-06T07:12:32.371Z",
+    "category": "Chrome Rod"
   },
   {
     "id": "rod-60-15-148",
@@ -1625,7 +1893,56 @@
     "lengthFt": 15,
     "quantity": 2,
     "notes": "",
-    "updatedAt": "2026-11-06T07:12:32.371Z"
+    "updatedAt": "2026-11-06T07:12:32.371Z",
+    "category": "Chrome Rod"
+  },
+  {
+    "id": "rod-csv-1795082847853-72-d77n",
+    "sku": "ROD-63MM-2IN",
+    "name": "Chrome Rod",
+    "category": "Chrome Rod",
+    "diameterMm": 63,
+    "lengthIn": 2,
+    "lengthFt": 2,
+    "quantity": 1,
+    "notes": "",
+    "createdAt": 1795082847853
+  },
+  {
+    "id": "rod-csv-1795082847853-80-nmyw",
+    "sku": "ROD-63MM-4IN",
+    "name": "Chrome Rod",
+    "category": "Chrome Rod",
+    "diameterMm": 63,
+    "lengthIn": 4,
+    "lengthFt": 4,
+    "quantity": 3,
+    "notes": "",
+    "createdAt": 1795082847853
+  },
+  {
+    "id": "rod-csv-1795082847853-78-3hlk",
+    "sku": "ROD-63MM-5IN",
+    "name": "Chrome Rod",
+    "category": "Chrome Rod",
+    "diameterMm": 63,
+    "lengthIn": 5,
+    "lengthFt": 5,
+    "quantity": 5,
+    "notes": "",
+    "createdAt": 1795082847853
+  },
+  {
+    "id": "rod-csv-1795082847853-81-jknz",
+    "sku": "ROD-63MM-5.5IN",
+    "name": "Chrome Rod",
+    "category": "Chrome Rod",
+    "diameterMm": 63,
+    "lengthIn": 5.5,
+    "lengthFt": 5.5,
+    "quantity": 1,
+    "notes": "",
+    "createdAt": 1795082847853
   },
   {
     "id": "rod-63-6-149",
@@ -1636,7 +1953,32 @@
     "lengthFt": 6,
     "quantity": 1,
     "notes": "",
-    "updatedAt": "2026-11-06T07:12:32.371Z"
+    "updatedAt": "2026-11-06T07:12:32.371Z",
+    "category": "Chrome Rod"
+  },
+  {
+    "id": "rod-csv-1795082847853-77-7d3p",
+    "sku": "ROD-63MM-6.5IN",
+    "name": "Chrome Rod",
+    "category": "Chrome Rod",
+    "diameterMm": 63,
+    "lengthIn": 6.5,
+    "lengthFt": 6.5,
+    "quantity": 1,
+    "notes": "",
+    "createdAt": 1795082847853
+  },
+  {
+    "id": "rod-csv-1795082847853-79-4njt",
+    "sku": "ROD-63MM-7IN",
+    "name": "Chrome Rod",
+    "category": "Chrome Rod",
+    "diameterMm": 63,
+    "lengthIn": 7,
+    "lengthFt": 7,
+    "quantity": 2,
+    "notes": "",
+    "createdAt": 1795082847853
   },
   {
     "id": "rod-63-8-150",
@@ -1645,9 +1987,10 @@
     "diameterMm": 63,
     "lengthIn": 8,
     "lengthFt": 8,
-    "quantity": 1,
+    "quantity": 3,
     "notes": "",
-    "updatedAt": "2026-11-06T07:12:32.371Z"
+    "updatedAt": "2026-11-06T07:12:32.371Z",
+    "category": "Chrome Rod"
   },
   {
     "id": "rod-63-8.5-151",
@@ -1658,7 +2001,8 @@
     "lengthFt": 8.5,
     "quantity": 3,
     "notes": "",
-    "updatedAt": "2026-11-06T07:12:32.371Z"
+    "updatedAt": "2026-11-06T07:12:32.371Z",
+    "category": "Chrome Rod"
   },
   {
     "id": "rod-63-9-152",
@@ -1669,7 +2013,20 @@
     "lengthFt": 9,
     "quantity": 1,
     "notes": "",
-    "updatedAt": "2026-11-06T07:12:32.371Z"
+    "updatedAt": "2026-11-06T07:12:32.371Z",
+    "category": "Chrome Rod"
+  },
+  {
+    "id": "rod-csv-1795082847853-75-jo7m",
+    "sku": "ROD-63MM-9.5IN",
+    "name": "Chrome Rod",
+    "category": "Chrome Rod",
+    "diameterMm": 63,
+    "lengthIn": 9.5,
+    "lengthFt": 9.5,
+    "quantity": 2,
+    "notes": "",
+    "createdAt": 1795082847853
   },
   {
     "id": "rod-63-10-153",
@@ -1680,7 +2037,8 @@
     "lengthFt": 10,
     "quantity": 5,
     "notes": "",
-    "updatedAt": "2026-11-06T07:12:32.371Z"
+    "updatedAt": "2026-11-06T07:12:32.371Z",
+    "category": "Chrome Rod"
   },
   {
     "id": "rod-63-10.5-154",
@@ -1691,7 +2049,8 @@
     "lengthFt": 10.5,
     "quantity": 2,
     "notes": "",
-    "updatedAt": "2026-11-06T07:12:32.371Z"
+    "updatedAt": "2026-11-06T07:12:32.371Z",
+    "category": "Chrome Rod"
   },
   {
     "id": "rod-63-11-155",
@@ -1702,7 +2061,8 @@
     "lengthFt": 11,
     "quantity": 1,
     "notes": "",
-    "updatedAt": "2026-11-06T07:12:32.371Z"
+    "updatedAt": "2026-11-06T07:12:32.371Z",
+    "category": "Chrome Rod"
   },
   {
     "id": "rod-63-11.5-156",
@@ -1713,7 +2073,8 @@
     "lengthFt": 11.5,
     "quantity": 1,
     "notes": "",
-    "updatedAt": "2026-11-06T07:12:32.371Z"
+    "updatedAt": "2026-11-06T07:12:32.371Z",
+    "category": "Chrome Rod"
   },
   {
     "id": "rod-63-12-157",
@@ -1724,7 +2085,8 @@
     "lengthFt": 12,
     "quantity": 2,
     "notes": "",
-    "updatedAt": "2026-11-06T07:12:32.371Z"
+    "updatedAt": "2026-11-06T07:12:32.371Z",
+    "category": "Chrome Rod"
   },
   {
     "id": "rod-63-13-158",
@@ -1735,7 +2097,20 @@
     "lengthFt": 13,
     "quantity": 1,
     "notes": "",
-    "updatedAt": "2026-11-06T07:12:32.371Z"
+    "updatedAt": "2026-11-06T07:12:32.371Z",
+    "category": "Chrome Rod"
+  },
+  {
+    "id": "rod-csv-1795082847853-74-792o",
+    "sku": "ROD-63MM-13.5IN",
+    "name": "Chrome Rod",
+    "category": "Chrome Rod",
+    "diameterMm": 63,
+    "lengthIn": 13.5,
+    "lengthFt": 13.5,
+    "quantity": 1,
+    "notes": "",
+    "createdAt": 1795082847853
   },
   {
     "id": "rod-63-14-159",
@@ -1746,7 +2121,32 @@
     "lengthFt": 14,
     "quantity": 1,
     "notes": "",
-    "updatedAt": "2026-11-06T07:12:32.371Z"
+    "updatedAt": "2026-11-06T07:12:32.371Z",
+    "category": "Chrome Rod"
+  },
+  {
+    "id": "rod-csv-1795082847853-73-5l50",
+    "sku": "ROD-63MM-14.5IN",
+    "name": "Chrome Rod",
+    "category": "Chrome Rod",
+    "diameterMm": 63,
+    "lengthIn": 14.5,
+    "lengthFt": 14.5,
+    "quantity": 1,
+    "notes": "",
+    "createdAt": 1795082847853
+  },
+  {
+    "id": "rod-csv-1795082847853-71-hxlb",
+    "sku": "ROD-63MM-16.5IN",
+    "name": "Chrome Rod",
+    "category": "Chrome Rod",
+    "diameterMm": 63,
+    "lengthIn": 16.5,
+    "lengthFt": 16.5,
+    "quantity": 1,
+    "notes": "",
+    "createdAt": 1795082847853
   },
   {
     "id": "rod-63-20-160",
@@ -1757,7 +2157,8 @@
     "lengthFt": 20,
     "quantity": 1,
     "notes": "",
-    "updatedAt": "2026-11-06T07:12:32.371Z"
+    "updatedAt": "2026-11-06T07:12:32.371Z",
+    "category": "Chrome Rod"
   },
   {
     "id": "rod-65-10-161",
@@ -1768,7 +2169,8 @@
     "lengthFt": 10,
     "quantity": 1,
     "notes": "",
-    "updatedAt": "2026-11-06T07:12:32.371Z"
+    "updatedAt": "2026-11-06T07:12:32.371Z",
+    "category": "Chrome Rod"
   },
   {
     "id": "rod-65-11-162",
@@ -1779,7 +2181,8 @@
     "lengthFt": 11,
     "quantity": 1,
     "notes": "",
-    "updatedAt": "2026-11-06T07:12:32.371Z"
+    "updatedAt": "2026-11-06T07:12:32.371Z",
+    "category": "Chrome Rod"
   },
   {
     "id": "rod-65-12-163",
@@ -1790,7 +2193,8 @@
     "lengthFt": 12,
     "quantity": 1,
     "notes": "",
-    "updatedAt": "2026-11-06T07:12:32.371Z"
+    "updatedAt": "2026-11-06T07:12:32.371Z",
+    "category": "Chrome Rod"
   },
   {
     "id": "rod-65-18.5-164",
@@ -1801,7 +2205,8 @@
     "lengthFt": 18.5,
     "quantity": 1,
     "notes": "",
-    "updatedAt": "2026-11-06T07:12:32.371Z"
+    "updatedAt": "2026-11-06T07:12:32.371Z",
+    "category": "Chrome Rod"
   },
   {
     "id": "rod-70-12-165",
@@ -1812,7 +2217,8 @@
     "lengthFt": 12,
     "quantity": 1,
     "notes": "",
-    "updatedAt": "2026-11-06T07:12:32.371Z"
+    "updatedAt": "2026-11-06T07:12:32.371Z",
+    "category": "Chrome Rod"
   },
   {
     "id": "rod-70-13-166",
@@ -1823,7 +2229,8 @@
     "lengthFt": 13,
     "quantity": 1,
     "notes": "",
-    "updatedAt": "2026-11-06T07:12:32.371Z"
+    "updatedAt": "2026-11-06T07:12:32.371Z",
+    "category": "Chrome Rod"
   },
   {
     "id": "rod-70-15-167",
@@ -1834,7 +2241,8 @@
     "lengthFt": 15,
     "quantity": 1,
     "notes": "",
-    "updatedAt": "2026-11-06T07:12:32.371Z"
+    "updatedAt": "2026-11-06T07:12:32.371Z",
+    "category": "Chrome Rod"
   },
   {
     "id": "rod-70-16-168",
@@ -1845,7 +2253,80 @@
     "lengthFt": 16,
     "quantity": 1,
     "notes": "",
-    "updatedAt": "2026-11-06T07:12:32.371Z"
+    "updatedAt": "2026-11-06T07:12:32.371Z",
+    "category": "Chrome Rod"
+  },
+  {
+    "id": "rod-csv-1795082847853-66-ndbl",
+    "sku": "ROD-75MM-4.5IN",
+    "name": "Chrome Rod",
+    "category": "Chrome Rod",
+    "diameterMm": 75,
+    "lengthIn": 4.5,
+    "lengthFt": 4.5,
+    "quantity": 1,
+    "notes": "",
+    "createdAt": 1795082847853
+  },
+  {
+    "id": "rod-csv-1795082847853-65-cvtk",
+    "sku": "ROD-75MM-7IN",
+    "name": "Chrome Rod",
+    "category": "Chrome Rod",
+    "diameterMm": 75,
+    "lengthIn": 7,
+    "lengthFt": 7,
+    "quantity": 1,
+    "notes": "",
+    "createdAt": 1795082847853
+  },
+  {
+    "id": "rod-csv-1795082847853-64-gli2",
+    "sku": "ROD-75MM-7.5IN",
+    "name": "Chrome Rod",
+    "category": "Chrome Rod",
+    "diameterMm": 75,
+    "lengthIn": 7.5,
+    "lengthFt": 7.5,
+    "quantity": 1,
+    "notes": "",
+    "createdAt": 1795082847853
+  },
+  {
+    "id": "rod-csv-1795082847853-63-l6al",
+    "sku": "ROD-75MM-10IN",
+    "name": "Chrome Rod",
+    "category": "Chrome Rod",
+    "diameterMm": 75,
+    "lengthIn": 10,
+    "lengthFt": 10,
+    "quantity": 1,
+    "notes": "",
+    "createdAt": 1795082847853
+  },
+  {
+    "id": "rod-csv-1795082847853-62-czfd",
+    "sku": "ROD-75MM-11IN",
+    "name": "Chrome Rod",
+    "category": "Chrome Rod",
+    "diameterMm": 75,
+    "lengthIn": 11,
+    "lengthFt": 11,
+    "quantity": 1,
+    "notes": "",
+    "createdAt": 1795082847853
+  },
+  {
+    "id": "rod-csv-1795082847853-61-ogvt",
+    "sku": "ROD-75MM-14IN",
+    "name": "Chrome Rod",
+    "category": "Chrome Rod",
+    "diameterMm": 75,
+    "lengthIn": 14,
+    "lengthFt": 14,
+    "quantity": 1,
+    "notes": "",
+    "createdAt": 1795082847853
   },
   {
     "id": "rod-75-19-169",
@@ -1856,7 +2337,8 @@
     "lengthFt": 19,
     "quantity": 1,
     "notes": "",
-    "updatedAt": "2026-11-06T07:12:32.371Z"
+    "updatedAt": "2026-11-06T07:12:32.371Z",
+    "category": "Chrome Rod"
   },
   {
     "id": "rod-75-24-170",
@@ -1867,7 +2349,68 @@
     "lengthFt": 24,
     "quantity": 1,
     "notes": "",
-    "updatedAt": "2026-11-06T07:12:32.371Z"
+    "updatedAt": "2026-11-06T07:12:32.371Z",
+    "category": "Chrome Rod"
+  },
+  {
+    "id": "rod-csv-1795082847853-57-nsyf",
+    "sku": "ROD-80MM-4IN",
+    "name": "Chrome Rod",
+    "category": "Chrome Rod",
+    "diameterMm": 80,
+    "lengthIn": 4,
+    "lengthFt": 4,
+    "quantity": 1,
+    "notes": "",
+    "createdAt": 1795082847853
+  },
+  {
+    "id": "rod-csv-1795082847853-60-s0u8",
+    "sku": "ROD-80MM-5IN",
+    "name": "Chrome Rod",
+    "category": "Chrome Rod",
+    "diameterMm": 80,
+    "lengthIn": 5,
+    "lengthFt": 5,
+    "quantity": 2,
+    "notes": "",
+    "createdAt": 1795082847853
+  },
+  {
+    "id": "rod-csv-1795082847852-44-t23c",
+    "sku": "ROD-80MM-5.5IN",
+    "name": "Chrome Rod",
+    "category": "Chrome Rod",
+    "diameterMm": 80,
+    "lengthIn": 5.5,
+    "lengthFt": 5.5,
+    "quantity": 2,
+    "notes": "",
+    "createdAt": 1795082847852
+  },
+  {
+    "id": "rod-csv-1795082847853-59-g38p",
+    "sku": "ROD-80MM-6IN",
+    "name": "Chrome Rod",
+    "category": "Chrome Rod",
+    "diameterMm": 80,
+    "lengthIn": 6,
+    "lengthFt": 6,
+    "quantity": 1,
+    "notes": "",
+    "createdAt": 1795082847853
+  },
+  {
+    "id": "rod-csv-1795082847852-43-srsy",
+    "sku": "ROD-80MM-7.5IN",
+    "name": "Chrome Rod",
+    "category": "Chrome Rod",
+    "diameterMm": 80,
+    "lengthIn": 7.5,
+    "lengthFt": 7.5,
+    "quantity": 1,
+    "notes": "",
+    "createdAt": 1795082847852
   },
   {
     "id": "rod-80-13-171",
@@ -1878,7 +2421,152 @@
     "lengthFt": 13,
     "quantity": 2,
     "notes": "",
-    "updatedAt": "2026-11-06T07:12:32.371Z"
+    "updatedAt": "2026-11-06T07:12:32.371Z",
+    "category": "Chrome Rod"
+  },
+  {
+    "id": "rod-csv-1795082847853-56-mwln",
+    "sku": "ROD-80MM-19IN",
+    "name": "Chrome Rod",
+    "category": "Chrome Rod",
+    "diameterMm": 80,
+    "lengthIn": 19,
+    "lengthFt": 19,
+    "quantity": 1,
+    "notes": "",
+    "createdAt": 1795082847853
+  },
+  {
+    "id": "rod-csv-1795082847853-55-wbwy",
+    "sku": "ROD-80MM-22.5IN",
+    "name": "Chrome Rod",
+    "category": "Chrome Rod",
+    "diameterMm": 80,
+    "lengthIn": 22.5,
+    "lengthFt": 22.5,
+    "quantity": 1,
+    "notes": "",
+    "createdAt": 1795082847853
+  },
+  {
+    "id": "rod-csv-1795082847853-54-yqxi",
+    "sku": "ROD-80MM-26IN",
+    "name": "Chrome Rod",
+    "category": "Chrome Rod",
+    "diameterMm": 80,
+    "lengthIn": 26,
+    "lengthFt": 26,
+    "quantity": 1,
+    "notes": "",
+    "createdAt": 1795082847853
+  },
+  {
+    "id": "rod-csv-1795082847852-53-1jns",
+    "sku": "ROD-80MM-28IN",
+    "name": "Chrome Rod",
+    "category": "Chrome Rod",
+    "diameterMm": 80,
+    "lengthIn": 28,
+    "lengthFt": 28,
+    "quantity": 1,
+    "notes": "",
+    "createdAt": 1795082847852
+  },
+  {
+    "id": "rod-csv-1795082847852-42-mqha",
+    "sku": "ROD-90MM-6IN",
+    "name": "Chrome Rod",
+    "category": "Chrome Rod",
+    "diameterMm": 90,
+    "lengthIn": 6,
+    "lengthFt": 6,
+    "quantity": 1,
+    "notes": "",
+    "createdAt": 1795082847852
+  },
+  {
+    "id": "rod-csv-1795082847852-41-lanp",
+    "sku": "ROD-90MM-9.5IN",
+    "name": "Chrome Rod",
+    "category": "Chrome Rod",
+    "diameterMm": 90,
+    "lengthIn": 9.5,
+    "lengthFt": 9.5,
+    "quantity": 1,
+    "notes": "",
+    "createdAt": 1795082847852
+  },
+  {
+    "id": "rod-csv-1795082847853-67-vnj4",
+    "sku": "ROD-105MM-17IN",
+    "name": "Chrome Rod",
+    "category": "Chrome Rod",
+    "diameterMm": 105,
+    "lengthIn": 17,
+    "lengthFt": 17,
+    "quantity": 1,
+    "notes": "",
+    "createdAt": 1795082847853
+  },
+  {
+    "id": "rod-csv-1795082847852-48-qhcv",
+    "sku": "ROD-110MM-5.5IN",
+    "name": "Chrome Rod",
+    "category": "Chrome Rod",
+    "diameterMm": 110,
+    "lengthIn": 5.5,
+    "lengthFt": 5.5,
+    "quantity": 2,
+    "notes": "",
+    "createdAt": 1795082847852
+  },
+  {
+    "id": "rod-csv-1795082847852-51-2273",
+    "sku": "ROD-110MM-6IN",
+    "name": "Chrome Rod",
+    "category": "Chrome Rod",
+    "diameterMm": 110,
+    "lengthIn": 6,
+    "lengthFt": 6,
+    "quantity": 3,
+    "notes": "",
+    "createdAt": 1795082847852
+  },
+  {
+    "id": "rod-csv-1795082847852-49-a3xh",
+    "sku": "ROD-110MM-6.5IN",
+    "name": "Chrome Rod",
+    "category": "Chrome Rod",
+    "diameterMm": 110,
+    "lengthIn": 6.5,
+    "lengthFt": 6.5,
+    "quantity": 1,
+    "notes": "",
+    "createdAt": 1795082847852
+  },
+  {
+    "id": "rod-csv-1795082847852-50-bcu7",
+    "sku": "ROD-110MM-8.5IN",
+    "name": "Chrome Rod",
+    "category": "Chrome Rod",
+    "diameterMm": 110,
+    "lengthIn": 8.5,
+    "lengthFt": 8.5,
+    "quantity": 1,
+    "notes": "",
+    "createdAt": 1795082847852
+  },
+  {
+    "id": "rod-csv-1795082847852-52-wkmj",
+    "sku": "ROD-110MM-9.5IN",
+    "name": "Chrome Rod",
+    "category": "Chrome Rod",
+    "diameterMm": 110,
+    "lengthIn": 9.5,
+    "lengthFt": 9.5,
+    "quantity": 1,
+    "notes": "",
+    "createdAt": 1795082847852
   },
   {
     "id": "rod-110-12-172",
@@ -1889,7 +2577,8 @@
     "lengthFt": 12,
     "quantity": 1,
     "notes": "",
-    "updatedAt": "2026-11-06T07:12:32.371Z"
+    "updatedAt": "2026-11-06T07:12:32.371Z",
+    "category": "Chrome Rod"
   },
   {
     "id": "rod-110-13-173",
@@ -1900,7 +2589,44 @@
     "lengthFt": 13,
     "quantity": 1,
     "notes": "",
-    "updatedAt": "2026-11-06T07:12:32.371Z"
+    "updatedAt": "2026-11-06T07:12:32.371Z",
+    "category": "Chrome Rod"
+  },
+  {
+    "id": "rod-csv-1795082847852-47-fuzn",
+    "sku": "ROD-115MM-9.5IN",
+    "name": "Chrome Rod",
+    "category": "Chrome Rod",
+    "diameterMm": 115,
+    "lengthIn": 9.5,
+    "lengthFt": 9.5,
+    "quantity": 1,
+    "notes": "",
+    "createdAt": 1795082847852
+  },
+  {
+    "id": "rod-csv-1795082847852-46-3xoe",
+    "sku": "ROD-130MM-9IN",
+    "name": "Chrome Rod",
+    "category": "Chrome Rod",
+    "diameterMm": 130,
+    "lengthIn": 9,
+    "lengthFt": 9,
+    "quantity": 1,
+    "notes": "",
+    "createdAt": 1795082847852
+  },
+  {
+    "id": "rod-csv-1795082847852-45-v3zd",
+    "sku": "ROD-130MM-10IN",
+    "name": "Chrome Rod",
+    "category": "Chrome Rod",
+    "diameterMm": 130,
+    "lengthIn": 10,
+    "lengthFt": 10,
+    "quantity": 1,
+    "notes": "",
+    "createdAt": 1795082847852
   },
   {
     "id": "rod-140-10-174",
@@ -1911,7 +2637,8 @@
     "lengthFt": 10,
     "quantity": 1,
     "notes": "",
-    "updatedAt": "2026-11-06T07:12:32.371Z"
+    "updatedAt": "2026-11-06T07:12:32.371Z",
+    "category": "Chrome Rod"
   },
   {
     "id": "rod-160-6-175",
@@ -1922,7 +2649,8 @@
     "lengthFt": 6,
     "quantity": 1,
     "notes": "",
-    "updatedAt": "2026-11-06T07:12:32.371Z"
+    "updatedAt": "2026-11-06T07:12:32.371Z",
+    "category": "Chrome Rod"
   },
   {
     "id": "rod-160-28-176",
@@ -1933,7 +2661,8 @@
     "lengthFt": 28,
     "quantity": 1,
     "notes": "",
-    "updatedAt": "2026-11-06T07:12:32.371Z"
+    "updatedAt": "2026-11-06T07:12:32.371Z",
+    "category": "Chrome Rod"
   },
   {
     "id": "rod-200-14-177",
@@ -1944,6 +2673,1203 @@
     "lengthFt": 14,
     "quantity": 1,
     "notes": "",
-    "updatedAt": "2026-11-06T07:12:32.371Z"
+    "updatedAt": "2026-11-06T07:12:32.371Z",
+    "category": "Chrome Rod"
+  },
+  {
+    "id": "rod-hone-180x200-42-1-1795084483159",
+    "sku": "ROD-HONE-180X200-42IN-1",
+    "name": "HoneTube",
+    "category": "HoneTube",
+    "diameterMm": "180x200",
+    "lengthIn": 42,
+    "lengthFt": 42,
+    "quantity": 1,
+    "notes": "Imported HoneTube stock",
+    "createdAt": "2026-11-19T10:34:43.159Z",
+    "updatedAt": "2026-11-19T10:34:43.160Z"
+  },
+  {
+    "id": "rod-hone-180x200-7-2-1795084483160",
+    "sku": "ROD-HONE-180X200-7IN-2",
+    "name": "HoneTube",
+    "category": "HoneTube",
+    "diameterMm": "180x200",
+    "lengthIn": 7,
+    "lengthFt": 7,
+    "quantity": 1,
+    "notes": "Imported HoneTube stock",
+    "createdAt": "2026-11-19T10:34:43.160Z",
+    "updatedAt": "2026-11-19T10:34:43.160Z"
+  },
+  {
+    "id": "rod-hone-180x200-6.5-3-1795084483160",
+    "sku": "ROD-HONE-180X200-7IN-3",
+    "name": "HoneTube",
+    "category": "HoneTube",
+    "diameterMm": "180x200",
+    "lengthIn": 6.5,
+    "lengthFt": 6.5,
+    "quantity": 1,
+    "notes": "Imported HoneTube stock",
+    "createdAt": "2026-11-19T10:34:43.160Z",
+    "updatedAt": "2026-11-19T10:34:43.160Z"
+  },
+  {
+    "id": "rod-hone-200x220-8.5-4-1795084483160",
+    "sku": "ROD-HONE-200X220-9IN-4",
+    "name": "HoneTube",
+    "category": "HoneTube",
+    "diameterMm": "200x220",
+    "lengthIn": 8.5,
+    "lengthFt": 8.5,
+    "quantity": 1,
+    "notes": "Imported HoneTube stock",
+    "createdAt": "2026-11-19T10:34:43.160Z",
+    "updatedAt": "2026-11-19T10:34:43.160Z"
+  },
+  {
+    "id": "rod-hone-200x230-28-5-1795084483160",
+    "sku": "ROD-HONE-200X230-28IN-5",
+    "name": "HoneTube",
+    "category": "HoneTube",
+    "diameterMm": "200x230",
+    "lengthIn": 28,
+    "lengthFt": 28,
+    "quantity": 1,
+    "notes": "Imported HoneTube stock",
+    "createdAt": "2026-11-19T10:34:43.160Z",
+    "updatedAt": "2026-11-19T10:34:43.160Z"
+  },
+  {
+    "id": "rod-hone-200x230-21-6-1795084483160",
+    "sku": "ROD-HONE-200X230-21IN-6",
+    "name": "HoneTube",
+    "category": "HoneTube",
+    "diameterMm": "200x230",
+    "lengthIn": 21,
+    "lengthFt": 21,
+    "quantity": 1,
+    "notes": "Imported HoneTube stock",
+    "createdAt": "2026-11-19T10:34:43.160Z",
+    "updatedAt": "2026-11-19T10:34:43.160Z"
+  },
+  {
+    "id": "rod-hone-200x230-28.5-7-1795084483160",
+    "sku": "ROD-HONE-200X230-29IN-7",
+    "name": "HoneTube",
+    "category": "HoneTube",
+    "diameterMm": "200x230",
+    "lengthIn": 28.5,
+    "lengthFt": 28.5,
+    "quantity": 1,
+    "notes": "Imported HoneTube stock",
+    "createdAt": "2026-11-19T10:34:43.160Z",
+    "updatedAt": "2026-11-19T10:34:43.160Z"
+  },
+  {
+    "id": "rod-hone-180x210-13-8-1795084483160",
+    "sku": "ROD-HONE-180X210-13IN-8",
+    "name": "HoneTube",
+    "category": "HoneTube",
+    "diameterMm": "180x210",
+    "lengthIn": 13,
+    "lengthFt": 13,
+    "quantity": 1,
+    "notes": "Imported HoneTube stock",
+    "createdAt": "2026-11-19T10:34:43.160Z",
+    "updatedAt": "2026-11-19T10:34:43.160Z"
+  },
+  {
+    "id": "rod-hone-180x210-26.5-9-1795084483160",
+    "sku": "ROD-HONE-180X210-27IN-9",
+    "name": "HoneTube",
+    "category": "HoneTube",
+    "diameterMm": "180x210",
+    "lengthIn": 26.5,
+    "lengthFt": 26.5,
+    "quantity": 1,
+    "notes": "Imported HoneTube stock",
+    "createdAt": "2026-11-19T10:34:43.160Z",
+    "updatedAt": "2026-11-19T10:34:43.160Z"
+  },
+  {
+    "id": "rod-hone-180x210-33.5-10-1795084483160",
+    "sku": "ROD-HONE-180X210-34IN-10",
+    "name": "HoneTube",
+    "category": "HoneTube",
+    "diameterMm": "180x210",
+    "lengthIn": 33.5,
+    "lengthFt": 33.5,
+    "quantity": 1,
+    "notes": "Imported HoneTube stock",
+    "createdAt": "2026-11-19T10:34:43.160Z",
+    "updatedAt": "2026-11-19T10:34:43.160Z"
+  },
+  {
+    "id": "rod-hone-180x210-11-11-1795084483160",
+    "sku": "ROD-HONE-180X210-11IN-11",
+    "name": "HoneTube",
+    "category": "HoneTube",
+    "diameterMm": "180x210",
+    "lengthIn": 11,
+    "lengthFt": 11,
+    "quantity": 1,
+    "notes": "Imported HoneTube stock",
+    "createdAt": "2026-11-19T10:34:43.160Z",
+    "updatedAt": "2026-11-19T10:34:43.160Z"
+  },
+  {
+    "id": "rod-hone-150x170-29.5-12-1795084483160",
+    "sku": "ROD-HONE-150X170-30IN-12",
+    "name": "HoneTube",
+    "category": "HoneTube",
+    "diameterMm": "150x170",
+    "lengthIn": 29.5,
+    "lengthFt": 29.5,
+    "quantity": 1,
+    "notes": "Imported HoneTube stock",
+    "createdAt": "2026-11-19T10:34:43.160Z",
+    "updatedAt": "2026-11-19T10:34:43.160Z"
+  },
+  {
+    "id": "rod-hone-150x170-9-13-1795084483160",
+    "sku": "ROD-HONE-150X170-9IN-13",
+    "name": "HoneTube",
+    "category": "HoneTube",
+    "diameterMm": "150x170",
+    "lengthIn": 9,
+    "lengthFt": 9,
+    "quantity": 1,
+    "notes": "Imported HoneTube stock",
+    "createdAt": "2026-11-19T10:34:43.160Z",
+    "updatedAt": "2026-11-19T10:34:43.160Z"
+  },
+  {
+    "id": "rod-hone-150x180-25.5-14-1795084483160",
+    "sku": "ROD-HONE-150X180-26IN-14",
+    "name": "HoneTube",
+    "category": "HoneTube",
+    "diameterMm": "150x180",
+    "lengthIn": 25.5,
+    "lengthFt": 25.5,
+    "quantity": 1,
+    "notes": "Imported HoneTube stock",
+    "createdAt": "2026-11-19T10:34:43.160Z",
+    "updatedAt": "2026-11-19T10:34:43.160Z"
+  },
+  {
+    "id": "rod-hone-160x180-25-15-1795084483160",
+    "sku": "ROD-HONE-160X180-25IN-15",
+    "name": "HoneTube",
+    "category": "HoneTube",
+    "diameterMm": "160x180",
+    "lengthIn": 25,
+    "lengthFt": 25,
+    "quantity": 1,
+    "notes": "Imported HoneTube stock",
+    "createdAt": "2026-11-19T10:34:43.160Z",
+    "updatedAt": "2026-11-19T10:34:43.160Z"
+  },
+  {
+    "id": "rod-hone-160x180-7.5-16-1795084483160",
+    "sku": "ROD-HONE-160X180-8IN-16",
+    "name": "HoneTube",
+    "category": "HoneTube",
+    "diameterMm": "160x180",
+    "lengthIn": 7.5,
+    "lengthFt": 7.5,
+    "quantity": 1,
+    "notes": "Imported HoneTube stock",
+    "createdAt": "2026-11-19T10:34:43.160Z",
+    "updatedAt": "2026-11-19T10:34:43.160Z"
+  },
+  {
+    "id": "rod-hone-160x180-10.5-17-1795084483160",
+    "sku": "ROD-HONE-160X180-11IN-17",
+    "name": "HoneTube",
+    "category": "HoneTube",
+    "diameterMm": "160x180",
+    "lengthIn": 10.5,
+    "lengthFt": 10.5,
+    "quantity": 1,
+    "notes": "Imported HoneTube stock",
+    "createdAt": "2026-11-19T10:34:43.160Z",
+    "updatedAt": "2026-11-19T10:34:43.160Z"
+  },
+  {
+    "id": "rod-hone-160x180-4.5-18-1795084483160",
+    "sku": "ROD-HONE-160X180-5IN-18",
+    "name": "HoneTube",
+    "category": "HoneTube",
+    "diameterMm": "160x180",
+    "lengthIn": 4.5,
+    "lengthFt": 4.5,
+    "quantity": 1,
+    "notes": "Imported HoneTube stock",
+    "createdAt": "2026-11-19T10:34:43.160Z",
+    "updatedAt": "2026-11-19T10:34:43.160Z"
+  },
+  {
+    "id": "rod-hone-120x140-14.5-19-1795084483160",
+    "sku": "ROD-HONE-120X140-15IN-19",
+    "name": "HoneTube",
+    "category": "HoneTube",
+    "diameterMm": "120x140",
+    "lengthIn": 14.5,
+    "lengthFt": 14.5,
+    "quantity": 1,
+    "notes": "Imported HoneTube stock",
+    "createdAt": "2026-11-19T10:34:43.160Z",
+    "updatedAt": "2026-11-19T10:34:43.160Z"
+  },
+  {
+    "id": "rod-hone-100x115-19-20-1795084483160",
+    "sku": "ROD-HONE-100X115-19IN-20",
+    "name": "HoneTube",
+    "category": "HoneTube",
+    "diameterMm": "100x115",
+    "lengthIn": 19,
+    "lengthFt": 19,
+    "quantity": 1,
+    "notes": "Imported HoneTube stock",
+    "createdAt": "2026-11-19T10:34:43.160Z",
+    "updatedAt": "2026-11-19T10:34:43.160Z"
+  },
+  {
+    "id": "rod-hone-100x115-17.5-21-1795084483160",
+    "sku": "ROD-HONE-100X115-18IN-21",
+    "name": "HoneTube",
+    "category": "HoneTube",
+    "diameterMm": "100x115",
+    "lengthIn": 17.5,
+    "lengthFt": 17.5,
+    "quantity": 2,
+    "notes": "Imported HoneTube stock",
+    "createdAt": "2026-11-19T10:34:43.160Z",
+    "updatedAt": "2026-11-19T10:34:43.160Z"
+  },
+  {
+    "id": "rod-hone-100x115-15.5-22-1795084483160",
+    "sku": "ROD-HONE-100X115-16IN-22",
+    "name": "HoneTube",
+    "category": "HoneTube",
+    "diameterMm": "100x115",
+    "lengthIn": 15.5,
+    "lengthFt": 15.5,
+    "quantity": 1,
+    "notes": "Imported HoneTube stock",
+    "createdAt": "2026-11-19T10:34:43.160Z",
+    "updatedAt": "2026-11-19T10:34:43.160Z"
+  },
+  {
+    "id": "rod-hone-100x115-11-23-1795084483160",
+    "sku": "ROD-HONE-100X115-11IN-23",
+    "name": "HoneTube",
+    "category": "HoneTube",
+    "diameterMm": "100x115",
+    "lengthIn": 11,
+    "lengthFt": 11,
+    "quantity": 1,
+    "notes": "Imported HoneTube stock",
+    "createdAt": "2026-11-19T10:34:43.160Z",
+    "updatedAt": "2026-11-19T10:34:43.160Z"
+  },
+  {
+    "id": "rod-hone-100x115-23-24-1795084483160",
+    "sku": "ROD-HONE-100X115-23IN-24",
+    "name": "HoneTube",
+    "category": "HoneTube",
+    "diameterMm": "100x115",
+    "lengthIn": 23,
+    "lengthFt": 23,
+    "quantity": 1,
+    "notes": "Imported HoneTube stock",
+    "createdAt": "2026-11-19T10:34:43.160Z",
+    "updatedAt": "2026-11-19T10:34:43.160Z"
+  },
+  {
+    "id": "rod-hone-95x110-13.5-25-1795084483160",
+    "sku": "ROD-HONE-95X110-14IN-25",
+    "name": "HoneTube",
+    "category": "HoneTube",
+    "diameterMm": "95x110",
+    "lengthIn": 13.5,
+    "lengthFt": 13.5,
+    "quantity": 1,
+    "notes": "Imported HoneTube stock",
+    "createdAt": "2026-11-19T10:34:43.160Z",
+    "updatedAt": "2026-11-19T10:34:43.160Z"
+  },
+  {
+    "id": "rod-hone-110x125-10.5-26-1795084483160",
+    "sku": "ROD-HONE-110X125-11IN-26",
+    "name": "HoneTube",
+    "category": "HoneTube",
+    "diameterMm": "110x125",
+    "lengthIn": 10.5,
+    "lengthFt": 10.5,
+    "quantity": 1,
+    "notes": "Imported HoneTube stock",
+    "createdAt": "2026-11-19T10:34:43.160Z",
+    "updatedAt": "2026-11-19T10:34:43.160Z"
+  },
+  {
+    "id": "rod-hone-70x82-30-27-1795084483160",
+    "sku": "ROD-HONE-70X82-30IN-27",
+    "name": "HoneTube",
+    "category": "HoneTube",
+    "diameterMm": "70x82",
+    "lengthIn": 30,
+    "lengthFt": 30,
+    "quantity": 6,
+    "notes": "Imported HoneTube stock",
+    "createdAt": "2026-11-19T10:34:43.160Z",
+    "updatedAt": "2026-11-19T10:34:43.160Z"
+  },
+  {
+    "id": "rod-hone-70x82-18-28-1795084483160",
+    "sku": "ROD-HONE-70X82-18IN-28",
+    "name": "HoneTube",
+    "category": "HoneTube",
+    "diameterMm": "70x82",
+    "lengthIn": 18,
+    "lengthFt": 18,
+    "quantity": 1,
+    "notes": "Imported HoneTube stock",
+    "createdAt": "2026-11-19T10:34:43.160Z",
+    "updatedAt": "2026-11-19T10:34:43.160Z"
+  },
+  {
+    "id": "rod-hone-70x82-21.5-29-1795084483160",
+    "sku": "ROD-HONE-70X82-22IN-29",
+    "name": "HoneTube",
+    "category": "HoneTube",
+    "diameterMm": "70x82",
+    "lengthIn": 21.5,
+    "lengthFt": 21.5,
+    "quantity": 1,
+    "notes": "Imported HoneTube stock",
+    "createdAt": "2026-11-19T10:34:43.160Z",
+    "updatedAt": "2026-11-19T10:34:43.160Z"
+  },
+  {
+    "id": "rod-hone-70x82-15-30-1795084483160",
+    "sku": "ROD-HONE-70X82-15IN-30",
+    "name": "HoneTube",
+    "category": "HoneTube",
+    "diameterMm": "70x82",
+    "lengthIn": 15,
+    "lengthFt": 15,
+    "quantity": 1,
+    "notes": "Imported HoneTube stock",
+    "createdAt": "2026-11-19T10:34:43.160Z",
+    "updatedAt": "2026-11-19T10:34:43.160Z"
+  },
+  {
+    "id": "rod-hone-70x82-13-31-1795084483160",
+    "sku": "ROD-HONE-70X82-13IN-31",
+    "name": "HoneTube",
+    "category": "HoneTube",
+    "diameterMm": "70x82",
+    "lengthIn": 13,
+    "lengthFt": 13,
+    "quantity": 1,
+    "notes": "Imported HoneTube stock",
+    "createdAt": "2026-11-19T10:34:43.160Z",
+    "updatedAt": "2026-11-19T10:34:43.160Z"
+  },
+  {
+    "id": "rod-hone-70x82-13.5-32-1795084483160",
+    "sku": "ROD-HONE-70X82-14IN-32",
+    "name": "HoneTube",
+    "category": "HoneTube",
+    "diameterMm": "70x82",
+    "lengthIn": 13.5,
+    "lengthFt": 13.5,
+    "quantity": 1,
+    "notes": "Imported HoneTube stock",
+    "createdAt": "2026-11-19T10:34:43.160Z",
+    "updatedAt": "2026-11-19T10:34:43.160Z"
+  },
+  {
+    "id": "rod-hone-70x82-8.5-33-1795084483160",
+    "sku": "ROD-HONE-70X82-9IN-33",
+    "name": "HoneTube",
+    "category": "HoneTube",
+    "diameterMm": "70x82",
+    "lengthIn": 8.5,
+    "lengthFt": 8.5,
+    "quantity": 2,
+    "notes": "Imported HoneTube stock",
+    "createdAt": "2026-11-19T10:34:43.160Z",
+    "updatedAt": "2026-11-19T10:34:43.160Z"
+  },
+  {
+    "id": "rod-hone-70x82-8-34-1795084483160",
+    "sku": "ROD-HONE-70X82-8IN-34",
+    "name": "HoneTube",
+    "category": "HoneTube",
+    "diameterMm": "70x82",
+    "lengthIn": 8,
+    "lengthFt": 8,
+    "quantity": 1,
+    "notes": "Imported HoneTube stock",
+    "createdAt": "2026-11-19T10:34:43.160Z",
+    "updatedAt": "2026-11-19T10:34:43.160Z"
+  },
+  {
+    "id": "rod-hone-70x82-7-35-1795084483160",
+    "sku": "ROD-HONE-70X82-7IN-35",
+    "name": "HoneTube",
+    "category": "HoneTube",
+    "diameterMm": "70x82",
+    "lengthIn": 7,
+    "lengthFt": 7,
+    "quantity": 1,
+    "notes": "Imported HoneTube stock",
+    "createdAt": "2026-11-19T10:34:43.160Z",
+    "updatedAt": "2026-11-19T10:34:43.160Z"
+  },
+  {
+    "id": "rod-hone-70x82-5.5-36-1795084483160",
+    "sku": "ROD-HONE-70X82-6IN-36",
+    "name": "HoneTube",
+    "category": "HoneTube",
+    "diameterMm": "70x82",
+    "lengthIn": 5.5,
+    "lengthFt": 5.5,
+    "quantity": 1,
+    "notes": "Imported HoneTube stock",
+    "createdAt": "2026-11-19T10:34:43.160Z",
+    "updatedAt": "2026-11-19T10:34:43.160Z"
+  },
+  {
+    "id": "rod-hone-70x82-5.5-37-1795084483160",
+    "sku": "ROD-HONE-70X82-6IN-37",
+    "name": "HoneTube",
+    "category": "HoneTube",
+    "diameterMm": "70x82",
+    "lengthIn": 5.5,
+    "lengthFt": 5.5,
+    "quantity": 1,
+    "notes": "Imported HoneTube stock",
+    "createdAt": "2026-11-19T10:34:43.160Z",
+    "updatedAt": "2026-11-19T10:34:43.160Z"
+  },
+  {
+    "id": "rod-hone-70x82-6.5-38-1795084483160",
+    "sku": "ROD-HONE-70X82-7IN-38",
+    "name": "HoneTube",
+    "category": "HoneTube",
+    "diameterMm": "70x82",
+    "lengthIn": 6.5,
+    "lengthFt": 6.5,
+    "quantity": 1,
+    "notes": "Imported HoneTube stock",
+    "createdAt": "2026-11-19T10:34:43.160Z",
+    "updatedAt": "2026-11-19T10:34:43.160Z"
+  },
+  {
+    "id": "rod-hone-140x160-10-39-1795084483160",
+    "sku": "ROD-HONE-140X160-10IN-39",
+    "name": "HoneTube",
+    "category": "HoneTube",
+    "diameterMm": "140x160",
+    "lengthIn": 10,
+    "lengthFt": 10,
+    "quantity": 1,
+    "notes": "Imported HoneTube stock",
+    "createdAt": "2026-11-19T10:34:43.160Z",
+    "updatedAt": "2026-11-19T10:34:43.160Z"
+  },
+  {
+    "id": "rod-hone-90x105-9-40-1795084483160",
+    "sku": "ROD-HONE-90X105-9IN-40",
+    "name": "HoneTube",
+    "category": "HoneTube",
+    "diameterMm": "90x105",
+    "lengthIn": 9,
+    "lengthFt": 9,
+    "quantity": 4,
+    "notes": "Imported HoneTube stock",
+    "createdAt": "2026-11-19T10:34:43.160Z",
+    "updatedAt": "2026-11-19T10:34:43.160Z"
+  },
+  {
+    "id": "rod-hone-90x105-9.5-41-1795084483160",
+    "sku": "ROD-HONE-90X105-10IN-41",
+    "name": "HoneTube",
+    "category": "HoneTube",
+    "diameterMm": "90x105",
+    "lengthIn": 9.5,
+    "lengthFt": 9.5,
+    "quantity": 1,
+    "notes": "Imported HoneTube stock",
+    "createdAt": "2026-11-19T10:34:43.160Z",
+    "updatedAt": "2026-11-19T10:34:43.160Z"
+  },
+  {
+    "id": "rod-hone-90x105-6-42-1795084483160",
+    "sku": "ROD-HONE-90X105-6IN-42",
+    "name": "HoneTube",
+    "category": "HoneTube",
+    "diameterMm": "90x105",
+    "lengthIn": 6,
+    "lengthFt": 6,
+    "quantity": 1,
+    "notes": "Imported HoneTube stock",
+    "createdAt": "2026-11-19T10:34:43.160Z",
+    "updatedAt": "2026-11-19T10:34:43.160Z"
+  },
+  {
+    "id": "rod-hone-80x100-7.5-43-1795084483160",
+    "sku": "ROD-HONE-80X100-8IN-43",
+    "name": "HoneTube",
+    "category": "HoneTube",
+    "diameterMm": "80x100",
+    "lengthIn": 7.5,
+    "lengthFt": 7.5,
+    "quantity": 1,
+    "notes": "Imported HoneTube stock",
+    "createdAt": "2026-11-19T10:34:43.160Z",
+    "updatedAt": "2026-11-19T10:34:43.160Z"
+  },
+  {
+    "id": "rod-hone-80x95-5.5-44-1795084483160",
+    "sku": "ROD-HONE-80X95-6IN-44",
+    "name": "HoneTube",
+    "category": "HoneTube",
+    "diameterMm": "80x95",
+    "lengthIn": 5.5,
+    "lengthFt": 5.5,
+    "quantity": 1,
+    "notes": "Imported HoneTube stock",
+    "createdAt": "2026-11-19T10:34:43.160Z",
+    "updatedAt": "2026-11-19T10:34:43.160Z"
+  },
+  {
+    "id": "rod-hone-130x148-10-45-1795084483160",
+    "sku": "ROD-HONE-130X148-10IN-45",
+    "name": "HoneTube",
+    "category": "HoneTube",
+    "diameterMm": "130x148",
+    "lengthIn": 10,
+    "lengthFt": 10,
+    "quantity": 1,
+    "notes": "Imported HoneTube stock",
+    "createdAt": "2026-11-19T10:34:43.160Z",
+    "updatedAt": "2026-11-19T10:34:43.160Z"
+  },
+  {
+    "id": "rod-hone-130x148-9-46-1795084483160",
+    "sku": "ROD-HONE-130X148-9IN-46",
+    "name": "HoneTube",
+    "category": "HoneTube",
+    "diameterMm": "130x148",
+    "lengthIn": 9,
+    "lengthFt": 9,
+    "quantity": 1,
+    "notes": "Imported HoneTube stock",
+    "createdAt": "2026-11-19T10:34:43.160Z",
+    "updatedAt": "2026-11-19T10:34:43.160Z"
+  },
+  {
+    "id": "rod-hone-115x130-9.5-47-1795084483160",
+    "sku": "ROD-HONE-115X130-10IN-47",
+    "name": "HoneTube",
+    "category": "HoneTube",
+    "diameterMm": "115x130",
+    "lengthIn": 9.5,
+    "lengthFt": 9.5,
+    "quantity": 1,
+    "notes": "Imported HoneTube stock",
+    "createdAt": "2026-11-19T10:34:43.160Z",
+    "updatedAt": "2026-11-19T10:34:43.160Z"
+  },
+  {
+    "id": "rod-hone-110x125-5.5-48-1795084483160",
+    "sku": "ROD-HONE-110X125-6IN-48",
+    "name": "HoneTube",
+    "category": "HoneTube",
+    "diameterMm": "110x125",
+    "lengthIn": 5.5,
+    "lengthFt": 5.5,
+    "quantity": 2,
+    "notes": "Imported HoneTube stock",
+    "createdAt": "2026-11-19T10:34:43.160Z",
+    "updatedAt": "2026-11-19T10:34:43.160Z"
+  },
+  {
+    "id": "rod-hone-110x125-6.5-49-1795084483161",
+    "sku": "ROD-HONE-110X125-7IN-49",
+    "name": "HoneTube",
+    "category": "HoneTube",
+    "diameterMm": "110x125",
+    "lengthIn": 6.5,
+    "lengthFt": 6.5,
+    "quantity": 1,
+    "notes": "Imported HoneTube stock",
+    "createdAt": "2026-11-19T10:34:43.161Z",
+    "updatedAt": "2026-11-19T10:34:43.161Z"
+  },
+  {
+    "id": "rod-hone-110x125-8.5-50-1795084483161",
+    "sku": "ROD-HONE-110X125-9IN-50",
+    "name": "HoneTube",
+    "category": "HoneTube",
+    "diameterMm": "110x125",
+    "lengthIn": 8.5,
+    "lengthFt": 8.5,
+    "quantity": 1,
+    "notes": "Imported HoneTube stock",
+    "createdAt": "2026-11-19T10:34:43.161Z",
+    "updatedAt": "2026-11-19T10:34:43.161Z"
+  },
+  {
+    "id": "rod-hone-110x125-6-51-1795084483161",
+    "sku": "ROD-HONE-110X125-6IN-51",
+    "name": "HoneTube",
+    "category": "HoneTube",
+    "diameterMm": "110x125",
+    "lengthIn": 6,
+    "lengthFt": 6,
+    "quantity": 3,
+    "notes": "Imported HoneTube stock",
+    "createdAt": "2026-11-19T10:34:43.161Z",
+    "updatedAt": "2026-11-19T10:34:43.161Z"
+  },
+  {
+    "id": "rod-hone-110x130-9.5-52-1795084483161",
+    "sku": "ROD-HONE-110X130-10IN-52",
+    "name": "HoneTube",
+    "category": "HoneTube",
+    "diameterMm": "110x130",
+    "lengthIn": 9.5,
+    "lengthFt": 9.5,
+    "quantity": 1,
+    "notes": "Imported HoneTube stock",
+    "createdAt": "2026-11-19T10:34:43.161Z",
+    "updatedAt": "2026-11-19T10:34:43.161Z"
+  },
+  {
+    "id": "rod-hone-80x92-28-53-1795084483161",
+    "sku": "ROD-HONE-80X92-28IN-53",
+    "name": "HoneTube",
+    "category": "HoneTube",
+    "diameterMm": "80x92",
+    "lengthIn": 28,
+    "lengthFt": 28,
+    "quantity": 1,
+    "notes": "Imported HoneTube stock",
+    "createdAt": "2026-11-19T10:34:43.161Z",
+    "updatedAt": "2026-11-19T10:34:43.161Z"
+  },
+  {
+    "id": "rod-hone-80x92-26-54-1795084483161",
+    "sku": "ROD-HONE-80X92-26IN-54",
+    "name": "HoneTube",
+    "category": "HoneTube",
+    "diameterMm": "80x92",
+    "lengthIn": 26,
+    "lengthFt": 26,
+    "quantity": 1,
+    "notes": "Imported HoneTube stock",
+    "createdAt": "2026-11-19T10:34:43.161Z",
+    "updatedAt": "2026-11-19T10:34:43.161Z"
+  },
+  {
+    "id": "rod-hone-80x92-22.5-55-1795084483161",
+    "sku": "ROD-HONE-80X92-23IN-55",
+    "name": "HoneTube",
+    "category": "HoneTube",
+    "diameterMm": "80x92",
+    "lengthIn": 22.5,
+    "lengthFt": 22.5,
+    "quantity": 1,
+    "notes": "Imported HoneTube stock",
+    "createdAt": "2026-11-19T10:34:43.161Z",
+    "updatedAt": "2026-11-19T10:34:43.161Z"
+  },
+  {
+    "id": "rod-hone-80x92-19-56-1795084483161",
+    "sku": "ROD-HONE-80X92-19IN-56",
+    "name": "HoneTube",
+    "category": "HoneTube",
+    "diameterMm": "80x92",
+    "lengthIn": 19,
+    "lengthFt": 19,
+    "quantity": 1,
+    "notes": "Imported HoneTube stock",
+    "createdAt": "2026-11-19T10:34:43.161Z",
+    "updatedAt": "2026-11-19T10:34:43.161Z"
+  },
+  {
+    "id": "rod-hone-80x92-4-57-1795084483161",
+    "sku": "ROD-HONE-80X92-4IN-57",
+    "name": "HoneTube",
+    "category": "HoneTube",
+    "diameterMm": "80x92",
+    "lengthIn": 4,
+    "lengthFt": 4,
+    "quantity": 1,
+    "notes": "Imported HoneTube stock",
+    "createdAt": "2026-11-19T10:34:43.161Z",
+    "updatedAt": "2026-11-19T10:34:43.161Z"
+  },
+  {
+    "id": "rod-hone-80x92-5.5-58-1795084483161",
+    "sku": "ROD-HONE-80X92-6IN-58",
+    "name": "HoneTube",
+    "category": "HoneTube",
+    "diameterMm": "80x92",
+    "lengthIn": 5.5,
+    "lengthFt": 5.5,
+    "quantity": 1,
+    "notes": "Imported HoneTube stock",
+    "createdAt": "2026-11-19T10:34:43.161Z",
+    "updatedAt": "2026-11-19T10:34:43.161Z"
+  },
+  {
+    "id": "rod-hone-80x92-6-59-1795084483161",
+    "sku": "ROD-HONE-80X92-6IN-59",
+    "name": "HoneTube",
+    "category": "HoneTube",
+    "diameterMm": "80x92",
+    "lengthIn": 6,
+    "lengthFt": 6,
+    "quantity": 1,
+    "notes": "Imported HoneTube stock",
+    "createdAt": "2026-11-19T10:34:43.161Z",
+    "updatedAt": "2026-11-19T10:34:43.161Z"
+  },
+  {
+    "id": "rod-hone-80x92-5-60-1795084483161",
+    "sku": "ROD-HONE-80X92-5IN-60",
+    "name": "HoneTube",
+    "category": "HoneTube",
+    "diameterMm": "80x92",
+    "lengthIn": 5,
+    "lengthFt": 5,
+    "quantity": 2,
+    "notes": "Imported HoneTube stock",
+    "createdAt": "2026-11-19T10:34:43.161Z",
+    "updatedAt": "2026-11-19T10:34:43.161Z"
+  },
+  {
+    "id": "rod-hone-75x90-14-61-1795084483161",
+    "sku": "ROD-HONE-75X90-14IN-61",
+    "name": "HoneTube",
+    "category": "HoneTube",
+    "diameterMm": "75x90",
+    "lengthIn": 14,
+    "lengthFt": 14,
+    "quantity": 1,
+    "notes": "Imported HoneTube stock",
+    "createdAt": "2026-11-19T10:34:43.161Z",
+    "updatedAt": "2026-11-19T10:34:43.161Z"
+  },
+  {
+    "id": "rod-hone-75x90-11-62-1795084483161",
+    "sku": "ROD-HONE-75X90-11IN-62",
+    "name": "HoneTube",
+    "category": "HoneTube",
+    "diameterMm": "75x90",
+    "lengthIn": 11,
+    "lengthFt": 11,
+    "quantity": 1,
+    "notes": "Imported HoneTube stock",
+    "createdAt": "2026-11-19T10:34:43.161Z",
+    "updatedAt": "2026-11-19T10:34:43.161Z"
+  },
+  {
+    "id": "rod-hone-75x90-10-63-1795084483161",
+    "sku": "ROD-HONE-75X90-10IN-63",
+    "name": "HoneTube",
+    "category": "HoneTube",
+    "diameterMm": "75x90",
+    "lengthIn": 10,
+    "lengthFt": 10,
+    "quantity": 1,
+    "notes": "Imported HoneTube stock",
+    "createdAt": "2026-11-19T10:34:43.161Z",
+    "updatedAt": "2026-11-19T10:34:43.161Z"
+  },
+  {
+    "id": "rod-hone-75x90-7.5-64-1795084483161",
+    "sku": "ROD-HONE-75X90-8IN-64",
+    "name": "HoneTube",
+    "category": "HoneTube",
+    "diameterMm": "75x90",
+    "lengthIn": 7.5,
+    "lengthFt": 7.5,
+    "quantity": 1,
+    "notes": "Imported HoneTube stock",
+    "createdAt": "2026-11-19T10:34:43.161Z",
+    "updatedAt": "2026-11-19T10:34:43.161Z"
+  },
+  {
+    "id": "rod-hone-75x90-7-65-1795084483161",
+    "sku": "ROD-HONE-75X90-7IN-65",
+    "name": "HoneTube",
+    "category": "HoneTube",
+    "diameterMm": "75x90",
+    "lengthIn": 7,
+    "lengthFt": 7,
+    "quantity": 1,
+    "notes": "Imported HoneTube stock",
+    "createdAt": "2026-11-19T10:34:43.161Z",
+    "updatedAt": "2026-11-19T10:34:43.161Z"
+  },
+  {
+    "id": "rod-hone-75x90-4.5-66-1795084483161",
+    "sku": "ROD-HONE-75X90-5IN-66",
+    "name": "HoneTube",
+    "category": "HoneTube",
+    "diameterMm": "75x90",
+    "lengthIn": 4.5,
+    "lengthFt": 4.5,
+    "quantity": 1,
+    "notes": "Imported HoneTube stock",
+    "createdAt": "2026-11-19T10:34:43.161Z",
+    "updatedAt": "2026-11-19T10:34:43.161Z"
+  },
+  {
+    "id": "rod-hone-105x120-17-67-1795084483161",
+    "sku": "ROD-HONE-105X120-17IN-67",
+    "name": "HoneTube",
+    "category": "HoneTube",
+    "diameterMm": "105x120",
+    "lengthIn": 17,
+    "lengthFt": 17,
+    "quantity": 1,
+    "notes": "Imported HoneTube stock",
+    "createdAt": "2026-11-19T10:34:43.161Z",
+    "updatedAt": "2026-11-19T10:34:43.161Z"
+  },
+  {
+    "id": "rod-hone-55x65-27-68-1795084483161",
+    "sku": "ROD-HONE-55X65-27IN-68",
+    "name": "HoneTube",
+    "category": "HoneTube",
+    "diameterMm": "55x65",
+    "lengthIn": 27,
+    "lengthFt": 27,
+    "quantity": 1,
+    "notes": "Imported HoneTube stock",
+    "createdAt": "2026-11-19T10:34:43.161Z",
+    "updatedAt": "2026-11-19T10:34:43.161Z"
+  },
+  {
+    "id": "rod-hone-55x65-12-69-1795084483161",
+    "sku": "ROD-HONE-55X65-12IN-69",
+    "name": "HoneTube",
+    "category": "HoneTube",
+    "diameterMm": "55x65",
+    "lengthIn": 12,
+    "lengthFt": 12,
+    "quantity": 1,
+    "notes": "Imported HoneTube stock",
+    "createdAt": "2026-11-19T10:34:43.161Z",
+    "updatedAt": "2026-11-19T10:34:43.161Z"
+  },
+  {
+    "id": "rod-hone-55x65-8-70-1795084483161",
+    "sku": "ROD-HONE-55X65-8IN-70",
+    "name": "HoneTube",
+    "category": "HoneTube",
+    "diameterMm": "55x65",
+    "lengthIn": 8,
+    "lengthFt": 8,
+    "quantity": 1,
+    "notes": "Imported HoneTube stock",
+    "createdAt": "2026-11-19T10:34:43.161Z",
+    "updatedAt": "2026-11-19T10:34:43.161Z"
+  },
+  {
+    "id": "rod-hone-63x75-16.5-71-1795084483161",
+    "sku": "ROD-HONE-63X75-17IN-71",
+    "name": "HoneTube",
+    "category": "HoneTube",
+    "diameterMm": "63x75",
+    "lengthIn": 16.5,
+    "lengthFt": 16.5,
+    "quantity": 1,
+    "notes": "Imported HoneTube stock",
+    "createdAt": "2026-11-19T10:34:43.161Z",
+    "updatedAt": "2026-11-19T10:34:43.161Z"
+  },
+  {
+    "id": "rod-hone-63x75-2-72-1795084483161",
+    "sku": "ROD-HONE-63X75-2IN-72",
+    "name": "HoneTube",
+    "category": "HoneTube",
+    "diameterMm": "63x75",
+    "lengthIn": 2,
+    "lengthFt": 2,
+    "quantity": 1,
+    "notes": "Imported HoneTube stock",
+    "createdAt": "2026-11-19T10:34:43.161Z",
+    "updatedAt": "2026-11-19T10:34:43.161Z"
+  },
+  {
+    "id": "rod-hone-63x73-14.5-73-1795084483161",
+    "sku": "ROD-HONE-63X73-15IN-73",
+    "name": "HoneTube",
+    "category": "HoneTube",
+    "diameterMm": "63x73",
+    "lengthIn": 14.5,
+    "lengthFt": 14.5,
+    "quantity": 1,
+    "notes": "Imported HoneTube stock",
+    "createdAt": "2026-11-19T10:34:43.161Z",
+    "updatedAt": "2026-11-19T10:34:43.161Z"
+  },
+  {
+    "id": "rod-hone-63x73-13.5-74-1795084483161",
+    "sku": "ROD-HONE-63X73-14IN-74",
+    "name": "HoneTube",
+    "category": "HoneTube",
+    "diameterMm": "63x73",
+    "lengthIn": 13.5,
+    "lengthFt": 13.5,
+    "quantity": 1,
+    "notes": "Imported HoneTube stock",
+    "createdAt": "2026-11-19T10:34:43.161Z",
+    "updatedAt": "2026-11-19T10:34:43.161Z"
+  },
+  {
+    "id": "rod-hone-63x73-9.5-75-1795084483161",
+    "sku": "ROD-HONE-63X73-10IN-75",
+    "name": "HoneTube",
+    "category": "HoneTube",
+    "diameterMm": "63x73",
+    "lengthIn": 9.5,
+    "lengthFt": 9.5,
+    "quantity": 2,
+    "notes": "Imported HoneTube stock",
+    "createdAt": "2026-11-19T10:34:43.161Z",
+    "updatedAt": "2026-11-19T10:34:43.161Z"
+  },
+  {
+    "id": "rod-hone-63x73-8-76-1795084483161",
+    "sku": "ROD-HONE-63X73-8IN-76",
+    "name": "HoneTube",
+    "category": "HoneTube",
+    "diameterMm": "63x73",
+    "lengthIn": 8,
+    "lengthFt": 8,
+    "quantity": 2,
+    "notes": "Imported HoneTube stock",
+    "createdAt": "2026-11-19T10:34:43.161Z",
+    "updatedAt": "2026-11-19T10:34:43.161Z"
+  },
+  {
+    "id": "rod-hone-63x73-6.5-77-1795084483161",
+    "sku": "ROD-HONE-63X73-7IN-77",
+    "name": "HoneTube",
+    "category": "HoneTube",
+    "diameterMm": "63x73",
+    "lengthIn": 6.5,
+    "lengthFt": 6.5,
+    "quantity": 1,
+    "notes": "Imported HoneTube stock",
+    "createdAt": "2026-11-19T10:34:43.161Z",
+    "updatedAt": "2026-11-19T10:34:43.161Z"
+  },
+  {
+    "id": "rod-hone-63x73-5-78-1795084483161",
+    "sku": "ROD-HONE-63X73-5IN-78",
+    "name": "HoneTube",
+    "category": "HoneTube",
+    "diameterMm": "63x73",
+    "lengthIn": 5,
+    "lengthFt": 5,
+    "quantity": 5,
+    "notes": "Imported HoneTube stock",
+    "createdAt": "2026-11-19T10:34:43.161Z",
+    "updatedAt": "2026-11-19T10:34:43.161Z"
+  },
+  {
+    "id": "rod-hone-63x73-7-79-1795084483161",
+    "sku": "ROD-HONE-63X73-7IN-79",
+    "name": "HoneTube",
+    "category": "HoneTube",
+    "diameterMm": "63x73",
+    "lengthIn": 7,
+    "lengthFt": 7,
+    "quantity": 2,
+    "notes": "Imported HoneTube stock",
+    "createdAt": "2026-11-19T10:34:43.161Z",
+    "updatedAt": "2026-11-19T10:34:43.161Z"
+  },
+  {
+    "id": "rod-hone-63x73-4-80-1795084483161",
+    "sku": "ROD-HONE-63X73-4IN-80",
+    "name": "HoneTube",
+    "category": "HoneTube",
+    "diameterMm": "63x73",
+    "lengthIn": 4,
+    "lengthFt": 4,
+    "quantity": 3,
+    "notes": "Imported HoneTube stock",
+    "createdAt": "2026-11-19T10:34:43.161Z",
+    "updatedAt": "2026-11-19T10:34:43.161Z"
+  },
+  {
+    "id": "rod-hone-63x73-5.5-81-1795084483161",
+    "sku": "ROD-HONE-63X73-6IN-81",
+    "name": "HoneTube",
+    "category": "HoneTube",
+    "diameterMm": "63x73",
+    "lengthIn": 5.5,
+    "lengthFt": 5.5,
+    "quantity": 1,
+    "notes": "Imported HoneTube stock",
+    "createdAt": "2026-11-19T10:34:43.161Z",
+    "updatedAt": "2026-11-19T10:34:43.161Z"
+  },
+  {
+    "id": "rod-hone-50x60-20-82-1795084483161",
+    "sku": "ROD-HONE-50X60-20IN-82",
+    "name": "HoneTube",
+    "category": "HoneTube",
+    "diameterMm": "50x60",
+    "lengthIn": 20,
+    "lengthFt": 20,
+    "quantity": 1,
+    "notes": "Imported HoneTube stock",
+    "createdAt": "2026-11-19T10:34:43.161Z",
+    "updatedAt": "2026-11-19T10:34:43.161Z"
+  },
+  {
+    "id": "rod-hone-50x60-15-83-1795084483161",
+    "sku": "ROD-HONE-50X60-15IN-83",
+    "name": "HoneTube",
+    "category": "HoneTube",
+    "diameterMm": "50x60",
+    "lengthIn": 15,
+    "lengthFt": 15,
+    "quantity": 1,
+    "notes": "Imported HoneTube stock",
+    "createdAt": "2026-11-19T10:34:43.161Z",
+    "updatedAt": "2026-11-19T10:34:43.161Z"
+  },
+  {
+    "id": "rod-hone-50x60-8-84-1795084483161",
+    "sku": "ROD-HONE-50X60-8IN-84",
+    "name": "HoneTube",
+    "category": "HoneTube",
+    "diameterMm": "50x60",
+    "lengthIn": 8,
+    "lengthFt": 8,
+    "quantity": 1,
+    "notes": "Imported HoneTube stock",
+    "createdAt": "2026-11-19T10:34:43.161Z",
+    "updatedAt": "2026-11-19T10:34:43.161Z"
+  },
+  {
+    "id": "rod-hone-50x60-6-85-1795084483161",
+    "sku": "ROD-HONE-50X60-6IN-85",
+    "name": "HoneTube",
+    "category": "HoneTube",
+    "diameterMm": "50x60",
+    "lengthIn": 6,
+    "lengthFt": 6,
+    "quantity": 1,
+    "notes": "Imported HoneTube stock",
+    "createdAt": "2026-11-19T10:34:43.161Z",
+    "updatedAt": "2026-11-19T10:34:43.161Z"
+  },
+  {
+    "id": "rod-hone-50x60-4-86-1795084483161",
+    "sku": "ROD-HONE-50X60-4IN-86",
+    "name": "HoneTube",
+    "category": "HoneTube",
+    "diameterMm": "50x60",
+    "lengthIn": 4,
+    "lengthFt": 4,
+    "quantity": 2,
+    "notes": "Imported HoneTube stock",
+    "createdAt": "2026-11-19T10:34:43.161Z",
+    "updatedAt": "2026-11-19T10:34:43.161Z"
+  },
+  {
+    "id": "rod-hone-60x70-10.5-87-1795084483161",
+    "sku": "ROD-HONE-60X70-11IN-87",
+    "name": "HoneTube",
+    "category": "HoneTube",
+    "diameterMm": "60x70",
+    "lengthIn": 10.5,
+    "lengthFt": 10.5,
+    "quantity": 1,
+    "notes": "Imported HoneTube stock",
+    "createdAt": "2026-11-19T10:34:43.161Z",
+    "updatedAt": "2026-11-19T10:34:43.161Z"
+  },
+  {
+    "id": "rod-hone-48x58-11.5-88-1795084483161",
+    "sku": "ROD-HONE-48X58-12IN-88",
+    "name": "HoneTube",
+    "category": "HoneTube",
+    "diameterMm": "48x58",
+    "lengthIn": 11.5,
+    "lengthFt": 11.5,
+    "quantity": 1,
+    "notes": "Imported HoneTube stock",
+    "createdAt": "2026-11-19T10:34:43.161Z",
+    "updatedAt": "2026-11-19T10:34:43.161Z"
+  },
+  {
+    "id": "rod-hone-40x50-16-89-1795084483161",
+    "sku": "ROD-HONE-40X50-16IN-89",
+    "name": "HoneTube",
+    "category": "HoneTube",
+    "diameterMm": "40x50",
+    "lengthIn": 16,
+    "lengthFt": 16,
+    "quantity": 1,
+    "notes": "Imported HoneTube stock",
+    "createdAt": "2026-11-19T10:34:43.161Z",
+    "updatedAt": "2026-11-19T10:34:43.161Z"
+  },
+  {
+    "id": "rod-hone-45x55-8-90-1795084483161",
+    "sku": "ROD-HONE-45X55-8IN-90",
+    "name": "HoneTube",
+    "category": "HoneTube",
+    "diameterMm": "45x55",
+    "lengthIn": 8,
+    "lengthFt": 8,
+    "quantity": 1,
+    "notes": "Imported HoneTube stock",
+    "createdAt": "2026-11-19T10:34:43.161Z",
+    "updatedAt": "2026-11-19T10:34:43.161Z"
+  },
+  {
+    "id": "rod-hone-25x35-11-91-1795084483161",
+    "sku": "ROD-HONE-25X35-11IN-91",
+    "name": "HoneTube",
+    "category": "HoneTube",
+    "diameterMm": "25x35",
+    "lengthIn": 11,
+    "lengthFt": 11,
+    "quantity": 1,
+    "notes": "Imported HoneTube stock",
+    "createdAt": "2026-11-19T10:34:43.161Z",
+    "updatedAt": "2026-11-19T10:34:43.161Z"
+  },
+  {
+    "id": "rod-hone-25x35-8.5-92-1795084483161",
+    "sku": "ROD-HONE-25X35-9IN-92",
+    "name": "HoneTube",
+    "category": "HoneTube",
+    "diameterMm": "25x35",
+    "lengthIn": 8.5,
+    "lengthFt": 8.5,
+    "quantity": 1,
+    "notes": "Imported HoneTube stock",
+    "createdAt": "2026-11-19T10:34:43.161Z",
+    "updatedAt": "2026-11-19T10:34:43.161Z"
   }
 ]
