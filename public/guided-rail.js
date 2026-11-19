@@ -3644,18 +3644,6 @@
         <button class="btn-close-slip" onclick="window.close()" title="Close Preview">✕</button>
       </div>
     </div>
-
-    <div class="preview-hint">${isAssignByLocked ? 'You can edit Assign To before printing:' : 'You can edit Assign By and Assign To before printing:'}</div>
-
-    <div class="preview-field">
-      <label class="preview-label" for="inputAssignBy">Assign By : ${isAssignByLocked ? '<span style="font-size: 0.62rem; color: #64748b; font-weight: 700; margin-left: 4px;">(🔒 Locked)</span>' : ''}</label>
-      <input type="text" id="inputAssignBy" class="preview-input" value="${_escapeHtml(defaultAssignBy)}" placeholder="e.g. Roshni, Suman, Bhawna" ${isAssignByLocked ? 'readonly tabindex="-1" style="background: #f1f5f9; cursor: not-allowed; color: #334155; font-weight: 700; border-color: #cbd5e1;" title="Assign By is automatically set to your login account and cannot be modified."' : ''} />
-    </div>
-
-    <div class="preview-field">
-      <label class="preview-label" for="inputAssignTo">Assign To :</label>
-      <input type="text" id="inputAssignTo" class="preview-input" value="${_escapeHtml(defaultAssignTo)}" placeholder="e.g. Jai Parkash, Bhushan" />
-    </div>
   </div>
 
   <!-- THE RECEIPT SLIP -->
