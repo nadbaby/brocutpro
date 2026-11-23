@@ -885,6 +885,7 @@
       .replace(/"/g, '&quot;')
       .replace(/'/g, '&#39;');
   }
+  const escapeHtml = _escapeHtml;
 
   function openGrCutModal(stockId, cutLenMm, pieces) {
     const modal = document.getElementById('grCutModalOverlay');
@@ -1670,7 +1671,7 @@
               </svg>
               <span>Print Cut Slip</span>
             </button>
-            <button type="button" class="btn btn-primary" id="btnExecuteGrCutPlan" ${plan.steps.length === 0 ? 'disabled' : ''} style="display: inline-flex; align-items: center; gap: 0.5rem; background: linear-gradient(135deg, #6b8e23, #55731c); border-color: #55731c; border-radius: var(--radius-md); font-weight: 700; padding: 0.55rem 1.25rem; box-shadow: 0 4px 14px rgba(107, 142, 35, 0.35);">
+            <button type="button" class="btn btn-primary" id="btnExecuteGrCutPlan" onclick="if(window.openExecuteGrPlanModal)window.openExecuteGrPlanModal();" ${plan.steps.length === 0 ? 'disabled' : ''} style="display: inline-flex; align-items: center; gap: 0.5rem; background: linear-gradient(135deg, #6b8e23, #55731c); border-color: #55731c; border-radius: var(--radius-md); font-weight: 700; padding: 0.55rem 1.25rem; box-shadow: 0 4px 14px rgba(107, 142, 35, 0.35); cursor: pointer;">
               <span>✂️ Execute This Cutting Plan</span>
             </button>
           </div>
@@ -1749,7 +1750,7 @@
           <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 0.35rem;">
             <div style="display: flex; align-items: center; gap: 0.65rem;">
               <span style="background: #f0f7e6; color: #6b8e23; font-weight: 700; font-size: 0.78rem; padding: 0.2rem 0.55rem; border-radius: 6px;">Step: #${step.stepNum}</span>
-              <strong style="font-size: 0.95rem; color: #0f172a;">${escapeHtml(step.modelName)} (${fullLenInches} In / ${_fmtGrLenShort(step.barFullLengthMm)})</strong>
+              <strong style="font-size: 0.95rem; color: #0f172a;">${_escapeHtml(step.modelName)} (${fullLenInches} In / ${_fmtGrLenShort(step.barFullLengthMm)})</strong>
             </div>
             ${step.remainderMm > 0.1
               ? `<span style="background: #d1fae5; color: #059669; font-weight: 700; font-size: 0.78rem; padding: 0.25rem 0.75rem; border-radius: 9999px;">+${remLenInches} In (Offcut)</span>`
@@ -2314,6 +2315,18 @@
       if (e.target.closest('#btnExecuteGrCutPlan')) {
         e.preventDefault();
         openExecuteGrPlanModal();
+        return;
+      }
+
+      // 2i-2. Direct Click on Confirm Execute Plan button inside modal
+      if (e.target.closest('#btnConfirmExecuteGrPlan')) {
+        e.preventDefault();
+        const planForm = document.getElementById('executeGrPlanForm');
+        if (planForm && typeof planForm.requestSubmit === 'function') {
+          planForm.requestSubmit();
+        } else {
+          handleConfirmExecuteGrPlan(e);
+        }
         return;
       }
 
@@ -3803,6 +3816,7 @@
   window.closeGrCutModal = closeGrCutModal;
   window.openExecuteGrPlanModal = openExecuteGrPlanModal;
   window.closeExecuteGrPlanModal = closeExecuteGrPlanModal;
+  window.handleConfirmExecuteGrPlan = handleConfirmExecuteGrPlan;
   window.exportGuidedRailCsv = exportGuidedRailCsv;
   window.handleGuidedRailCsvImport = handleGuidedRailCsvImport;
   window.printGuidedRailCutSlip = printGuidedRailCutSlip;

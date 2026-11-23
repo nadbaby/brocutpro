@@ -5805,7 +5805,7 @@ export default function Home() {
       />
       {/* Guided Rail Module */}
       <Script
-        src="/guided-rail.js?v=127"
+        src="/guided-rail.js?v=128"
         strategy="afterInteractive"
         onLoad={() => {
           if (window.initGuidedRail) {
