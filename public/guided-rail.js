@@ -1721,91 +1721,118 @@
 
   // ── Modal & Execution Handlers for Guided Rail Cut Plan ───────────────────────
   function openExecuteGrPlanModal() {
+    console.log('[GuidedRail] openExecuteGrPlanModal invoked', { _activeGrCutPlan, _lastValidResult });
     if (!_activeGrCutPlan || !_activeGrCutPlan.steps || _activeGrCutPlan.steps.length === 0) {
-      _toast('No active cutting plan available to execute', 'warning');
+      if (_lastValidResult && _lastValidResult.requestedMm) {
+        _activeGrCutPlan = _calculateGrCutPlan(
+          _lastValidResult.modelName,
+          _lastValidResult.requestedMm,
+          _lastValidResult.pieces || 1,
+          _activeGrStrategy || 'full_length_first'
+        );
+      }
+    }
+    if (!_activeGrCutPlan || !_activeGrCutPlan.steps || _activeGrCutPlan.steps.length === 0) {
+      _toast('No active cutting plan available to execute. Please validate a length first.', 'warning');
       return;
     }
     const modal = document.getElementById('executeGrPlanModalOverlay');
     const container = document.getElementById('executeGrPlanSummaryDetails');
-    if (!modal || !container) return;
+    if (!modal || !container) {
+      console.error('[GuidedRail] Modal element #executeGrPlanModalOverlay or #executeGrPlanSummaryDetails not found in DOM!');
+      _toast('Cut plan modal not found in DOM', 'danger');
+      return;
+    }
 
-    const pieceMm = Number(_activeGrCutPlan.pieceLengthMm) || 0;
-    const pieceInches = (pieceMm / 25.4).toFixed(1);
+    try {
+      const pieceMm = Number(_activeGrCutPlan.pieceLengthMm) || 0;
+      const pieceInches = (pieceMm / 25.4).toFixed(1);
 
-    let detailsHtml = `
-      <div style="background: #f0f7e6; border-radius: 12px; padding: 0.85rem 1.25rem; font-weight: 700; color: #0f172a; margin-bottom: 0.85rem; display: flex; align-items: center; gap: 1.5rem; font-size: 0.92rem;">
-        <div>Pieces: ${_activeGrCutPlan.fulfilledPieces}</div>
-        <div style="color: #cbd5e1; font-weight: 400;">|</div>
-        <div>Length: ${pieceInches} In (${Math.round(pieceMm)} mm)</div>
-      </div>
-    `;
-
-    _activeGrCutPlan.steps.forEach(step => {
-      const fullLenInches = (step.barFullLengthMm / 25.4).toFixed(1);
-      const cutLenInches = (step.pieceLengthMm / 25.4).toFixed(1);
-      const remLenInches = (step.remainderMm / 25.4).toFixed(1);
-
-      detailsHtml += `
-        <div style="background: #ffffff; border: 1px solid #e2e8f0; border-radius: 12px; padding: 0.85rem 1rem; margin-bottom: 0.75rem; box-shadow: 0 1px 3px rgba(0,0,0,0.02);">
-          <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 0.35rem;">
-            <div style="display: flex; align-items: center; gap: 0.65rem;">
-              <span style="background: #f0f7e6; color: #6b8e23; font-weight: 700; font-size: 0.78rem; padding: 0.2rem 0.55rem; border-radius: 6px;">Step: #${step.stepNum}</span>
-              <strong style="font-size: 0.95rem; color: #0f172a;">${_escapeHtml(step.modelName)} (${fullLenInches} In / ${_fmtGrLenShort(step.barFullLengthMm)})</strong>
-            </div>
-            ${step.remainderMm > 0.1
-              ? `<span style="background: #d1fae5; color: #059669; font-weight: 700; font-size: 0.78rem; padding: 0.25rem 0.75rem; border-radius: 9999px;">+${remLenInches} In (Offcut)</span>`
-              : `<span style="background: #f1f5f9; color: #64748b; font-weight: 700; font-size: 0.78rem; padding: 0.25rem 0.75rem; border-radius: 9999px;">Exact (0 Scrap)</span>`
-            }
-          </div>
-          <div style="font-size: 0.82rem; color: #64748b; margin-left: 2px;">
-            Cut: ${step.piecesToCut} piece${step.piecesToCut > 1 ? 's' : ''} (${cutLenInches} In / ${_fmtGrLenShort(step.pieceLengthMm)})
-          </div>
+      let detailsHtml = `
+        <div style="background: #f0f7e6; border-radius: 12px; padding: 0.85rem 1.25rem; font-weight: 700; color: #0f172a; margin-bottom: 0.85rem; display: flex; align-items: center; gap: 1.5rem; font-size: 0.92rem;">
+          <div>Pieces: ${_activeGrCutPlan.fulfilledPieces}</div>
+          <div style="color: #cbd5e1; font-weight: 400;">|</div>
+          <div>Length: ${pieceInches} In (${Math.round(pieceMm)} mm)</div>
         </div>
       `;
-    });
 
-    container.innerHTML = detailsHtml;
-    const reasonInput = document.getElementById('grPlanReasonInput');
-    const createdBySelect = document.getElementById('grPlanCreatedBySelect');
-    const createdByInput = document.getElementById('grPlanCreatedByInput');
-    const assignedBySelect = document.getElementById('grPlanAssignedBySelect');
-    const assignedByInput = document.getElementById('grPlanAssignedByInput');
-    if (reasonInput) reasonInput.value = '';
+      _activeGrCutPlan.steps.forEach(step => {
+        const fullLenInches = (step.barFullLengthMm / 25.4).toFixed(1);
+        const cutLenInches = (step.pieceLengthMm / 25.4).toFixed(1);
+        const remLenInches = (step.remainderMm / 25.4).toFixed(1);
 
-    // Auto-fill logged-in user name
-    const sessionUser = _getCurrentSessionUser();
-    const currentUserName = sessionUser.name || 'Operator';
-    if (createdBySelect) {
-      let matched = false;
-      for (let i = 0; i < createdBySelect.options.length; i++) {
-        if (createdBySelect.options[i].value.toLowerCase() === currentUserName.toLowerCase()) {
-          createdBySelect.selectedIndex = i;
-          matched = true;
-          break;
+        detailsHtml += `
+          <div style="background: #ffffff; border: 1px solid #e2e8f0; border-radius: 12px; padding: 0.85rem 1rem; margin-bottom: 0.75rem; box-shadow: 0 1px 3px rgba(0,0,0,0.02);">
+            <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 0.35rem;">
+              <div style="display: flex; align-items: center; gap: 0.65rem;">
+                <span style="background: #f0f7e6; color: #6b8e23; font-weight: 700; font-size: 0.78rem; padding: 0.2rem 0.55rem; border-radius: 6px;">Step: #${step.stepNum}</span>
+                <strong style="font-size: 0.95rem; color: #0f172a;">${_escapeHtml(step.modelName)} (${fullLenInches} In / ${_fmtGrLenShort(step.barFullLengthMm)})</strong>
+              </div>
+              ${step.remainderMm > 0.1
+                ? `<span style="background: #d1fae5; color: #059669; font-weight: 700; font-size: 0.78rem; padding: 0.25rem 0.75rem; border-radius: 9999px;">+${remLenInches} In (Offcut)</span>`
+                : `<span style="background: #f1f5f9; color: #64748b; font-weight: 700; font-size: 0.78rem; padding: 0.25rem 0.75rem; border-radius: 9999px;">Exact (0 Scrap)</span>`
+              }
+            </div>
+            <div style="font-size: 0.82rem; color: #64748b; margin-left: 2px;">
+              Cut: ${step.piecesToCut} piece${step.piecesToCut > 1 ? 's' : ''} (${cutLenInches} In / ${_fmtGrLenShort(step.pieceLengthMm)})
+            </div>
+          </div>
+        `;
+      });
+
+      container.innerHTML = detailsHtml;
+      const reasonInput = document.getElementById('grPlanReasonInput');
+      const createdBySelect = document.getElementById('grPlanCreatedBySelect');
+      const createdByInput = document.getElementById('grPlanCreatedByInput');
+      const assignedBySelect = document.getElementById('grPlanAssignedBySelect');
+      const assignedByInput = document.getElementById('grPlanAssignedByInput');
+      if (reasonInput) reasonInput.value = '';
+
+      // Auto-fill logged-in user name
+      const sessionUser = _getCurrentSessionUser();
+      const currentUserName = sessionUser.name || 'Operator';
+      if (createdBySelect && createdBySelect.options) {
+        let matched = false;
+        for (let i = 0; i < createdBySelect.options.length; i++) {
+          const optVal = createdBySelect.options[i].value || '';
+          if (optVal.toLowerCase() === currentUserName.toLowerCase()) {
+            createdBySelect.selectedIndex = i;
+            matched = true;
+            break;
+          }
+        }
+        if (!matched && currentUserName) {
+          const opt = document.createElement('option');
+          opt.value = currentUserName;
+          opt.textContent = currentUserName;
+          opt.selected = true;
+          createdBySelect.appendChild(opt);
         }
       }
-      if (!matched && currentUserName) {
-        const opt = document.createElement('option');
-        opt.value = currentUserName;
-        opt.textContent = currentUserName;
-        opt.selected = true;
-        createdBySelect.appendChild(opt);
-      }
+      if (createdByInput) createdByInput.value = currentUserName;
+
+      if (assignedBySelect) assignedBySelect.value = '';
+      if (assignedByInput) assignedByInput.value = '';
+
+      const autoAddRemnants = document.getElementById('grPlanAutoAddRemnants');
+      if (autoAddRemnants) autoAddRemnants.checked = true;
+    } catch (err) {
+      console.error('[GuidedRail] Error populating cut plan modal:', err);
     }
-    if (createdByInput) createdByInput.value = currentUserName;
-
-    if (assignedBySelect) assignedBySelect.value = '';
-    if (assignedByInput) assignedByInput.value = '';
-
-    const autoAddRemnants = document.getElementById('grPlanAutoAddRemnants');
-    if (autoAddRemnants) autoAddRemnants.checked = true;
 
     modal.classList.remove('hidden');
+    modal.style.display = 'flex';
+    modal.style.zIndex = '99999';
+    modal.style.opacity = '1';
+    modal.style.visibility = 'visible';
   }
 
   function closeExecuteGrPlanModal() {
     const modal = document.getElementById('executeGrPlanModalOverlay');
-    if (modal) modal.classList.add('hidden');
+    if (modal) {
+      modal.classList.add('hidden');
+      modal.style.display = 'none';
+    }
   }
 
   async function handleConfirmExecuteGrPlan(e) {

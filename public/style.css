@@ -2026,7 +2026,7 @@ select:focus {
   justify-content: center;
   padding: 1.25rem 1rem;
   overflow-y: auto;
-  z-index: 100;
+  z-index: 99999 !important;
   animation: fadeIn 180ms cubic-bezier(0.16, 1, 0.3, 1) forwards;
   will-change: opacity;
   box-sizing: border-box;

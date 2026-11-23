@@ -1365,6 +1365,11 @@
 
   function openExecutePlanModal() {
     if (!activeCutPlan || !activeCutPlan.steps || activeCutPlan.steps.length === 0) {
+      if (lastSmartSearchQuery) {
+        executeSmartSearch(lastSmartSearchQuery.diameter, lastSmartSearchQuery.length, false, lastSmartSearchQuery.unit, lastSmartSearchQuery.pieces);
+      }
+    }
+    if (!activeCutPlan || !activeCutPlan.steps || activeCutPlan.steps.length === 0) {
       showToast('No cutting plan is currently active to execute', 'warning');
       return;
     }
@@ -1450,11 +1455,14 @@
     if (planAutoAddRemnants) planAutoAddRemnants.checked = true;
 
     executePlanModalOverlay.classList.remove('hidden');
+    executePlanModalOverlay.style.display = 'flex';
+    executePlanModalOverlay.style.zIndex = '99999';
   }
 
   function closeExecutePlanModal() {
     if (executePlanModalOverlay) {
       executePlanModalOverlay.classList.add('hidden');
+      executePlanModalOverlay.style.display = 'none';
     }
   }
 
