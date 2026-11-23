@@ -3174,7 +3174,60 @@ export default function Home() {
                   <tr>
                     <th>Rail Model</th>
                     <th className="text-center">Pitch (P)</th>
-                    <th className="text-right">Stock Bar Length (In / mm)</th>
+                    <th className="text-right" style={{ verticalAlign: 'middle' }}>
+                      <div style={{ display: 'inline-flex', alignItems: 'center', gap: '0.45rem', justifyContent: 'flex-end' }}>
+                        <span>Stock Bar Length</span>
+                        <button
+                          type="button"
+                          id="btnToggleGrStockUnit"
+                          onClick={() => {
+                            if (typeof window !== 'undefined' && (window as any).toggleGrStockTableUnit) {
+                              (window as any).toggleGrStockTableUnit();
+                            }
+                          }}
+                          title="Toggle length display unit (In / mm)"
+                          style={{
+                            display: 'inline-flex',
+                            alignItems: 'center',
+                            padding: '2px',
+                            background: '#f1f5f9',
+                            border: '1px solid #cbd5e1',
+                            borderRadius: '9999px',
+                            cursor: 'pointer',
+                            fontSize: '0.68rem',
+                            fontWeight: 700,
+                            userSelect: 'none',
+                            lineHeight: 1,
+                          }}
+                        >
+                          <span
+                            id="grStockUnitPillIn"
+                            style={{
+                              padding: '2px 7px',
+                              borderRadius: '9999px',
+                              transition: 'all 0.15s ease',
+                              background: 'transparent',
+                              color: '#64748b'
+                            }}
+                          >
+                            In
+                          </span>
+                          <span
+                            id="grStockUnitPillMm"
+                            style={{
+                              padding: '2px 7px',
+                              borderRadius: '9999px',
+                              transition: 'all 0.15s ease',
+                              background: '#6b8e23',
+                              color: '#ffffff',
+                              boxShadow: '0 1px 3px rgba(0,0,0,0.1)'
+                            }}
+                          >
+                            mm
+                          </span>
+                        </button>
+                      </div>
+                    </th>
                     <th className="text-right">Available Qty</th>
                     <th className="text-center" style={{ width: '100px' }}>Actions</th>
                   </tr>
@@ -3262,7 +3315,60 @@ export default function Home() {
                   <tr>
                     <th>Rod Model</th>
                     <th className="text-center">Diameter (mm)</th>
-                    <th className="text-right">Stock Bar Length (In / mm)</th>
+                    <th className="text-right" style={{ verticalAlign: 'middle' }}>
+                      <div style={{ display: 'inline-flex', alignItems: 'center', gap: '0.45rem', justifyContent: 'flex-end' }}>
+                        <span>Stock Bar Length</span>
+                        <button
+                          type="button"
+                          id="btnToggleGrStockUnit"
+                          onClick={() => {
+                            if (typeof window !== 'undefined' && (window as any).toggleGrStockTableUnit) {
+                              (window as any).toggleGrStockTableUnit();
+                            }
+                          }}
+                          title="Toggle length display unit (In / mm)"
+                          style={{
+                            display: 'inline-flex',
+                            alignItems: 'center',
+                            padding: '2px',
+                            background: '#f1f5f9',
+                            border: '1px solid #cbd5e1',
+                            borderRadius: '9999px',
+                            cursor: 'pointer',
+                            fontSize: '0.68rem',
+                            fontWeight: 700,
+                            userSelect: 'none',
+                            lineHeight: 1,
+                          }}
+                        >
+                          <span
+                            id="grStockUnitPillIn"
+                            style={{
+                              padding: '2px 7px',
+                              borderRadius: '9999px',
+                              transition: 'all 0.15s ease',
+                              background: 'transparent',
+                              color: '#64748b'
+                            }}
+                          >
+                            In
+                          </span>
+                          <span
+                            id="grStockUnitPillMm"
+                            style={{
+                              padding: '2px 7px',
+                              borderRadius: '9999px',
+                              transition: 'all 0.15s ease',
+                              background: '#6b8e23',
+                              color: '#ffffff',
+                              boxShadow: '0 1px 3px rgba(0,0,0,0.1)'
+                            }}
+                          >
+                            mm
+                          </span>
+                        </button>
+                      </div>
+                    </th>
                     <th className="text-right">Available Qty</th>
                     <th className="text-center" style={{ width: '100px' }}>Actions</th>
                   </tr>
@@ -5805,7 +5911,7 @@ export default function Home() {
       />
       {/* Guided Rail Module */}
       <Script
-        src="/guided-rail.js?v=131"
+        src="/guided-rail.js?v=132"
         strategy="afterInteractive"
         onLoad={() => {
           if (window.initGuidedRail) {

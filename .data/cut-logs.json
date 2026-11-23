@@ -1,1 +1,29 @@
-[]
+[
+  {
+    "quantity": 1,
+    "assignedBy": "",
+    "isRail": true,
+    "assignBy": "Bhawna",
+    "brand": "HIWIN",
+    "remainderIn": 40.16,
+    "remnantAdded": true,
+    "createdBy": "Bhawna",
+    "diameterMm": 60,
+    "originalLengthMm": 1200,
+    "cutLengthFt": 0.59,
+    "timestamp": 1795425129044,
+    "reason": "Multi-cut plan: 1 pc of 180 mm",
+    "pitchMm": 60,
+    "cutLengthIn": 7.09,
+    "originalLengthFt": 3.94,
+    "endMarginMm": 30,
+    "holesCount": 3,
+    "rodName": "Guided Rail HIWIN HGR160",
+    "assignTo": "",
+    "cutLengthMm": 180,
+    "id": "gr-cut-1795425129044-1-xhak",
+    "modelName": "HGR160",
+    "remainderMm": 1020,
+    "originalLengthIn": 47.24
+  }
+]

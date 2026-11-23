@@ -26,6 +26,7 @@
   let _railStock = [];                    // Storage inventory of guided rails
   let _selectedModel = null;              // currently selected GuidedRailModel
   let _grLengthUnit = 'mm';               // active length unit: 'mm' | 'in' | 'ft'
+  let _grStockTableLengthUnit = (typeof localStorage !== 'undefined' && localStorage.getItem('rodsync_gr_stock_unit')) || 'mm';
   let _eventsBound = false;
   let _lastValidResult = null;            // cached last valid layout for cut slip printing
   let _grKpiFilter = 'all';               // active KPI stock filter: 'all' | 'stock' | 'in_stock' | 'low_stock'
@@ -569,8 +570,39 @@
   }
 
   // ── Render Guided Rail Stock Inventory Table ──────────────────────────────────
+  function toggleGrStockTableUnit(forcedUnit) {
+    if (forcedUnit === 'in' || forcedUnit === 'mm') {
+      _grStockTableLengthUnit = forcedUnit;
+    } else {
+      _grStockTableLengthUnit = _grStockTableLengthUnit === 'mm' ? 'in' : 'mm';
+    }
+    try {
+      if (typeof localStorage !== 'undefined') {
+        localStorage.setItem('rodsync_gr_stock_unit', _grStockTableLengthUnit);
+      }
+    } catch (_) {}
+    _updateGrStockUnitPills();
+    _renderStockTable();
+  }
+
+  function _updateGrStockUnitPills() {
+    const pillIn = document.getElementById('grStockUnitPillIn');
+    const pillMm = document.getElementById('grStockUnitPillMm');
+    if (pillIn && pillMm) {
+      const isMm = _grStockTableLengthUnit === 'mm';
+      pillMm.style.background = isMm ? '#6b8e23' : 'transparent';
+      pillMm.style.color = isMm ? '#ffffff' : '#64748b';
+      pillMm.style.boxShadow = isMm ? '0 1px 3px rgba(0,0,0,0.1)' : 'none';
+
+      pillIn.style.background = !isMm ? '#6b8e23' : 'transparent';
+      pillIn.style.color = !isMm ? '#ffffff' : '#64748b';
+      pillIn.style.boxShadow = !isMm ? '0 1px 3px rgba(0,0,0,0.1)' : 'none';
+    }
+  }
+
   function _renderStockTable() {
     _updateGrKpis();
+    _updateGrStockUnitPills();
 
     const tbody = document.getElementById('grStockTableBody');
     const badge = document.getElementById('grTotalStockBarsBadge');
@@ -623,6 +655,12 @@
     }
 
     tbody.innerHTML = filtered.map(item => {
+      const lenMm = Number(item.lengthMm) || 0;
+      const lenIn = Number((lenMm / 25.4).toFixed(1));
+      const isMmPrimary = _grStockTableLengthUnit === 'mm';
+      const primaryDisplay = isMmPrimary ? `${lenMm} mm` : `${lenIn} In`;
+      const secondaryDisplay = isMmPrimary ? `${lenIn} In` : `${lenMm} mm`;
+
       return `
         <tr data-stock-id="${item.id}">
           <td>
@@ -632,7 +670,10 @@
             </div>
           </td>
           <td class="text-center font-mono" style="color: var(--text-secondary);">${item.pitchMm || 60} mm</td>
-          <td class="text-right font-mono" style="font-weight: 700; color: #6b8e23;">${item.lengthMm} mm</td>
+          <td class="text-right font-mono" style="font-weight: 700; color: #6b8e23;">
+            ${primaryDisplay}
+            <span style="font-size: 0.72rem; color: var(--text-muted); font-weight: 400; display: block;">${secondaryDisplay}</span>
+          </td>
           <td class="text-right">
             <span class="font-mono" style="font-weight: 700; font-size: 0.95rem; color: var(--text-main);">${item.quantity}</span>
           </td>
@@ -2331,6 +2372,23 @@
         return;
       }
 
+      // 2g-2. Toggle Guided Rail Stock Table Length Unit (In / mm)
+      if (e.target.closest('#btnToggleGrStockUnit')) {
+        e.preventDefault();
+        toggleGrStockTableUnit();
+        return;
+      }
+      if (e.target.closest('#grStockUnitPillIn')) {
+        e.preventDefault();
+        toggleGrStockTableUnit('in');
+        return;
+      }
+      if (e.target.closest('#grStockUnitPillMm')) {
+        e.preventDefault();
+        toggleGrStockTableUnit('mm');
+        return;
+      }
+
       // 2h. Print cut slip for active Guided Rail multi-cut plan
       if (e.target.closest('#btnGrPrintPlanSlip')) {
         e.preventDefault();
@@ -3837,6 +3895,7 @@
   window.setGrLengthUnit = setGrLengthUnit;
   window.onGrReset = _onReset;
   window.openAddRailStockModal = openAddRailStockModal;
+  window.toggleGrStockTableUnit = toggleGrStockTableUnit;
   window.openEditRailStockModal = openEditRailStockModal;
   window.closeRailStockModal = closeRailStockModal;
   window.openGrCutModal = openGrCutModal;
