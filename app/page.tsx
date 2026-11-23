@@ -423,6 +423,49 @@ export default function Home() {
     document.body.removeChild(link);
   };
 
+  const handleDownloadRodTemplate = () => {
+    const templateRows = [
+      ['Rod Name', 'Diameter (mm)', 'Length (in)', 'Quantity (Pieces)', 'Storage Rack / Notes'],
+      ['Chrome Rod', 20, 120.0, 5, 'Rack A-1'],
+      ['Chrome Rod', 25, 84.5, 10, 'Rack A-2'],
+      ['Hard Chrome Rod', 30, 72.0, 3, 'Rack A-3'],
+      ['Hard Chrome Rod', 40, 120.0, 4, 'Rack A-4'],
+      ['HoneTube', '50x50', 60.0, 4, 'Rack B-1'],
+      ['HoneTube', '55x65', 72.0, 2, 'Rack B-2'],
+      ['HoneTube', '100x100', 120.0, 6, 'Rack B-3']
+    ];
+
+    if (typeof window !== 'undefined' && (window as any).XLSX) {
+      try {
+        const XLSX = (window as any).XLSX;
+        const ws = XLSX.utils.aoa_to_sheet(templateRows);
+        ws['!cols'] = [
+          { wch: 20 },
+          { wch: 18 },
+          { wch: 16 },
+          { wch: 20 },
+          { wch: 24 }
+        ];
+        const wb = XLSX.utils.book_new();
+        XLSX.utils.book_append_sheet(wb, ws, 'Rod Stock Template');
+        XLSX.writeFile(wb, 'Rod_Inventory_Template.xlsx');
+        return;
+      } catch (err) {
+        console.warn('XLSX template generation fallback to CSV', err);
+      }
+    }
+
+    const csvContent = "data:text/csv;charset=utf-8,\uFEFF" + encodeURIComponent(
+      templateRows.map(r => r.map(c => `"${String(c).replace(/"/g, '""')}"`).join(',')).join('\r\n')
+    );
+    const link = document.createElement("a");
+    link.setAttribute("href", csvContent);
+    link.setAttribute("download", "Rod_Inventory_Template.csv");
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+  };
+
   useEffect(() => {
     if (typeof window !== 'undefined') {
       (window as any).switchSystemMode = handleSwitchSystem;
@@ -3261,24 +3304,17 @@ export default function Home() {
             <h3 className="modal-title">Bulk Import Inventory</h3>
             <button type="button" className="modal-close-btn" onClick={() => setIsImportModalOpen(false)} aria-label="Close dialog">&times;</button>
           </div>
-          <p className="modal-subtitle" style={{ marginBottom: '1.5rem' }}>Download the template (Format: <strong>Rod name, Diameter(mm), length(inch), quantity</strong>), or upload your completed .xlsx / .csv file.</p>
+          <p className="modal-subtitle" style={{ marginBottom: '1.5rem' }}>Download the template (Format: <strong>Rod Name, Diameter (mm), Length (in), Quantity (Pieces), Storage Rack / Notes</strong>), or upload your completed .xlsx / .csv file.</p>
 
           <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
             <button
+              type="button"
               className="btn btn-secondary"
-              onClick={() => {
-                const csvContent = "data:text/csv;charset=utf-8,Rod name,Diameter(mm),length(inch),quantity\nHard Chrome Rod,20,10.5,5\nHard Chrome Rod,25,12,8\nHard Chrome Rod,30,15.5,10";
-                const encodedUri = encodeURI(csvContent);
-                const link = document.createElement("a");
-                link.setAttribute("href", encodedUri);
-                link.setAttribute("download", "Rod_Inventory_Template.csv");
-                document.body.appendChild(link);
-                link.click();
-                link.remove();
-              }}
+              onClick={handleDownloadRodTemplate}
+              style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '0.5rem', fontWeight: 600 }}
             >
-              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" style={{ marginRight: '8px' }}><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path><polyline points="7 10 12 15 17 10"></polyline><line x1="12" y1="15" x2="12" y2="3"></line></svg>
-              Download Template (.csv)
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path><polyline points="7 10 12 15 17 10"></polyline><line x1="12" y1="15" x2="12" y2="3"></line></svg>
+              Download Rod Template (.xlsx / .csv)
             </button>
             <label className="btn btn-primary" style={{ textAlign: 'center', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
               <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" style={{ marginRight: '8px' }}><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path><polyline points="17 8 12 3 7 8"></polyline><line x1="12" y1="15" x2="12" y2="3"></line></svg>
