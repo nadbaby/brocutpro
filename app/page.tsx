@@ -4935,7 +4935,7 @@ export default function Home() {
                   height: '42px',
                   padding: '0 1.6rem',
                   borderRadius: '9999px',
-                  backgr  ound: '#0d9488',
+                  background: '#0d9488',
                   borderColor: '#0d9488',
                   color: '#ffffff',
                   fontWeight: 700,
