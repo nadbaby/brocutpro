@@ -2373,19 +2373,22 @@
       }
 
       // 2g-2. Toggle Guided Rail Stock Table Length Unit (In / mm)
-      if (e.target.closest('#btnToggleGrStockUnit')) {
-        e.preventDefault();
-        toggleGrStockTableUnit();
-        return;
-      }
       if (e.target.closest('#grStockUnitPillIn')) {
         e.preventDefault();
+        e.stopPropagation();
         toggleGrStockTableUnit('in');
         return;
       }
       if (e.target.closest('#grStockUnitPillMm')) {
         e.preventDefault();
+        e.stopPropagation();
         toggleGrStockTableUnit('mm');
+        return;
+      }
+      if (e.target.closest('#btnToggleGrStockUnit')) {
+        e.preventDefault();
+        e.stopPropagation();
+        toggleGrStockTableUnit();
         return;
       }
 
