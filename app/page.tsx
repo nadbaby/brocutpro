@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState, useRef } from 'react';
+import { useEffect, useState, useRef, useMemo } from 'react';
 import Script from 'next/script';
 import { useRouter } from 'next/navigation';
 import { db } from '@/lib/firebase';
@@ -1163,10 +1163,75 @@ export default function Home() {
     }
   };
 
-  const filteredDiameters = availableRodDiameters.filter((d) => {
-    if (!diaSearchQuery.trim()) return true;
-    return `${d} mm`.toLowerCase().includes(diaSearchQuery.toLowerCase()) || String(d).includes(diaSearchQuery);
-  });
+  const formatDiameterLabel = (d: string | number) => {
+    const s = String(d || '').trim();
+    if (!s) return '';
+    if (s.includes('x') || s.includes('X')) {
+      return `${s.replace(/x/i, ' × ')} mm`;
+    }
+    return `${s} mm`;
+  };
+
+  const filteredDiameters = useMemo(() => {
+    // 1. Filter rods by currently selected rod category
+    const allRodsList = adminRods.length > 0 
+      ? adminRods 
+      : (typeof window !== 'undefined' && Array.isArray((window as any).__INITIAL_RODS__) ? (window as any).__INITIAL_RODS__ : []);
+
+    const activeRods = (selectedRodCategory && selectedRodCategory !== 'all' && selectedRodCategory !== 'ALL')
+      ? allRodsList.filter((r: any) => String(r.category || r.name || '').trim().toLowerCase() === selectedRodCategory.trim().toLowerCase())
+      : allRodsList;
+
+    const rawList = activeRods.length > 0
+      ? Array.from(new Set(
+          activeRods
+            .map((r: any) => r.diameterMm !== undefined && r.diameterMm !== null ? String(r.diameterMm).trim() : '')
+            .filter((d: string) => d.length > 0 && d !== '300')
+        ))
+      : availableRodDiameters.map(d => String(d).trim());
+
+    const sorted = (rawList as string[]).sort((a: string, b: string) => {
+      const isDimA = a.includes('x') || a.includes('X');
+      const isDimB = b.includes('x') || b.includes('X');
+      if (!isDimA && isDimB) return -1;
+      if (isDimA && !isDimB) return 1;
+      if (isDimA && isDimB) {
+        const partsA = a.toLowerCase().split('x').map(p => parseFloat(p) || 0);
+        const partsB = b.toLowerCase().split('x').map(p => parseFloat(p) || 0);
+        if (partsA[0] !== partsB[0]) return partsA[0] - partsB[0];
+        return (partsA[1] || 0) - (partsB[1] || 0);
+      }
+      const numA = parseFloat(a) || 0;
+      const numB = parseFloat(b) || 0;
+      if (numA !== numB) return numA - numB;
+      return a.localeCompare(b);
+    });
+
+    if (!diaSearchQuery.trim()) return sorted;
+    const q = diaSearchQuery.toLowerCase().trim();
+    return sorted.filter((d) => {
+      const label = formatDiameterLabel(d).toLowerCase();
+      return label.includes(q) || String(d).toLowerCase().includes(q);
+    });
+  }, [adminRods, availableRodDiameters, selectedRodCategory, diaSearchQuery]);
+
+  // Keep selectedDiameter synchronized with the filtered list
+  useEffect(() => {
+    if (filteredDiameters.length > 0) {
+      if (!selectedDiameter || !filteredDiameters.some((d: any) => String(d).toLowerCase() === String(selectedDiameter).toLowerCase())) {
+        const next = String(filteredDiameters[0]);
+        setSelectedDiameter(next);
+        const inp = document.getElementById('searchDiameterInput') as HTMLInputElement | null;
+        if (inp && inp.value !== next) {
+          inp.value = next;
+          inp.dispatchEvent(new Event('input', { bubbles: true }));
+          inp.dispatchEvent(new Event('change', { bubbles: true }));
+        }
+      }
+    } else {
+      setSelectedDiameter('');
+    }
+  }, [filteredDiameters, selectedDiameter]);
 
   const filteredAdminRods = adminRods.filter((r: any) => {
     if (adminSelectedCat !== 'all') {
@@ -2377,7 +2442,7 @@ export default function Home() {
                     aria-expanded={isDiaDropdownOpen}
                     title="Select required diameter (from database inventory)"
                   >
-                    <span>{selectedDiameter ? `${selectedDiameter} mm` : (availableRodDiameters.length > 0 ? 'Select diameter' : 'No diameters in DB')}</span>
+                    <span>{selectedDiameter ? formatDiameterLabel(selectedDiameter) : (filteredDiameters.length > 0 ? 'Select diameter' : 'No stock in DB')}</span>
                     <svg
                       className={`custom-dia-chevron ${isDiaDropdownOpen ? 'open' : ''}`}
                       viewBox="0 0 24 24"
@@ -2429,7 +2494,7 @@ export default function Home() {
                       </div>
 
                       <div className="custom-dia-options-list">
-                        {filteredDiameters.map((d) => {
+                        {filteredDiameters.map((d: any) => {
                           const isSelected = String(selectedDiameter) === String(d);
                           return (
                             <div
@@ -2441,7 +2506,7 @@ export default function Home() {
                             >
                               <div className="custom-dia-option-left">
                                 <span className={`custom-dia-radio-ring ${isSelected ? 'checked' : ''}`}></span>
-                                <span className="custom-dia-option-label">{d} mm</span>
+                                <span className="custom-dia-option-label">{formatDiameterLabel(d)}</span>
                               </div>
                               {isSelected && (
                                 <svg
@@ -5694,7 +5759,7 @@ export default function Home() {
 
       {/* We load the script with afterInteractive strategy and trigger initialization on load */}
       <Script
-        src="/script.js?v=125"
+        src="/script.js?v=126"
         strategy="afterInteractive"
         onLoad={() => {
           if (window.initVanillaApp) {
@@ -5704,7 +5769,7 @@ export default function Home() {
       />
       {/* Guided Rail Module */}
       <Script
-        src="/guided-rail.js?v=125"
+        src="/guided-rail.js?v=126"
         strategy="afterInteractive"
         onLoad={() => {
           if (window.initGuidedRail) {

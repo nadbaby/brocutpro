@@ -154,7 +154,7 @@
   let executePlanSummaryDetails, planAutoAddRemnants, planReasonInput, planCreatedByInput, planAssignedByInput, btnConfirmExecutePlan;
   let activeCutPlan = null;
   let activeCutStrategy = 'full_length_first';
-  let _rodCategoryFilter = 'all';
+  let _rodCategoryFilter = 'Chrome Rod';
   let isMatchingTableVisible = false;
   let cutLogsModalOverlay, btnOpenCutLogsModal, btnCloseCutLogsModal, btnCloseCutLogsBottom, cutLogsBadge;
   let cutLogsTableBody, cutLogsEmptyState, filterCutLogsInput, btnExportCutLogsCsv, btnClearCutLogs;
@@ -590,10 +590,29 @@
   function sortDiameters(a, b) {
     const sA = String(a).trim();
     const sB = String(b).trim();
+    const isDimA = sA.includes('x') || sA.includes('X');
+    const isDimB = sB.includes('x') || sB.includes('X');
+    if (!isDimA && isDimB) return -1;
+    if (isDimA && !isDimB) return 1;
+    if (isDimA && isDimB) {
+      const partsA = sA.toLowerCase().split('x').map(p => parseFloat(p) || 0);
+      const partsB = b.toLowerCase().split('x').map(p => parseFloat(p) || 0);
+      if (partsA[0] !== partsB[0]) return partsA[0] - partsB[0];
+      return (partsA[1] || 0) - (partsB[1] || 0);
+    }
     const numA = parseFloat(sA) || 0;
     const numB = parseFloat(sB) || 0;
     if (numA !== numB) return numA - numB;
     return sA.localeCompare(sB);
+  }
+
+  function formatDiameterDisplay(d) {
+    const s = String(d || '').trim();
+    if (!s) return '—';
+    if (s.includes('x') || s.includes('X')) {
+      return s.replace(/x/i, ' × ') + ' mm';
+    }
+    return s + ' mm';
   }
 
   // --- DATA STORAGE & PERSISTENCE (PURE FIREBASE CLOUD DATABASE) ---
@@ -961,18 +980,17 @@
       const lenIn = getRodLength(rod);
       const lenMm = (lenIn * 25.4).toFixed(1);
       const diaVal = rod.diameterMm !== undefined && rod.diameterMm !== null ? String(rod.diameterMm).trim() : '';
-      const modelTag = diaVal ? `${diaVal} mm` : 'Rod';
+      const diaFormatted = formatDiameterDisplay(diaVal);
       const rodCat = rod.name || rod.category || 'Rod';
 
       tr.innerHTML = `
         <td>
           <div style="display: flex; align-items: center; gap: 0.5rem; flex-wrap: wrap;">
             <span class="cr-category-badge-tag">${rodCat}</span>
-            <span class="cr-spec-badge-tag">${modelTag}</span>
           </div>
         </td>
         <td class="text-center font-mono" style="font-weight: 700; color: #0d9488;">
-          ${diaVal ? diaVal + ' mm' : '—'}
+          ${diaFormatted}
         </td>
         <td class="text-right font-mono" style="font-weight: 700; color: #0d9488;">
           ${formatDisplayLength(lenIn)} In
@@ -5802,6 +5820,9 @@
     // Update #searchRodCategorySelect
     const catSel = document.getElementById('searchRodCategorySelect');
     if (catSel) {
+      if (catSel.value) {
+        _rodCategoryFilter = catSel.value;
+      }
       if (catSel.options.length === 0) {
         namesToUse.forEach(name => {
           const opt = document.createElement('option');
@@ -5930,7 +5951,7 @@
         btn.type = 'button';
         btn.className = 'btn-dia-preset' + (areDiasEqual(currentDia, dia) ? ' active' : '');
         btn.dataset.dia = dia;
-        btn.textContent = `${dia}mm`;
+        btn.textContent = formatDiameterDisplay(dia);
         diaChipsCont.appendChild(btn);
       });
     }
@@ -5947,7 +5968,7 @@
       const count = activeRods.filter(r => areDiasEqual(r.diameterMm, dia)).length;
       const opt = document.createElement('option');
       opt.value = dia;
-      opt.label = `${dia} mm (${count} in database)`;
+      opt.label = `${formatDiameterDisplay(dia)} (${count} in database)`;
       diaDatalist.appendChild(opt);
     });
     if (searchDiameterInput) {
