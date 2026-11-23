@@ -1071,6 +1071,7 @@
       // Update in-memory stock immediately from authoritative backend response
       if (Array.isArray(data.stock)) {
         _railStock = data.stock;
+        window.dispatchEvent(new CustomEvent('syncRailStockToBackend', { detail: _railStock }));
       }
 
       // Append returned log(s) to cut logs state and sync to Firebase
@@ -1851,6 +1852,7 @@
 
       if (Array.isArray(data.stock)) {
         _railStock = data.stock;
+        window.dispatchEvent(new CustomEvent('syncRailStockToBackend', { detail: _railStock }));
       }
 
       if (Array.isArray(data.logs)) {
@@ -2803,40 +2805,42 @@
 
     // Find header row (skipping banner/title rows like "Rail")
     let headerRowIndex = -1;
-    let catIdx = -1, modelIdx = -1, lengthIdx = -1, qtyIdx = -1, pitchIdx = -1, notesIdx = -1, skuIdx = -1;
+    let catIdx = -1, modelIdx = -1, diaIdx = -1, lengthIdx = -1, qtyIdx = -1, pitchIdx = -1, notesIdx = -1, skuIdx = -1;
     let isLengthInches = false;
 
     for (let r = 0; r < Math.min(5, lines.length); r++) {
       const headerParts = _parseCsvRow(lines[r]).map(h => (h || '').trim().toLowerCase());
-      let cI = -1, mI = -1, lI = -1, qI = -1, pI = -1, nI = -1, sI = -1;
+      let cI = -1, mI = -1, dI = -1, lI = -1, qI = -1, pI = -1, nI = -1, sI = -1;
       let lInches = false;
 
       headerParts.forEach((col, idx) => {
         const lower = col.toLowerCase().trim();
         const clean = lower.replace(/[^a-z0-9]/g, '');
-        if (clean.includes('pcc') || clean.includes('pitch')) {
+        if (clean.includes('pcc') || clean.includes('pitch') || clean.includes('hole')) {
           pI = idx;
         } else if (clean.includes('piece') || clean.includes('pcs') || clean.includes('qty') || clean.includes('quant') || clean.includes('count')) {
           qI = idx;
-        } else if (clean.includes('dia') || clean.includes('model') || clean.includes('profile') || clean.includes('spec') || clean.includes('size')) {
+        } else if (clean.includes('dia') || clean.includes('diameter') || clean.includes('width') || clean.includes('thickness')) {
+          dI = idx;
+        } else if (clean.includes('model') || clean.includes('railname') || clean.includes('name') || clean.includes('profile') || clean.includes('spec') || clean.includes('series')) {
           mI = idx;
         } else if (clean.includes('len') || clean.includes('length')) {
           lI = idx;
           if (lower.includes('(in)') || lower.includes('inch') || clean.endsWith('in')) {
             lInches = true;
           }
-        } else if (clean.includes('subcat') || clean.includes('sub') || clean.includes('cat') || clean.includes('brand') || clean.includes('rail')) {
+        } else if (clean.includes('subcat') || clean.includes('sub') || clean.includes('cat') || clean.includes('brand') || clean.includes('rail') || clean.includes('make')) {
           cI = idx;
-        } else if (clean.includes('note') || clean.includes('rack') || clean.includes('loc')) {
+        } else if (clean.includes('note') || clean.includes('rack') || clean.includes('loc') || clean.includes('storage') || clean.includes('remark')) {
           nI = idx;
         } else if (clean.includes('sku') || clean.includes('code')) {
           sI = idx;
         }
       });
 
-      if (mI !== -1 && (lI !== -1 || qI !== -1 || pI !== -1)) {
+      if ((mI !== -1 || dI !== -1) && (lI !== -1 || qI !== -1 || pI !== -1)) {
         headerRowIndex = r;
-        catIdx = cI; modelIdx = mI; lengthIdx = lI; qtyIdx = qI; pitchIdx = pI; notesIdx = nI; skuIdx = sI;
+        catIdx = cI; modelIdx = mI; diaIdx = dI; lengthIdx = lI; qtyIdx = qI; pitchIdx = pI; notesIdx = nI; skuIdx = sI;
         isLengthInches = lInches;
         break;
       }
@@ -2847,7 +2851,7 @@
       headerRowIndex = lines[0].includes(',') || lines[0].includes('\t') || lines[0].includes(';') ? 0 : 1;
       catIdx = 0; modelIdx = 1; lengthIdx = 2; qtyIdx = 3; pitchIdx = 4;
     } else {
-      if (catIdx === -1 && modelIdx !== 0) catIdx = 0;
+      if (catIdx === -1 && modelIdx !== 0 && diaIdx !== 0) catIdx = 0;
       if (qtyIdx === -1) {
         const rowCols = _parseCsvRow(lines[headerRowIndex]);
         if (rowCols.length >= 4 && lengthIdx !== 3 && modelIdx !== 3 && catIdx !== 3) qtyIdx = 3;
@@ -2863,8 +2867,18 @@
 
       const rawCat = (catIdx >= 0 && parts[catIdx] ? parts[catIdx].trim() : '').toUpperCase();
       let rawModel = (modelIdx >= 0 && parts[modelIdx] ? parts[modelIdx] : '').trim().toUpperCase().replace(/\s+/g, '');
-      if (/^\d+$/.test(rawModel)) {
+      const rawDia = (diaIdx >= 0 && parts[diaIdx] ? parts[diaIdx] : '').trim().replace(/[^0-9.]/g, '');
+      const parsedDia = parseFloat(rawDia);
+
+      // Smart Model Name resolution
+      if (!rawModel && !isNaN(parsedDia) && parsedDia > 0) {
+        rawModel = 'HGR' + Math.round(parsedDia);
+      } else if (rawModel && !isNaN(parsedDia) && parsedDia > 0 && !/\d/.test(rawModel)) {
+        rawModel = rawModel + Math.round(parsedDia);
+      } else if (/^\d+$/.test(rawModel)) {
         rawModel = 'HGR' + rawModel;
+      } else if (!rawModel && diaIdx === -1 && modelIdx !== -1) {
+        continue;
       }
 
       const rawPitch = pitchIdx >= 0 ? parseFloat(parts[pitchIdx]) : NaN;
@@ -2885,7 +2899,7 @@
 
       const matched = _railModels.find(m => m.modelName.toUpperCase() === rawModel);
       const pitchMm = !isNaN(rawPitch) && rawPitch > 0 ? rawPitch : (matched ? matched.pitchMm : 60);
-      let railWidthMm = matched ? matched.railWidthMm : 0;
+      let railWidthMm = matched ? matched.railWidthMm : (!isNaN(parsedDia) && parsedDia > 0 ? parsedDia : 0);
       let railHeightMm = matched ? matched.railHeightMm : 0;
       if (railWidthMm === 0) {
         const numMatch = rawModel.match(/\d+/);
@@ -3641,7 +3655,6 @@
             <div>Slip</div>
           </div>
         </button>
-        <button class="btn-close-slip" onclick="window.close()" title="Close Preview">✕</button>
       </div>
     </div>
   </div>
@@ -3806,6 +3819,7 @@
   };
   window.loadRailStock = _loadRailStock;
   window._loadRailStock = _loadRailStock;
+  window.refreshRailStockData = window.setGuidedRailStock;
 
   // Auto-init on script evaluation
   if (typeof document !== 'undefined') {

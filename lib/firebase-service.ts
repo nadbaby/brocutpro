@@ -234,13 +234,13 @@ export async function getFirebaseInventory(): Promise<{
 
     if (snap.exists()) {
       const data = snap.data();
-      if (Array.isArray(data.rods) && data.rods.length > 0) {
+      if (Array.isArray(data.rods)) {
         rods = data.rods.filter((r: any) => Number(r.diameterMm) !== 300);
         memoryRods = rods;
         writeJsonFile(RODS_FILE, memoryRods);
         fromFirebase = true;
       }
-      if (Array.isArray(data.railStock) && data.railStock.length > 0) {
+      if (Array.isArray(data.railStock)) {
         railStock = data.railStock.filter((r: any) => (Number(r.quantity) || 0) > 0 && (Number(r.lengthMm) || 0) > 0);
         memoryRails = railStock;
         writeJsonFile(RAILS_FILE, memoryRails);

@@ -379,11 +379,45 @@ export default function Home() {
   };
 
   const handleDownloadGrTemplate = () => {
-    const csvContent = "data:text/csv;charset=utf-8,Rail\nSub Category,Diameter (mm),Length (in),Pieces,PCC\nFinhy,Hgr 15,12.53,8,30\nHiwin,20,34.54,11,60\nPmi,egr 35,464,1,100";
-    const encodedUri = encodeURI(csvContent);
+    const templateRows = [
+      ['Brand', 'Rail Name', 'Rail Diameter (mm)', 'Length (in)', 'Pieces', 'PCC / Hole Pitch (mm)', 'Storage Rack / Notes'],
+      ['HIWIN', 'HGR 15', 15, 120.0, 8, 60, 'Rack A-1'],
+      ['HIWIN', 'HGR 20', 20, 150.0, 12, 60, 'Rack A-2'],
+      ['PMI', 'HGR 25', 25, 98.5, 6, 60, 'Rack B-1'],
+      ['FINHY', 'HGR 30', 30, 80.0, 4, 80, 'Rack B-2'],
+      ['HIWIN', 'HGR 45', 45, 120.0, 5, 105, 'Rack C-1'],
+      ['PMI', 'HGR 55', 53, 160.0, 3, 120, 'Rack C-2'],
+      ['HIWIN', 'HGR 65', 63, 160.0, 2, 150, 'Rack D-1'],
+    ];
+
+    if (typeof window !== 'undefined' && (window as any).XLSX) {
+      try {
+        const XLSX = (window as any).XLSX;
+        const ws = XLSX.utils.aoa_to_sheet(templateRows);
+        ws['!cols'] = [
+          { wch: 14 },
+          { wch: 16 },
+          { wch: 20 },
+          { wch: 15 },
+          { wch: 12 },
+          { wch: 24 },
+          { wch: 24 }
+        ];
+        const wb = XLSX.utils.book_new();
+        XLSX.utils.book_append_sheet(wb, ws, 'Rail Stock Template');
+        XLSX.writeFile(wb, 'Guided_Rail_Inventory_Template.xlsx');
+        return;
+      } catch (err) {
+        console.warn('XLSX template generation fallback to CSV', err);
+      }
+    }
+
+    const csvContent = "data:text/csv;charset=utf-8,\uFEFF" + encodeURIComponent(
+      templateRows.map(r => r.map(c => `"${String(c).replace(/"/g, '""')}"`).join(',')).join('\r\n')
+    );
     const link = document.createElement("a");
-    link.setAttribute("href", encodedUri);
-    link.setAttribute("download", "Guided_Rail_Import_Template.csv");
+    link.setAttribute("href", csvContent);
+    link.setAttribute("download", "Guided_Rail_Inventory_Template.csv");
     document.body.appendChild(link);
     link.click();
     document.body.removeChild(link);
@@ -824,6 +858,30 @@ export default function Home() {
                 if (window.updateRodNamesDropdown) window.updateRodNamesDropdown(rodCats);
                 if (window.updateRailBrandsDropdown) window.updateRailBrandsDropdown(railCats);
               }
+            }
+
+            if (Array.isArray(data.rods)) {
+              setAdminRods(data.rods);
+              if (typeof window !== 'undefined') {
+                const win = window as any;
+                win.__INITIAL_RODS__ = data.rods;
+                if (typeof win.refreshRodsData === 'function') win.refreshRodsData(data.rods);
+              }
+            }
+
+            if (Array.isArray(data.railStock)) {
+              setAdminRails(data.railStock);
+              if (typeof window !== 'undefined') {
+                const win = window as any;
+                win.__INITIAL_RAIL_STOCK__ = data.railStock;
+                if (typeof win.refreshRailStockData === 'function') win.refreshRailStockData(data.railStock);
+              }
+            }
+
+            if (Array.isArray(data.cutLogs) && typeof window !== 'undefined') {
+              const win = window as any;
+              win.__INITIAL_CUT_LOGS__ = data.cutLogs;
+              if (typeof win.refreshCutLogsData === 'function') win.refreshCutLogsData(data.cutLogs);
             }
           }
         }, (err) => {
@@ -3185,21 +3243,23 @@ export default function Home() {
             </div>
             <button type="button" className="modal-close-btn" onClick={() => setIsGrImportModalOpen(false)} aria-label="Close dialog">&times;</button>
           </div>
-          <p className="modal-subtitle" style={{ margin: '1rem 0 1.5rem' }}>Download the template (Format: <strong>Sub Category, Diameter (mm), Length (in), Pieces, PCC</strong>), or upload your completed .xlsx / .csv file.</p>
+          <p className="modal-subtitle" style={{ margin: '1rem 0 1.5rem' }}>
+            Download the Excel template (Columns: <strong>Brand, Rail Name, Rail Diameter (mm), Length (in), Pieces, PCC / Hole Pitch (mm), Storage Rack / Notes</strong>), fill in your stock, and upload your completed .xlsx / .csv file.
+          </p>
 
           <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
             <button
               type="button"
               className="btn btn-secondary"
               onClick={handleDownloadGrTemplate}
-              style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '0.5rem' }}
+              style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '0.5rem', fontWeight: 600 }}
             >
               <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path><polyline points="7 10 12 15 17 10"></polyline><line x1="12" y1="15" x2="12" y2="3"></line></svg>
-              Download Guided Rail Template (.csv)
+              Download Guided Rail Template (.xlsx / .csv)
             </button>
-            <label className="btn btn-primary" style={{ textAlign: 'center', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '0.5rem', background: 'linear-gradient(135deg, #6b8e23, #55731c)', borderColor: '#55731c' }}>
+            <label className="btn btn-primary" style={{ textAlign: 'center', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '0.5rem', background: 'linear-gradient(135deg, #6b8e23, #55731c)', borderColor: '#55731c', fontWeight: 600 }}>
               <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path><polyline points="17 8 12 3 7 8"></polyline><line x1="12" y1="3" x2="12" y2="15"></line></svg>
-              Upload Bulk Guided Rail (.csv, .xlsx)
+              Upload Bulk Guided Rail (.xlsx, .csv)
               <input type="file" id="grCsvFileInput" accept=".csv,.xlsx,.xls" className="hidden-input" onChange={() => setIsGrImportModalOpen(false)} />
             </label>
           </div>
@@ -5634,7 +5694,7 @@ export default function Home() {
 
       {/* We load the script with afterInteractive strategy and trigger initialization on load */}
       <Script
-        src="/script.js?v=119"
+        src="/script.js?v=125"
         strategy="afterInteractive"
         onLoad={() => {
           if (window.initVanillaApp) {
@@ -5644,7 +5704,7 @@ export default function Home() {
       />
       {/* Guided Rail Module */}
       <Script
-        src="/guided-rail.js?v=123"
+        src="/guided-rail.js?v=125"
         strategy="afterInteractive"
         onLoad={() => {
           if (window.initGuidedRail) {

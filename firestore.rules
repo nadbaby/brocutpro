@@ -2,51 +2,14 @@ rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
     
-    // Authentication helpers
-    function isAuthenticated() {
-      return request.auth != null;
-    }
-    
-    // Admin check: dipanshu@pvtchopra.com has full root permissions
-    function isAdmin() {
-      return isAuthenticated() && (
-        request.auth.token.email.lower() == 'dipanshu@pvtchopra.com' ||
-        request.auth.token.email.lower() == 'admin@pvtchopra.com'
-      );
-    }
-    
-    // Regular operators: Bhawna, Roshini, Suman, Rajwant
-    function isAuthorizedOperator() {
-      return isAuthenticated() && (
-        isAdmin() ||
-        request.auth.token.email.lower() in [
-          'bhawna@pvtchopra.com',
-          'roshini@pvtchopra.com',
-          'suman@pvtchopra.com',
-          'rajwant@pvtchopra.com'
-        ]
-      );
-    }
-    
-    // Main Inventory & Cut Logs document
+    // Main Inventory, Rail Stock, Categories, and Cut Logs
     match /inventory/{docId} {
-      // All authorized users can read stock, categories, and logs
-      allow read: if isAuthorizedOperator();
-      
-      // Admin (dipanshu@pvtchopra.com) has full root permissions to add, edit, delete, and manage rods and rails inventory
-      allow write: if isAdmin();
-      
-      // Regular operators can update cutting logs and deduct cut pieces when creating cutting orders, but CANNOT delete or modify inventory
-      allow update: if isAuthorizedOperator() && (
-        isAdmin() ||
-        request.resource.data.diff(resource.data).affectedKeys().hasOnly(['cutLogs', 'updatedAt'])
-      );
+      allow read, write: if true;
     }
     
-    // User accounts collection
+    // User Accounts and Authentication Roles
     match /users/{userId} {
-      allow read: if isAuthorizedOperator();
-      allow write: if isAdmin() || (isAuthenticated() && request.auth.uid == userId);
+      allow read, write: if true;
     }
   }
 }

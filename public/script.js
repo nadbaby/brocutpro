@@ -3086,7 +3086,6 @@
             <div>Slip</div>
           </div>
         </button>
-        <button class="btn-close-slip" onclick="window.close()" title="Close Preview">✕</button>
       </div>
     </div>
   </div>
@@ -6291,6 +6290,15 @@
       });
     });
   }
+
+  window.refreshRodsData = function(newRods) {
+    if (Array.isArray(newRods)) {
+      rods = newRods.filter(r => Number(r.diameterMm) !== 300);
+      renderInventoryTable();
+      renderQuickDiameterChips();
+      updateDynamicRodInputsFromStock();
+    }
+  };
 
   window.initAllCustomDropdowns = initAllCustomDropdowns;
   window.enhanceSelectToCustomDropdown = enhanceSelectToCustomDropdown;
