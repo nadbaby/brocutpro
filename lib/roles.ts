@@ -26,6 +26,7 @@ export const REGULAR_USERS: Record<string, { name: string }> = {
   'roshini@pvtchopra.com': { name: 'Roshini' },
   'suman@pvtchopra.com': { name: 'Suman' },
   'rajwant@pvtchopra.com': { name: 'Rajwant' },
+  'mamta@pvtchopra.com': { name: 'Mamta' },
 };
 
 export function getUserRoleProfile(emailRaw?: string | null): UserRoleProfile {
@@ -45,6 +46,8 @@ export function getUserRoleProfile(emailRaw?: string | null): UserRoleProfile {
     name = 'Suman';
   } else if (email.includes('rajwant')) {
     name = 'Rajwant';
+  } else if (email.includes('mamta')) {
+    name = 'Mamta';
   } else if (email) {
     const prefix = email.split('@')[0].replace(/[._\d]/g, ' ').trim();
     name = prefix ? (prefix.charAt(0).toUpperCase() + prefix.slice(1)) : 'Operator';

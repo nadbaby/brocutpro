@@ -56,6 +56,8 @@
     if (clean.includes('roshni') || clean.includes('roshini')) return { email: clean, name: 'Roshini', isLocked: true };
     if (clean.includes('suman')) return { email: clean, name: 'Suman', isLocked: true };
     if (clean.includes('bhawna')) return { email: clean, name: 'Bhawna', isLocked: true };
+    if (clean.includes('rajwant')) return { email: clean, name: 'Rajwant', isLocked: true };
+    if (clean.includes('mamta')) return { email: clean, name: 'Mamta', isLocked: true };
     if (clean.includes('admin')) return { email: clean, name: 'Admin', isLocked: true };
     if (clean) {
       const prefix = clean.split('@')[0].replace(/[._\d]/g, ' ').trim();
@@ -3194,6 +3196,8 @@
           if (clean.includes('roshni') || clean.includes('roshini')) return { email: clean, name: 'Roshini', isLocked: true };
           if (clean.includes('suman')) return { email: clean, name: 'Suman', isLocked: true };
           if (clean.includes('bhawna')) return { email: clean, name: 'Bhawna', isLocked: true };
+          if (clean.includes('rajwant')) return { email: clean, name: 'Rajwant', isLocked: true };
+          if (clean.includes('mamta')) return { email: clean, name: 'Mamta', isLocked: true };
           if (clean) {
             const prefix = clean.split('@')[0].replace(/[._\d]/g, ' ').trim();
             const formatted = prefix ? (prefix.charAt(0).toUpperCase() + prefix.slice(1)) : 'User';
