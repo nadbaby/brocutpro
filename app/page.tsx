@@ -4935,7 +4935,7 @@ export default function Home() {
                   height: '42px',
                   padding: '0 1.6rem',
                   borderRadius: '9999px',
-                  background: '#0d9488',
+                  backgr  ound: '#0d9488',
                   borderColor: '#0d9488',
                   color: '#ffffff',
                   fontWeight: 700,
@@ -5795,7 +5795,7 @@ export default function Home() {
 
       {/* We load the script with afterInteractive strategy and trigger initialization on load */}
       <Script
-        src="/script.js?v=130"
+        src="/script.js?v=131"
         strategy="afterInteractive"
         onLoad={() => {
           if (window.initVanillaApp) {
@@ -5805,7 +5805,7 @@ export default function Home() {
       />
       {/* Guided Rail Module */}
       <Script
-        src="/guided-rail.js?v=130"
+        src="/guided-rail.js?v=131"
         strategy="afterInteractive"
         onLoad={() => {
           if (window.initGuidedRail) {

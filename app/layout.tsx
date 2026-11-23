@@ -29,6 +29,26 @@ export default function RootLayout({
               document.documentElement.setAttribute('data-theme', 'light');
               document.documentElement.setAttribute('data-theme-mode', 'light');
               try { localStorage.setItem('rodsync_theme', 'light'); } catch(e){}
+              
+              // Global HTML escape helper failsafe for all scripts and cached bundles
+              window.escapeHtml = function(str) {
+                if (!str) return '';
+                return String(str)
+                  .replace(/&/g, '&amp;')
+                  .replace(/</g, '&lt;')
+                  .replace(/>/g, '&gt;')
+                  .replace(/"/g, '&quot;')
+                  .replace(/'/g, '&#39;');
+              };
+              window._escapeHtml = window.escapeHtml;
+
+              // Unregister any stale service workers
+              if (typeof navigator !== 'undefined' && 'serviceWorker' in navigator) {
+                navigator.serviceWorker.getRegistrations().then(function(regs) {
+                  for (var i = 0; i < regs.length; i++) regs[i].unregister();
+                }).catch(function(){});
+              }
+
               if (typeof Node !== 'undefined' && Node.prototype) {
                 const origRemove = Node.prototype.removeChild;
                 Node.prototype.removeChild = function(child) {
