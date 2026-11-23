@@ -1492,7 +1492,7 @@
           const existingRem = rods.find(r =>
             r.id !== rod.id &&
             r.name.toLowerCase() === rod.name.toLowerCase() &&
-            Number(r.diameterMm) === Number(rod.diameterMm) &&
+            areDiasEqual(r.diameterMm, rod.diameterMm) &&
             Math.abs(getRodLength(r) - remainder) < 0.05
           );
           if (existingRem) {
@@ -1517,7 +1517,7 @@
         if (remainder > 0 && shouldAddRemnants) {
           const existingRem = rods.find(r =>
             r.name.toLowerCase() === rod.name.toLowerCase() &&
-            Number(r.diameterMm) === Number(rod.diameterMm) &&
+            areDiasEqual(r.diameterMm, rod.diameterMm) &&
             Math.abs(getRodLength(r) - remainder) < 0.05
           );
           if (existingRem) {
@@ -1526,9 +1526,9 @@
           } else {
             rods.push({
               id: 'rod-cut-' + Date.now() + '-' + idx,
-              sku: rod.sku ? `${rod.sku}-CUT` : `ROD-${Math.round(rod.diameterMm)}MM-${Math.round(remainder)}IN`,
+              sku: rod.sku ? `${rod.sku}-CUT` : `ROD-${String(rod.diameterMm).toUpperCase()}MM-${Math.round(remainder)}IN`,
               name: rod.name,
-              diameterMm: rod.diameterMm,
+              diameterMm: parseDiameterValue(rod.diameterMm),
               lengthIn: remainder,
               lengthFt: remainder,
               quantity: 1,
@@ -1551,7 +1551,7 @@
         id: 'log-' + Date.now() + '-' + idx,
         timestamp: Date.now(),
         rodName: rod.name,
-        diameterMm: Number(rod.diameterMm),
+        diameterMm: parseDiameterValue(rod.diameterMm),
         originalLengthIn: origLength,
         originalLengthFt: origLength,
         cutLengthIn: cutLen,
@@ -2055,7 +2055,7 @@
 
     // Find candidate additional rods with SAME diameter in stock
     const candidateRods = rods.filter(r => {
-      if (Number(r.diameterMm) !== Number(rod.diameterMm)) return false;
+      if (!areDiasEqual(r.diameterMm, rod.diameterMm)) return false;
       if (getRodLength(r) < cutPieceLen) return false;
       const availUnits = r.id === rod.id ? (r.quantity - rodsQty) : r.quantity;
       return availUnits > 0;
@@ -2124,7 +2124,7 @@
         stepNum: 1,
         rodId: rod.id,
         rodName: rod.name,
-        diameterMm: Number(rod.diameterMm),
+        diameterMm: parseDiameterValue(rod.diameterMm),
         sourceLength: fullLen,
         piecesToCut: piecesFromThisRod,
         totalCut: totalCutThisRod,
@@ -2135,7 +2135,7 @@
         stepNum: 2,
         rodId: secondRod.id,
         rodName: secondRod.id === rod.id ? `${rod.name} (Unit #${rodsQty + 1})` : secondRod.name,
-        diameterMm: Number(secondRod.diameterMm),
+        diameterMm: parseDiameterValue(secondRod.diameterMm),
         sourceLength: secondRodLen,
         piecesToCut: piecesFromSecondRod,
         totalCut: cutFromSecondRod,
@@ -2147,7 +2147,7 @@
     const unfulfilledPieces = remainingPieces - piecesFromSecondRod;
 
     activeModalMultiPlan = {
-      diameterMm: Number(rod.diameterMm),
+      diameterMm: parseDiameterValue(rod.diameterMm),
       cutPieceLen: cutPieceLen,
       piecesNeeded: piecesNeeded,
       steps: steps,
@@ -2221,7 +2221,7 @@
           const existingRemnant = rods.find(r =>
             r.id !== targetRod.id &&
             r.name.toLowerCase() === targetRod.name.toLowerCase() &&
-            Number(r.diameterMm) === Number(targetRod.diameterMm) &&
+            areDiasEqual(r.diameterMm, targetRod.diameterMm) &&
             Math.abs(getRodLength(r) - step.remainder) < 0.05
           );
 
@@ -2231,9 +2231,9 @@
           } else {
             rods.push({
               id: 'rod-cut-' + Date.now() + '-' + step.stepNum,
-              sku: targetRod.sku ? `${targetRod.sku}-CUT` : `ROD-${Math.round(targetRod.diameterMm)}MM-${Math.round(step.remainder)}IN`,
+              sku: targetRod.sku ? `${targetRod.sku}-CUT` : `ROD-${String(targetRod.diameterMm).toUpperCase()}MM-${Math.round(step.remainder)}IN`,
               name: targetRod.name,
-              diameterMm: Number(targetRod.diameterMm),
+              diameterMm: parseDiameterValue(targetRod.diameterMm),
               lengthIn: step.remainder,
               lengthFt: step.remainder,
               quantity: 1,
@@ -2249,7 +2249,7 @@
           id: 'log-' + Date.now() + '-' + step.stepNum,
           timestamp: Date.now(),
           rodName: targetRod.name,
-          diameterMm: Number(targetRod.diameterMm),
+          diameterMm: parseDiameterValue(targetRod.diameterMm),
           originalLengthIn: step.sourceLength,
           originalLengthFt: step.sourceLength,
           cutLengthIn: plan.cutPieceLen,
@@ -2336,7 +2336,7 @@
         const existingRemnant = rods.find(r =>
           r.id !== rod.id &&
           r.name.toLowerCase() === rod.name.toLowerCase() &&
-          Number(r.diameterMm) === Number(rod.diameterMm) &&
+          areDiasEqual(r.diameterMm, rod.diameterMm) &&
           Math.abs(getRodLength(r) - remainder) < 0.05
         );
 
@@ -2370,7 +2370,7 @@
       if (remainder > 0 && shouldAddRemnant) {
         const existingRemnant = rods.find(r =>
           r.name.toLowerCase() === rod.name.toLowerCase() &&
-          Number(r.diameterMm) === Number(rod.diameterMm) &&
+          areDiasEqual(r.diameterMm, rod.diameterMm) &&
           Math.abs(getRodLength(r) - remainder) < 0.05
         );
 
@@ -2381,9 +2381,9 @@
         } else {
           const newOffcutRod = {
             id: 'rod-cut-' + Date.now(),
-            sku: rod.sku ? `${rod.sku}-CUT` : `ROD-${Math.round(rod.diameterMm)}MM-${Math.round(remainder)}IN`,
+            sku: rod.sku ? `${rod.sku}-CUT` : `ROD-${String(rod.diameterMm).toUpperCase()}MM-${Math.round(remainder)}IN`,
             name: rod.name,
-            diameterMm: rod.diameterMm,
+            diameterMm: parseDiameterValue(rod.diameterMm),
             lengthIn: remainder,
             lengthFt: remainder,
             quantity: rodsQty,
@@ -2402,7 +2402,7 @@
       id: 'log-' + Date.now(),
       timestamp: Date.now(),
       rodName: rod.name,
-      diameterMm: Number(rod.diameterMm),
+      diameterMm: parseDiameterValue(rod.diameterMm),
       originalLengthIn: origLength,
       originalLengthFt: origLength,
       cutLengthIn: cutPieceLen,
@@ -5581,13 +5581,13 @@
           updateDynamicLengthOptionsFromDatabase();
         }
         updateSearchLengthHint();
-        const dia = searchDiameterInput ? parseFloat(searchDiameterInput.value) : NaN;
+        const rawDia = searchDiameterInput ? parseDiameterValue(searchDiameterInput.value) : '';
         const len = searchLengthInput ? parseFloat(searchLengthInput.value) : NaN;
         const pcs = searchPiecesInput ? parseInt(searchPiecesInput.value, 10) : 1;
-        if (!isNaN(dia) && dia > 0 && !isNaN(len) && len > 0) {
+        if (rawDia && !isNaN(len) && len > 0) {
           if (smartSearchDebounceTimer) clearTimeout(smartSearchDebounceTimer);
           smartSearchDebounceTimer = setTimeout(() => {
-            executeSmartSearch(dia, len, false, searchLengthUnit, pcs);
+            executeSmartSearch(rawDia, len, false, searchLengthUnit, pcs);
           }, 250);
         }
       } else if (e.target.id === 'filterKeyword') {

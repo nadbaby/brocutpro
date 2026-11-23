@@ -5759,7 +5759,7 @@ export default function Home() {
 
       {/* We load the script with afterInteractive strategy and trigger initialization on load */}
       <Script
-        src="/script.js?v=126"
+        src="/script.js?v=127"
         strategy="afterInteractive"
         onLoad={() => {
           if (window.initVanillaApp) {
@@ -5769,7 +5769,7 @@ export default function Home() {
       />
       {/* Guided Rail Module */}
       <Script
-        src="/guided-rail.js?v=126"
+        src="/guided-rail.js?v=127"
         strategy="afterInteractive"
         onLoad={() => {
           if (window.initGuidedRail) {
