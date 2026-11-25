@@ -1118,15 +1118,13 @@
         window.dispatchEvent(new CustomEvent('syncRailStockToBackend', { detail: _railStock }));
       }
 
-      // Append returned log(s) to cut logs state and sync to Firebase
-      if (Array.isArray(data.logs)) {
-        data.logs.forEach(l => {
-          if (typeof window.addCutLog === 'function') {
-            window.addCutLog(l);
-          } else {
-            window.dispatchEvent(new CustomEvent('syncCutLogsToFirebase', { detail: [l] }));
-          }
-        });
+      // Append returned log(s) to cut logs state and sync
+      if (Array.isArray(data.logs) && data.logs.length > 0) {
+        if (typeof window.addCutLogs === 'function') {
+          window.addCutLogs(data.logs);
+        } else if (typeof window.addCutLog === 'function') {
+          window.addCutLog(data.logs);
+        }
       }
 
       if (typeof window.updateCutLogsBadge === 'function') {
@@ -1926,14 +1924,12 @@
         window.dispatchEvent(new CustomEvent('syncRailStockToBackend', { detail: _railStock }));
       }
 
-      if (Array.isArray(data.logs)) {
-        data.logs.forEach(l => {
-          if (typeof window.addCutLog === 'function') {
-            window.addCutLog(l);
-          } else {
-            window.dispatchEvent(new CustomEvent('syncCutLogsToFirebase', { detail: [l] }));
-          }
-        });
+      if (Array.isArray(data.logs) && data.logs.length > 0) {
+        if (typeof window.addCutLogs === 'function') {
+          window.addCutLogs(data.logs);
+        } else if (typeof window.addCutLog === 'function') {
+          window.addCutLog(data.logs);
+        }
       }
 
       if (typeof window.updateCutLogsBadge === 'function') {

@@ -253,10 +253,27 @@ export async function getFirebaseInventory(): Promise<{
         fromFirebase = true;
       }
       if (Array.isArray(data.cutLogs)) {
-        cutLogs = data.cutLogs.filter((l: any) => Number(l.diameterMm) !== 300);
+        // Smart merge Firestore logs with local memoryLogs by unique ID
+        const logMap = new Map<string, CutLogRecord>();
+        memoryLogs.forEach(l => {
+          if (l && l.id && Number(l.diameterMm) !== 300) {
+            logMap.set(String(l.id), l);
+          }
+        });
+        data.cutLogs.forEach((l: any) => {
+          if (l && l.id && Number(l.diameterMm) !== 300) {
+            logMap.set(String(l.id), l);
+          }
+        });
+        cutLogs = Array.from(logMap.values()).sort((a, b) => (Number(b.timestamp) || 0) - (Number(a.timestamp) || 0));
         memoryLogs = cutLogs;
         writeJsonFile(CUT_LOGS_FILE, memoryLogs);
         fromFirebase = true;
+
+        // If local disk had more logs than Firestore, heal Firestore by syncing the combined list
+        if (cutLogs.length > data.cutLogs.length) {
+          setDoc(mainDocRef, { cutLogs: memoryLogs, updatedAt: new Date().toISOString() }, { merge: true }).catch(() => {});
+        }
       }
       if (data.categories && (Array.isArray(data.categories.rodSubcategories) || Array.isArray(data.categories.railSubcategories))) {
         categories = saveLocalCategories({
@@ -330,6 +347,7 @@ export async function saveFirebaseInventory(data: {
   railModels?: GuidedRailModelRecord[];
   cutLogs?: CutLogRecord[];
   categories?: CategoryStore;
+  replaceCutLogs?: boolean;
 }): Promise<{ success: boolean; syncedToFirebase: boolean }> {
   let syncedToFirebase = false;
 
@@ -350,7 +368,23 @@ export async function saveFirebaseInventory(data: {
     writeJsonFile(RAIL_MODELS_FILE, memoryRailModels);
   }
   if (data.cutLogs && Array.isArray(data.cutLogs)) {
-    memoryLogs = data.cutLogs.filter(l => Number(l.diameterMm) !== 300);
+    if (data.replaceCutLogs) {
+      memoryLogs = data.cutLogs.filter(l => Number(l.diameterMm) !== 300);
+    } else {
+      // Smart merge by unique ID
+      const logMap = new Map<string, CutLogRecord>();
+      memoryLogs.forEach(l => {
+        if (l && l.id && Number(l.diameterMm) !== 300) {
+          logMap.set(String(l.id), l);
+        }
+      });
+      data.cutLogs.forEach(l => {
+        if (l && l.id && Number(l.diameterMm) !== 300) {
+          logMap.set(String(l.id), l);
+        }
+      });
+      memoryLogs = Array.from(logMap.values()).sort((a, b) => (Number(b.timestamp) || 0) - (Number(a.timestamp) || 0));
+    }
     writeJsonFile(CUT_LOGS_FILE, memoryLogs);
   }
   if (data.categories) {

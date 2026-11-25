@@ -29,7 +29,8 @@ export async function POST(req: Request) {
       railStock: body.railStock,
       railModels: body.railModels,
       cutLogs: body.cutLogs,
-      categories: body.categories
+      categories: body.categories,
+      replaceCutLogs: Boolean(body.replaceCutLogs)
     });
 
     return NextResponse.json({

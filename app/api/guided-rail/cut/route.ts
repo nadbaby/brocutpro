@@ -222,9 +222,10 @@ export async function POST(req: Request) {
     setMemoryStockCache(stock, 120000);
     writeLocalStockFile(stock);
     appendCutLogsSafely(createdLogs);
+    const fullLogs = loadLocalLogs();
 
     // Await sync to Firebase Cloud Database
-    const synced = await syncStockToFirebase(stock, createdLogs);
+    const synced = await syncStockToFirebase(stock, fullLogs);
 
     return NextResponse.json({
       success: true,

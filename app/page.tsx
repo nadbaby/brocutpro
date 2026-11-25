@@ -630,11 +630,11 @@ export default function Home() {
             setAvailableRailModels(modelsList);
           }
 
-          // Pure Firebase database mode: purge any legacy local cache keys
+          // Update persistent cut logs cache for instant offline fallback
           if (typeof window !== 'undefined') {
-            localStorage.removeItem('rod_stock_inventory_v1');
-            localStorage.removeItem('rod_stock_cut_logs_v1');
-            localStorage.removeItem('guided_rail_stock_inventory_v1');
+            try {
+              localStorage.setItem('rod_stock_cut_logs_v1', JSON.stringify(cleanLogs.slice(0, 500)));
+            } catch (_) {}
           }
           if (window.setVanillaRods) window.setVanillaRods(cleanRods);
           if (window.setVanillaCutLogs) window.setVanillaCutLogs(cleanLogs);
@@ -800,6 +800,8 @@ export default function Home() {
     const handleSyncLogs = async (e: Event) => {
       const customEvent = e as CustomEvent<unknown[]>;
       const cutLogs = customEvent.detail;
+      if (!Array.isArray(cutLogs)) return;
+
       fetch('/api/firebase-sync', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -808,7 +810,10 @@ export default function Home() {
 
       if (db) {
         try {
-          await setDoc(doc(db, 'inventory', 'main'), { cutLogs }, { merge: true });
+          const fullLogs = (typeof window !== 'undefined' && (window as any).getVanillaCutLogs)
+            ? (window as any).getVanillaCutLogs()
+            : cutLogs;
+          await setDoc(doc(db, 'inventory', 'main'), { cutLogs: fullLogs, updatedAt: new Date().toISOString() }, { merge: true });
           setFirebaseStatus('connected');
         } catch { }
       }
@@ -924,7 +929,11 @@ export default function Home() {
             if (Array.isArray(data.cutLogs) && typeof window !== 'undefined') {
               const win = window as any;
               win.__INITIAL_CUT_LOGS__ = data.cutLogs;
-              if (typeof win.refreshCutLogsData === 'function') win.refreshCutLogsData(data.cutLogs);
+              if (typeof win.refreshCutLogsData === 'function') {
+                win.refreshCutLogsData(data.cutLogs);
+              } else if (typeof win.setVanillaCutLogs === 'function') {
+                win.setVanillaCutLogs(data.cutLogs);
+              }
             }
           }
         }, (err) => {
@@ -5852,7 +5861,7 @@ export default function Home() {
 
       {/* We load the script with afterInteractive strategy and trigger initialization on load */}
       <Script
-        src="/script.js?v=135"
+        src="/script.js?v=136"
         strategy="afterInteractive"
         onLoad={() => {
           if (window.initVanillaApp) {
@@ -5862,7 +5871,7 @@ export default function Home() {
       />
       {/* Guided Rail Module */}
       <Script
-        src="/guided-rail.js?v=135"
+        src="/guided-rail.js?v=136"
         strategy="afterInteractive"
         onLoad={() => {
           if (window.initGuidedRail) {

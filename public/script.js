@@ -655,8 +655,15 @@
 
   function loadCutLogsFromStorage() {
     try {
-      if (window.__INITIAL_CUT_LOGS__ && Array.isArray(window.__INITIAL_CUT_LOGS__)) {
+      if (window.__INITIAL_CUT_LOGS__ && Array.isArray(window.__INITIAL_CUT_LOGS__) && window.__INITIAL_CUT_LOGS__.length > 0) {
         cutLogs = JSON.parse(JSON.stringify(window.__INITIAL_CUT_LOGS__));
+      } else if (typeof localStorage !== 'undefined') {
+        const stored = localStorage.getItem('rod_stock_cut_logs_v1');
+        if (stored) {
+          cutLogs = JSON.parse(stored);
+        } else {
+          cutLogs = [];
+        }
       } else {
         cutLogs = [];
       }
@@ -664,19 +671,22 @@
         cutLogs = cutLogs.filter(l => Number(l.diameterMm) !== 300);
       }
     } catch (e) {
-      console.error('Error loading cut logs from Firebase', e);
+      console.error('Error loading cut logs from storage', e);
       cutLogs = [];
     }
   }
 
-  function saveCutLogsToStorage() {
+  function saveCutLogsToStorage(isExplicitReplace = false) {
     try {
-      // Always persist directly to Firebase Cloud Database
-      window.dispatchEvent(new CustomEvent('syncCutLogsToFirebase', { detail: cutLogs }));
+      if (typeof localStorage !== 'undefined') {
+        try {
+          localStorage.setItem('rod_stock_cut_logs_v1', JSON.stringify(cutLogs.slice(0, 500)));
+        } catch (_) {}
+      }
       fetch('/api/firebase-sync', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ cutLogs })
+        body: JSON.stringify({ cutLogs, replaceCutLogs: isExplicitReplace })
       }).catch(err => console.warn('Firebase cut logs API sync warning:', err));
     } catch (e) {
       console.error('Error saving cut logs to Firebase database', e);
@@ -3615,7 +3625,7 @@
       () => {
         cutLogs = cutLogs.filter(l => l.id !== logId);
         selectedCutLogIds.delete(logId);
-        saveCutLogsToStorage();
+        saveCutLogsToStorage(true);
         updateCutLogsBadge();
         renderCutLogsTable();
         closeEditCutLogModal();
@@ -3936,7 +3946,7 @@
               <span>Select</span>
             </label>
           </div>
-          <div style="font-size:0.75rem; color:var(--text-muted); margin-bottom:6px;">${dateStr}</div>
+          <div style="font-size:0.75rem; color:var(--text-muted); margin-bottom:6px;">${dateFormatted}</div>
 
           <div class="cut-log-card-metrics">
             <div class="cut-log-metric-item">
@@ -4115,10 +4125,13 @@
         // Keep logs belonging to the OTHER mode
         cutLogs = cutLogs.filter(l => isRailMode ? !isGuidedRailLog(l) : isGuidedRailLog(l));
         selectedCutLogIds.clear();
-        saveCutLogsToStorage();
+        saveCutLogsToStorage(true);
         updateCutLogsBadge();
         renderCutLogsTable();
         updateSelectedCutLogsUI();
+        window.dispatchEvent(new CustomEvent('syncBothToBackend', {
+          detail: { rods: rods, cutLogs: cutLogs }
+        }));
         showToast(`All ${modeLabel} cut history logs cleared`, 'info');
       },
       true
@@ -6015,15 +6028,45 @@
   window.getVanillaCutLogs = () => cutLogs;
   window.setVanillaCutLogs = (newLogs) => {
     if (Array.isArray(newLogs)) {
-      cutLogs = newLogs.filter(l => Number(l.diameterMm) !== 300);
+      const logMap = new Map();
+      cutLogs.forEach(l => {
+        if (l && l.id && Number(l.diameterMm) !== 300) {
+          logMap.set(String(l.id), l);
+        }
+      });
+      newLogs.forEach(l => {
+        if (l && l.id && Number(l.diameterMm) !== 300) {
+          logMap.set(String(l.id), l);
+        }
+      });
+      cutLogs = Array.from(logMap.values()).sort((a, b) => (Number(b.timestamp) || 0) - (Number(a.timestamp) || 0));
       updateCutLogsBadge();
+      if (cutLogsModalOverlay && !cutLogsModalOverlay.classList.contains('hidden')) {
+        renderCutLogsTable();
+      }
+    }
+  };
+  window.refreshCutLogsData = (newLogs) => {
+    if (Array.isArray(newLogs)) {
+      window.setVanillaCutLogs(newLogs);
     }
   };
   window.isGuidedRailLog = isGuidedRailLog;
   window.getCurrentSystemMode = getCurrentSystemMode;
-  window.addCutLog = (entry) => {
-    if (!entry) return;
-    cutLogs.unshift(entry);
+  window.addCutLogs = (entries) => {
+    if (!entries) return;
+    const list = Array.isArray(entries) ? entries : [entries];
+    if (list.length === 0) return;
+    const existingIds = new Set(cutLogs.map(l => String(l.id)));
+    const toAdd = list.filter(l => l && l.id && !existingIds.has(String(l.id)));
+    if (toAdd.length === 0) {
+      updateCutLogsBadge();
+      if (cutLogsModalOverlay && !cutLogsModalOverlay.classList.contains('hidden')) {
+        renderCutLogsTable();
+      }
+      return;
+    }
+    cutLogs = [...toAdd, ...cutLogs].sort((a, b) => (Number(b.timestamp) || 0) - (Number(a.timestamp) || 0));
     saveCutLogsToStorage();
     updateCutLogsBadge();
     if (cutLogsModalOverlay && !cutLogsModalOverlay.classList.contains('hidden')) {
@@ -6033,6 +6076,9 @@
     window.dispatchEvent(new CustomEvent('syncBothToBackend', {
       detail: { rods: rods, cutLogs: cutLogs, railStock: currentRailStock }
     }));
+  };
+  window.addCutLog = (entry) => {
+    window.addCutLogs(entry);
   };
   window.updateRodNamesDropdown = function(cats) {
     if (Array.isArray(cats)) {
