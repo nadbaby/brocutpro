@@ -3965,7 +3965,7 @@
 
           <div class="cut-log-card-remnant">
             <span class="cut-log-remnant-label">Remnant:</span>
-            ${remnantCardBadge}
+            ${remnantBadge}
           </div>
 
           ${log.reason ? `
